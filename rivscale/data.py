@@ -1,0 +1,382 @@
+
+import glob
+import os.path
+
+import argparse
+
+import numpy as np
+import pandas as pd
+
+import errtools.plots
+import matplotlib.pyplot as plt
+
+import scipy.ndimage
+from scipy.linalg import pinv, svd, eigh, norm
+
+from errtools.misc import (split_utc_time, field_time_to_swot_time,
+    swot_time_to_field_time, get_dist_to_outlet_from_node_id)
+
+from errtools.plots import plot_cdf
+
+import netCDF4 as nc
+
+import statsmodels.api
+
+import geopandas as gpd
+
+import rivscale.misc
+
+def init_swot_reach_rivertile():
+    d = {
+        'wse':[],
+        'wse_u':[],
+        'slope':[],
+        'slope2':[],
+        'area_detct':[],
+        'area_total':[],
+        'width':[],
+        'reach_id':[],
+        'p_length':[],
+        'time':[],
+        'cycle':[],
+        'xovr_cal_c':[],
+        'reach_q':[]
+        }
+    return d
+
+def bayes_to_swot_df(reach_average_data, swot_df):
+    d = init_swot_reach_rivertile()
+    for reach in swot_df['reach_id']:
+       this_swot_df = swot_df[swot_df['reach_id']==reach].sort_values('cycle')
+       ind = np.where(np.array(reach_average_data['reach'])==reach)
+       #breakpoint()
+       if len(ind[0])==0:
+            continue
+       for key in d.keys():
+           dat = np.array(this_swot_df[key])
+           cycles = np.array(this_swot_df['cycle'])
+           if key == 'wse':
+               # null out the wse
+               dat = dat + np.nan
+           if key in reach_average_data.keys():
+               if key == 'cycle':
+                   dat = cycles
+               else:
+                   # replace the specific cycles
+                   dat0 = np.array(reach_average_data[key][ind[0][0]])
+                   cycles0 = np.array(reach_average_data['cycle'][ind[0][0]])
+                   for k,cycl in enumerate(cycles0):
+                       ind2 = np.where(cycles == cycl)
+                       #breakpoint()
+                       dat[ind2] = dat0[k]
+           d[key] = d[key] + list(dat)
+    df = pd.DataFrame(d)
+    df['time_UTC'] = np.array(swot_time_to_field_time(df['time']))
+    df['time_UTC'] = df['time_UTC'].astype('datetime64[ns]')
+    return df 
+
+
+
+
+
+
+
+def get_reach_average_df(pt_df, reaches):
+    d = {
+        'reach_wse':[],
+        'reach_slope':[],
+        'reach_num_pt':[],
+        'reach_length':[],
+        'reach_times':[],
+        'reach_id':[],
+        }
+    for reach in reaches:
+        # compute the reach wse and slope from PTs
+        this_pt_df = pt_df[pt_df['reach_id']==reach].sort_values('pt_time_UTC')
+        if len(this_pt_df) == 0:
+            continue
+        #breakpoint()
+        # loop through each time
+        this_pt_df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(this_pt_df['node_id'])
+        pt_times = np.unique(this_pt_df['pt_time_UTC'])
+        
+        reach_wse = []
+        reach_slope = []
+        reach_num_pt = []
+        reach_length = []
+        reach_times = []
+        reach_ids = []
+        for pt_time in pt_times:
+            this_df = this_pt_df[this_pt_df['pt_time_UTC']==pt_time].sort_values('local_node_id')
+            pt_ids = this_df['pt_serial']
+            wse = np.array(this_df['mean_node_pt_wse_m'])
+            dist_out = np.array(this_df['p_dist_out'])
+            length = np.nan
+            slope = np.nan
+            num_pt = len(wse)
+            if num_pt > 1:
+                length = dist_out[-1] - dist_out[0]
+                slope = (wse[-1] - wse[0]) / length
+            reach_wse.append(np.mean(wse))
+            reach_slope.append(slope)
+            reach_num_pt.append(num_pt)
+            reach_length.append(length)
+            reach_times.append(pt_time)
+            reach_ids.append(reach)
+        d['reach_wse'] = d['reach_wse'] + reach_wse
+        d['reach_slope'] = d['reach_slope'] + reach_slope
+        d['reach_num_pt'] = d['reach_num_pt'] + reach_num_pt
+        d['reach_length'] = d['reach_length'] + reach_length
+        d['reach_times'] = d['reach_times'] + reach_times
+        d['reach_id'] = d['reach_id'] + reach_ids
+        reach_average_df = pd.DataFrame(d)
+    return reach_average_df
+
+def init_full_profile_data():
+    full_profile_data = {
+        'wse_stack':[],
+        'time_stack':[],
+        'wse_u_stack':[],
+        'node_q_stack':[],
+        'area_stack':[],
+        'area_total_stack':[],
+        'node_id':[],
+        'dist_out':[],
+        'nodes':[],
+        'reach':[],
+        'cycle':[],
+        'network':[],
+        }
+    return full_profile_data
+
+def make_swot_data_stack(swot_node_df, sword_node_df):
+    reaches = np.unique(swot_node_df['reach_id'])
+    cycles = np.sort(np.unique(swot_node_df['cycle']))
+    full_profile_data = init_full_profile_data()
+    for k,reach in enumerate(reaches):
+        # get "full" profile by linearly interpolating over missing nodes...
+        this_df = swot_node_df[
+            swot_node_df['reach_id']==reach].sort_values('local_node_id')
+        local_node_ids = np.unique(this_df['local_node_id'])
+        this_sword_df = sword_node_df[sword_node_df['reach_id']==reach].sort_values('node_id')
+        nodes = rivscale.misc.node_id_to_local_node_id(this_sword_df['node_id'])
+        node_ids = this_sword_df['node_id']
+        dist_out = this_sword_df['dist_out']
+        #cycles = np.sort(np.unique(this_df['cycle']))
+        signal = []
+        signal_u = []
+        signal_q = []
+        signal_t = []
+        signal_a = []
+        signal_a_t = []
+        signal_cycle = []
+        for cycl in cycles:
+            df = this_df[this_df['cycle']==cycl]
+            # drop bad node data
+            this_node_q = np.array(df['local_node_id'])
+            df = df[df['node_q']<=1]
+            this_nodes = np.array(df['local_node_id'])
+            this_wse = np.array(df['wse'])
+            this_wse_u = np.array(df['wse_u'])
+            this_area_total = np.array(df['area_total'])
+            this_area = np.array(df['area_detct'])
+            this_node_q = np.array(df['node_q'])
+            this_time = np.array(df['time'])
+            #if len(this_wse) < 10:#len(nodes)*3/4:
+            #    continue
+            #breakpoint()
+            full_wse = np.ones(np.shape(nodes)) + np.nan
+            full_wse_u = np.ones(np.shape(nodes)) + np.nan
+            full_area = np.ones(np.shape(nodes)) + np.nan
+            full_area_t = np.ones(np.shape(nodes)) + np.nan
+            full_wse_q = np.ones(np.shape(nodes)) + np.nan
+            full_time = np.ones(np.shape(nodes)) + np.nan
+            for n,w,u,q,t,a,a_t in zip(this_nodes, this_wse, this_wse_u, this_node_q, this_time, this_area, this_area_total):
+                full_wse[nodes==n] = w
+                full_wse_u[nodes==n] = u
+                full_wse_q[nodes==n] = q
+                full_time[nodes==n] = t
+                full_area[nodes==n] = a
+                full_area_t[nodes==n] = a_t
+            # interpolate to full extent
+            #full_wse = np.interp(nodes, this_nodes, this_wse)
+            #signal.append(full_wse.T)
+            signal.append(full_wse)
+            signal_u.append(full_wse_u)
+            signal_q.append(full_wse_q)
+            signal_t.append(full_time)
+            signal_a.append(full_area)
+            signal_a_t.append(full_area_t)
+            signal_cycle.append(cycl)
+        signal = np.array(signal)
+        signal_cycle = np.array(signal_cycle)
+        if len(signal)==0:
+            continue
+        #full_profile_data['signal'].append(signal)
+        full_profile_data['wse_stack'].append(signal.T)
+        full_profile_data['time_stack'].append(np.array(signal_t).T)
+        full_profile_data['wse_u_stack'].append(np.array(signal_u).T)
+        full_profile_data['node_q_stack'].append(np.array(signal_q).T)
+        full_profile_data['area_stack'].append(np.array(signal_a).T)
+        full_profile_data['area_total_stack'].append(np.array(signal_a_t).T)
+        full_profile_data['node_id'].append(node_ids)
+        full_profile_data['dist_out'].append(dist_out)
+        full_profile_data['nodes'].append(nodes)
+        full_profile_data['reach'].append([reach,])
+        full_profile_data['network'].append(k)
+        full_profile_data['cycle'].append(np.array(signal_cycle))
+        #
+    #full_profile_data['cycle'] = cycles
+    return full_profile_data
+
+def stack_mean_and_covariance(full_profile_data):
+    stats = {'mean':[], 'median':[], 'Ry':[], 'reach':[], 'network':[]}
+    for k, network in enumerate(full_profile_data['network']):
+        signal = full_profile_data['wse_stack_interp'][k]
+        signal_u = full_profile_data['wse_u_stack'][k]
+        mn = np.nanmean(signal, axis=1)
+        med = np.nanmedian(signal, axis=1)
+        # define the zero-mean signal
+        #breakpoint()
+        M,N = np.shape(signal)
+        Y = signal-np.tile(mn,(N, 1)).T
+        Y[np.isnan(signal)] = 0
+        count = np.ones((M,N))
+        count[np.isnan(signal)] = 0
+        # estimate the covariance of the zero-mean signal
+        #Ry = np.inner(Y, Y) / N
+        C = np.inner(count, count)
+        Ry = np.inner(Y, Y) / C
+        Ry[C==0] = 0
+        
+        #breakpoint()
+        ## subtract off the known noise covariance
+        ## handling resulting negaitve diagonal elements
+        #Rv = np.diag(np.nanmean(signal_u, axis=1))
+        #Ry_diag = np.diag(np.diag(Ry))
+        #R1 = Ry_diag - Rv
+        #R1_full = Ry - Rv
+        #Rmax = np.diag(np.max(np.abs(R1_full), axis=0))
+        ## replace negative diag values with the next biggest magnitude element
+        ## in each row
+        ##R1[R1<0] = Rmax[R1<0]
+        #Ry = Ry - Rv
+        #Ry[R1<0] = Rmax[R1<0] + 1e-3
+        
+        
+        #breakpoint()
+        stats['mean'].append(mn)
+        stats['median'].append(med)
+        stats['Ry'].append(Ry)
+        stats['reach'].append(full_profile_data['reach'][k])
+        stats['network'].append(network)
+    return stats
+
+
+def compute_reach(bayes_data):
+    reach_data = {
+        'wse':[],
+        'slope':[],
+        'width':[],
+        'reach':[],
+        'cycle':[]
+        }
+    for k, reach in enumerate(bayes_data['reach']):
+        wse_stack = bayes_data['wse_stack'][k]
+        dist_out = np.array(bayes_data['dist_out'][k])
+        reach_length = dist_out[-1]-dist_out[0]
+        area_total_stack = bayes_data['area_total_stack'][k]
+        #breakpoint()
+        reach_data['wse'].append(np.mean(wse_stack, axis=0))
+        reach_data['slope'].append((wse_stack[-1,:] - wse_stack[0,:]) / reach_length)
+        reach_data['width'].append(np.nansum(area_total_stack, axis=0) / reach_length)
+        reach_data['reach'].append(reach)
+        reach_data['cycle'].append(bayes_data['cycle'][k])
+    return reach_data
+
+
+
+def get_connected_networks(sword_df, d_up, d_down):
+    this_sword_df = sword_df.sort_values('dist_out')
+    reach_ids = np.array(this_sword_df['reach_id'])
+    network_list = []
+    while len(reach_ids)>0:
+        lst = [reach_ids[0],] # start with the closest to outlet
+        while True:
+            #breakpoint()
+            rch = str(lst[-1])
+            if rch.endswith('4'):
+                # break connectivity at dams and dont include dam reaches
+                break
+            if rch not in d_up:
+                # break when next reach not in list of remaining reaches
+                break
+            this_d_up = d_up[rch][d_up[rch]>0]
+            if len(this_d_up)==0:
+                # break if there are no more upstream reaches
+                break
+            # TODO handle multiple up-stream reaches
+            lst.append(this_d_up[0])
+            #breakpoint()
+        reach_ids = list(set(reach_ids) - set(lst))
+        network_list.append(lst)
+    return network_list
+
+def network_stack(full_profile_data, network_list):
+    out_profile_data = init_full_profile_data()
+    for j, reaches in enumerate(network_list):
+        this_profile_data = init_full_profile_data()
+        for k,reach in enumerate(reaches):
+            rs = np.squeeze(full_profile_data['reach'])
+            ind = np.where(rs==reach)
+            if len(ind)==0:
+                continue
+            ind = ind[0]
+            if len(ind)==0:
+                continue
+            if len(ind)>0:
+                ind = ind[0]
+            #if len(ind)==0:
+            #    continue
+            for key in full_profile_data.keys():
+                #print(key, ind)
+                if key == 'reach':
+                    this_profile_data[key].append(rs[ind])
+                elif key not in ['cycle', 'network']:
+                    this_profile_data[key].append(full_profile_data[key][ind])
+        for key in full_profile_data.keys():
+            print(key)
+            if key == 'network':
+                out_profile_data[key].append(j)
+            elif key=='cycle':
+                out_profile_data[key].append(full_profile_data[key][0]) 
+            elif key not in ['cycle','reach']:
+                out_profile_data[key].append(np.concatenate(this_profile_data[key]))
+        out_profile_data['reach'].append(this_profile_data['reach'])
+        #breakpoint()
+        #out_profile_data['cycle'].append(full_profile_data['cycle'][j])
+    return out_profile_data
+
+
+def stuff_pt_stack(pt_swot_match, full_profile_data):
+    """
+    stuff the PT data into the cycle stack
+    """
+    full_pt_wse_stack = []
+    for k, network in enumerate(full_profile_data['network']):
+        pt_wse_stack = np.ones_like(full_profile_data['wse_stack'][k]) + np.nan
+        this_df = pt_swot_match[pt_swot_match['network']==network]
+        if len(this_df) == 0:
+            full_pt_wse_stack.append(pt_wse_stack)
+            continue
+        cycle = full_profile_data['cycle'][k]
+        nodes = full_profile_data['node_id'][k]
+        for node_id, cycl, wse in zip(this_df['node_id'], this_df['cycle'], this_df['pt_wse_m']):
+            #breakpoint()
+            n = np.argmin(np.abs(nodes-node_id))
+            c = np.argmin(np.abs(cycle-cycl))
+            if (nodes[n]==node_id) and (cycle[c]==cycl):
+                pt_wse_stack[n,c] = wse
+        full_pt_wse_stack.append(pt_wse_stack)
+    full_profile_data['pt_wse_stack'] = full_pt_wse_stack
+    #return full_profile_data
