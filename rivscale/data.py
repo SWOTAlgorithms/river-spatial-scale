@@ -174,7 +174,7 @@ def make_swot_data_stack(swot_node_df, sword_node_df):
             df = this_df[this_df['cycle']==cycl]
             # drop bad node data
             this_node_q = np.array(df['local_node_id'])
-            df = df[df['node_q']<=1]
+            df = df[df['node_q']<=1]# 1
             this_nodes = np.array(df['local_node_id'])
             this_wse = np.array(df['wse'])
             this_wse_u = np.array(df['wse_u'])
@@ -351,7 +351,10 @@ def network_stack(full_profile_data, network_list):
             elif key=='cycle':
                 out_profile_data[key].append(full_profile_data[key][0]) 
             elif key not in ['cycle','reach']:
-                out_profile_data[key].append(np.concatenate(this_profile_data[key]))
+                if len(this_profile_data[key])>0:
+                    out_profile_data[key].append(np.concatenate(this_profile_data[key]))
+                else:
+                    out_profile_data[key].append(this_profile_data[key])
         out_profile_data['reach'].append(this_profile_data['reach'])
         #breakpoint()
         #out_profile_data['cycle'].append(full_profile_data['cycle'][j])

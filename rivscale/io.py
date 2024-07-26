@@ -14,11 +14,13 @@ import rivscale.misc
 
 def read_reach_rivertiles(basedir):
     files = glob.glob(os.path.join(basedir, 'SWOT_L2_HR_RiverTile*.nc'))
+    #print("processing reach tile files:", files)
     d = rivscale.data.init_swot_reach_rivertile()
     if len(files) == 0:
         # return empty
         return pd.DataFrame(d)
-    for fle in files:
+    for i, fle in enumerate(files):
+        print('reach file: {}, {} of {}'.format(fle, i, len(files)))
         with nc.Dataset(fle) as f:
             #breakpoint()
             for var in d.keys():
@@ -37,7 +39,9 @@ def read_reach_rivertiles(basedir):
 
 def read_node_rivertiles(basedir):
     # nodes
+    print("node basedir", basedir)
     files = glob.glob(os.path.join(basedir, 'SWOT_L2_HR_RiverTile*.nc'))
+    print("processing node tile files:", files)
     d = {
         'wse':[],
         'wse_u':[],
@@ -54,11 +58,12 @@ def read_node_rivertiles(basedir):
         # try the shape files
         files = glob.glob(os.path.join(basedir,'SWOT_L2_HR_RiverSP_*/SWOT_L2_HR_RiverSP_*.shp'))
         #breakpoint()
-        
+        print("processing node tile files:", files)
         if len(files) ==0:
             # return empty dataframe
             return pd.DataFrame(d)
-    for fle in files:
+    for i, fle in enumerate(files):
+        print('node file: {}, {} of {}'.format(fle, i, len(files)))
         if fle.endswith('.shp'):
             # read in the shape file
             f = gpd.read_file(fle)
@@ -104,6 +109,7 @@ def read_SWORD(fle):
         'reach_id':[],
         'reach_length':[],
         'dist_out':[],
+        'river_name':[],
         }
     d_up = {}
     d_down = {}
@@ -124,6 +130,7 @@ def read_SWORD(fle):
         'reach_id':[],
         'node_id':[],
         'dist_out':[],
+        'river_name':[],
         }
     with nc.Dataset(fle) as f:
         for var in d.keys():
