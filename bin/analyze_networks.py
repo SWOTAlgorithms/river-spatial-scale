@@ -1,4 +1,15 @@
+#!/usr/bin/env python
+'''
+Copyright (c) 2024-, California Institute of Technology ("Caltech"). U.S.
+Government sponsorship acknowledged.
+All rights reserved.
 
+Author(s): Brent Williams
+
+Read in the river tiles, find connected river networks and do
+special bayes processing
+
+'''
 import glob
 import os.path
 
@@ -45,6 +56,8 @@ def create_parser():
         help='SWOT rivertile directory')
     parser.add_argument('sword_file', default=None,
         help='SWORD netcdf file')
+    parser.add_argument('river_name', default=None,
+        help='SWORD river name')
     return parser
 
 
@@ -58,19 +71,48 @@ def main():
 
     # read the SWOT data
     swot_df, swot_node_df = rivscale.io.read_rivertiles(args.rivertile_dir)
-    # drop reaches not in the desired tile (from SWORD tile)
+    # drop reaches from swot data not in the remaiing sword_df
     bad_reaches = list(set(swot_node_df['reach_id'])-set(sword_df['reach_id']))
     for rch in bad_reaches:
         swot_node_df = swot_node_df[swot_node_df['reach_id']!=rch]
+    """
+    # drop sword reaches that are not in the swot data
+    bad_reaches = list(set(sword_df['reach_id'])-set(swot_node_df['reach_id']))
+    for rch in bad_reaches:
+        sword_df = sword_df[sword_df['reach_id']!=rch]
+    #sword_df = sword_df[sword_df['reach_id'] in swot_node_df['reach_id']]
+    """
+    # drop all sword reaches that dont have the desired river_name
+    river_name = args.river_name
+    #river_name = 'Ocmulgee River'
+    #river_name = 'Colorado River'
+    sword_df = sword_df[sword_df['river_name']==river_name]
+    #sword_node_df = sword_node_df[sword_node_df['river_name']==river_name]
+    #breakpoint()
+    """
+    # drop reaches from swot data not in the remaiing sword_df
+    bad_reaches = list(set(swot_node_df['reach_id'])-set(sword_df['reach_id']))
+    for rch in bad_reaches:
+        swot_node_df = swot_node_df[swot_node_df['reach_id']!=rch]
+    """
+    print("creating network list")
     network_list = rivscale.data.get_connected_networks(sword_df, d_up, d_down)
+    #breakpoint()
     # hack to filter out unneeded things for the yellowstone case TODO generalize this
-    network_list = [network_list[3]]
+    #network_list = [network_list[3]]
+    #network_list = [network_list[0]]
+    # just look at the largest network
+    lens = [len(n) for n in network_list]
+    network_list = [network_list[np.argmax(lens)]]
+    #breakpoint()
     # create the data stack
     full_profile_data0 = rivscale.data.make_swot_data_stack(swot_node_df, sword_node_df)
+    #breakpoint()
     # create the network stack
     full_profile_data1 = rivscale.data.network_stack(full_profile_data0, network_list)
     # update the uncertainties
     full_profile_data = rivscale.filter.modify_uncert(full_profile_data1)
+    breakpoint()
     # interpolate over holes
     full_profile_data = rivscale.filter.interp_stack(full_profile_data, left=np.nan, right=np.nan)
     # estimate mean and covariance
@@ -79,7 +121,7 @@ def main():
     bayes_data = rivscale.reconstruct.reconstruct_stack(stats, full_profile_data)
 
     # load in the field data
-    pt_df, drift_df = rivscale.io.load_field_data(fles, args.sword_file)
+    #pt_df, drift_df = rivscale.io.load_field_data(fles, args.sword_file)
     
     # make Bayes with simple model params
     stats3 = rivscale.filter.replace_signal_stats(stats, full_profile_data, sword_node_df)
@@ -192,6 +234,7 @@ def main():
     plt.ylim(ylim)
     #plt.show()
 
+    """
     # plot the PTs at the same time/place as SWOT
     nodes = np.unique(pt_df['node_id'])
     # hack for Yellowstone TODO generalize this
@@ -203,6 +246,7 @@ def main():
 
     pt_swot_match = rivscale.filter.find_pt_swot_matches(pt_df, full_profile_data)
     rivscale.data.stuff_pt_stack(pt_swot_match, full_profile_data)
+    """
     rivscale.plot.plot_profile_with_bayes(full_profile_data, bayes_data4, anom_data)
     
     rivscale.plot.plot_mean_profile(full_profile_data, anom_data0)
