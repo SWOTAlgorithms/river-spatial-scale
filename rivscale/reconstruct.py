@@ -26,7 +26,87 @@ import geopandas as gpd
 
 import rivscale.data
 
+####### Sept 2024, updated for river stretch processing
 
+def reconstruct_stretch(stretch_data_in,
+        signal_key='wse', uncert_key='wse_u'):
+    # copy the input data to output data
+    stretch_data = stretch_data_in.copy()
+    # get the bayes parameters
+    mn = stretch_data['{}_reference'.format(signal_key)]
+    Ry = stretch_data['{}_cov'.format(signal_key)]
+    # TODO: should this be local_node_id (i.e., indexing starting at 1)?
+    nodes = np.arange(len(stretch_data['node_id']), dtype=int)
+    signal_hats = []
+    post_covs = []
+    bayes_us = []
+    time_key = 'time_id'
+    # go through each time/cycle observation in the stack 
+    for j,cycl in enumerate(stretch_data[time_key]):
+        meas = stretch_data[signal_key][:,j]
+        meas_u = stretch_data[uncert_key][:,j]
+        meas_u[~np.isfinite(meas_u)] = 10**5#10^5
+        msk = np.isfinite(meas)
+        #breakpoint()
+        # check for not enough data
+        if np.sum(msk) < 2:
+            # dont call bayes, just append nans
+            nan_array = np.ones_like(meas) + np.nan
+            unc_array = np.zeros_like(meas_u) + 10**5
+            signal_hats.append(nan_array)
+            post_covs.append(np.diag(unc_array))
+            bayes_us.append(unc_array.copy())
+        else:
+            signal_hat, A_inv = bayes_estimator(
+                meas[msk], nodes[msk], mn, Ry,
+                np.sqrt(meas_u[msk]))
+            signal_hats.append(signal_hat)
+            post_covs.append(A_inv)
+            bayes_us.append(np.diag(A_inv).copy())
+    #breakpoint()
+    stretch_data['bayes_{}'.format(signal_key)] = np.array(signal_hats).T
+    stretch_data['bayes_{}_post_cov'.format(signal_key)] = np.moveaxis(
+        np.array(post_covs), 0, -1)
+    stretch_data['bayes_{}_u'.format(signal_key)] = np.array(bayes_us).T
+    #breakpoint()
+    return stretch_data
+
+def bayes_estimator(meas_wse, node_index, mn, Ry0, meas_noise):
+    N = len(mn)
+    H = np.zeros((len(node_index), N))
+    for i,ni in enumerate(node_index):
+        if ni == -30:
+            breakpoint()
+        H[i,ni] = 1
+    X = meas_wse - mn[node_index]
+    Rv = np.diag(meas_noise**2)
+    Ry_inv = pinv(Ry0)
+    Rv_inv = pinv(Rv)
+    A = Ry_inv + H.T @ Rv_inv @ H
+    A_inv = np.linalg.inv(A)
+    K = A_inv @ H.T @ Rv_inv
+    K_bar = A_inv @ Ry_inv
+    yp = K @ meas_wse
+    y_bar =  K_bar @ mn
+    signal_hat = yp + y_bar
+    return signal_hat, A_inv
+
+def exponential_cov(p_dist_out, char_length_tau=20000, prior_unc_alpha=2.0):
+    """
+    copied snippets from RiverObs:
+    p_dist_out      : Node-level distance to outlet from prior database
+    char_length_tau : characteristic length (m)
+    prior_unc_alpha : scale to apply to the magnitude of Ry
+    """
+    Ry0 = np.zeros((len(p_dist_out), len(p_dist_out)))
+    for k, d0 in enumerate(p_dist_out):
+        t = p_dist_out - d0
+        Ry0[k, :] = np.exp(-np.abs(t) / char_length_tau)
+    # scale the covariance to trade-off noise.vs "spectral resolution"
+    Ry = Ry0 / np.max(Ry0) * prior_unc_alpha ** 2
+    return Ry
+
+######## Old data TODO: delete/revise etc
 
 def truncated_basis_estimator(meas_wse, node_index, mn, B):
     X = meas_wse - mn[node_index]
@@ -54,7 +134,7 @@ def optimal_linear_estimator(meas_wse, node_index, mn, Ry0, meas_noise):
     #signal_hat = np.inner(A_hat, X)
     return signal_hat
 
-def bayes_estimator(meas_wse, node_index, mn, Ry0, meas_noise):
+def bayes_estimator_old(meas_wse, node_index, mn, Ry0, meas_noise):
     N = len(mn)
     H = np.zeros((len(node_index), N))
     for i,ni in enumerate(node_index):
@@ -72,9 +152,11 @@ def bayes_estimator(meas_wse, node_index, mn, Ry0, meas_noise):
     #    Ry0[k, :] = np.exp(-np.abs(t) / tau)
     #Ry_exp = Ry_exp / np.max(Ry_exp) * prior_unc_alpha ** 2
     #Ry_reg = np.eye(N)*1e-10
-    Ry_reg = np.eye(N)*1e-8
-    Ry = Ry0 + Ry_reg # Tikhonov regularization...?
-    Ry_inv = np.linalg.inv(Ry)
+    ####
+    #Ry_reg = np.eye(N)*1e-8
+    #Ry = Ry0 + Ry_reg # Tikhonov regularization...?
+    #Ry_inv = np.linalg.inv(Ry)
+    Ry_inv = pinv(Ry0)
     Rv_inv = pinv(Rv)
     A = Ry_inv + H.T @ Rv_inv @ H
     A_inv = np.linalg.inv(A)
@@ -209,12 +291,17 @@ def reconstruct_profiles_from_pts(pt_df, good_drifts, swot_df, sword_df, reach_a
     reconst_match_df = pd.DataFrame(d)
     return reconst_match_df
 
-
-def reconstruct_stack(stats, full_profile_data):
+def reconstruct_stack(stats, full_profile_data,
+        signal_key='wse_stack', uncert_key='wse_u_stack'):
     data_out = rivscale.data.init_full_profile_data()
     # copy the input data to output data
     for key in data_out.keys():
-        data_out[key] = full_profile_data[key].copy()
+        try:
+            data_out[key] = full_profile_data[key].copy()
+        except KeyError:
+            pass
+    data_out[signal_key] = full_profile_data[signal_key].copy()
+    data_out[uncert_key] = full_profile_data[uncert_key].copy()
     data_out['post_cov'] = []
     # reconstruct
     for k0,network in enumerate(stats['network']):
@@ -240,10 +327,15 @@ def reconstruct_stack(stats, full_profile_data):
         nodes = np.arange(len(full_profile_data['nodes'][k]), dtype=int)
         this_signal_hat = []
         this_post_cov = []
-        for j,cycl in enumerate(full_profile_data['cycle'][k]):
-            meas_wse = full_profile_data['wse_stack'][k][:,j]
-            meas_wse_u = full_profile_data['wse_u_stack'][k][:,j]
-            meas_wse_u[~np.isfinite(meas_wse_u)] = 10^5
+        time_key = 'time_id'
+        try:
+            full_profile_data[time_key]
+        except KeyError:
+            time_key = 'cycle'
+        for j,cycl in enumerate(full_profile_data[time_key][k]):
+            meas_wse = full_profile_data[signal_key][k][:,j]
+            meas_wse_u = full_profile_data[uncert_key][k][:,j]
+            meas_wse_u[~np.isfinite(meas_wse_u)] = 10**5#10^5
             msk = np.isfinite(meas_wse)
             #breakpoint()
             signal_hat, A_inv = bayes_estimator(
@@ -252,14 +344,14 @@ def reconstruct_stack(stats, full_profile_data):
             this_signal_hat.append(signal_hat)
             this_post_cov.append(A_inv)
         #data_out['wse_stack'].append(np.array(this_signal_hat).T)
-        data_out['wse_stack'][k] = np.array(this_signal_hat).T
+        data_out[signal_key][k] = np.array(this_signal_hat).T
         data_out['post_cov'].append(this_post_cov)
         # TODO: update the wse_u_stack with posterior uncertainty estimate
     return data_out
 
 
 
-def exponential_cov(p_dist_out, char_length_tau=20000, prior_unc_alpha=2.0):#prior_unc_alpha=0.25):#char_length_tau=10000, prior_unc_alpha=0.5):#1.5):
+def exponential_cov_old(p_dist_out, char_length_tau=20000, prior_unc_alpha=2.0):#prior_unc_alpha=0.25):#char_length_tau=10000, prior_unc_alpha=0.5):#1.5):
     """
     copied snippets from RiverObs:
     p_dist_out      : Node-level distance to outlet from prior database

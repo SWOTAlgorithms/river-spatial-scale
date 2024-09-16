@@ -24,7 +24,82 @@ import statsmodels.api
 
 import geopandas as gpd
 
+########## Sept 2024, modified to use product class for river stretch processing
+def get_med_profile(signal, dist_out, kernel_size=35):
+    """
+    This function estimates a river profile from multitemporal SWOT measurements
+    over a connected river stretch (potentially mutu-reach section of river sampled at
+    the nodes).
 
+    inputs:
+    signal   = 2D multitemporal array of along-river data (e.g., node wse, node width)
+    dist_out = 1D along-river array of connected node distance to outlet
+    
+    output:
+    med_filt = median profile with holes onterpolated over and spatially median-filter smoothed
+    """
+    med = np.nanmedian(signal, axis=1)
+    msk = ~np.isnan(med)
+    # interplate over holes (but don't extrapolate. e.g., nan-fill outside)
+    med_interp = np.interp(
+        dist_out, dist_out[msk], med[msk], left=np.nan, right=np.nan)
+    # do along-river smoothing, preserving discontinuitites
+    med_filt = scipy.signal.medfilt(med_interp, kernel_size=kernel_size)
+    return med_filt
+
+def get_local_std(signal, signal_ref_1d, size=10):
+    """
+    This function computes the std of neighborhood of connected nodes (for each node).
+
+    inputs:
+    signal        = 2D multitemporal array of along-river data (e.g., node wse, node width)
+    signal_ref_1d = reference profile, e.g., output from get_med_profile()
+    size          = length of neighborhood window
+    
+    output:
+    std           = the local standard deviation
+    """
+    ref = np.broadcast_to(signal_ref_1d, np.shape(signal.T)).T
+    anom = signal - ref
+    anom_fill = anom.copy()
+    anom_fill[~np.isfinite(anom)] = 0
+    mask = np.ones_like(anom)
+    mask[~np.isfinite(anom)] = 0
+    cnt = scipy.ndimage.uniform_filter1d(mask, size, axis=0)
+    mn = scipy.ndimage.uniform_filter1d(anom_fill, size, axis=0) / cnt
+    mn[cnt==0] = 0
+    sm = scipy.ndimage.uniform_filter1d((anom_fill - mn)**2, size, axis=0) / cnt
+    std = np.sqrt(sm)
+    return std
+
+def get_stretch_stats(stretch_data_in, signal_key='wse', percentiles=[5, 25, 32, 50, 68, 75, 95]):
+    """
+    This function computes statistics of the multitemporal data along the time dimension.
+
+    inputs:
+    streach_data_in = a RiverStreachData object that is populated with input data
+    signal_key      = 'wse' or 'width' etc
+    percentiles     = list of percentiles to compute
+    
+    output:
+    streach_data    = copy of streach_data_in with the mean std, and percentile fields populated
+    """
+    stretch_data = stretch_data_in.copy()
+    stretch_data['{}_mean'.format(signal_key)] = np.nanmean(stretch_data[signal_key], axis=1)
+    stretch_data['{}_std'.format(signal_key)] = np.nanstd(stretch_data[signal_key], axis=1)
+    stretch_data['percentiles'] = np.array(percentiles)
+    ptiles = np.zeros((
+        len(stretch_data['{}_mean'.format(signal_key)]),
+        len(percentiles),
+        )) + np.nan
+    for k, ptile in enumerate(percentiles):
+        ptiles[:,k] = np.nanpercentile(stretch_data[signal_key], ptile, axis=1)
+    stretch_data['{}_percentiles'.format(signal_key)] = ptiles
+    return stretch_data
+
+# TODO: put functions to estimate scale parameters from the multitemporal streach data
+
+########## Older code ... TODO: clean-up/delete/revise
 def compute_mean_profile(drift_df, reaches, sword_node_df):
     # compute the mean profile handling missing data
     d = {

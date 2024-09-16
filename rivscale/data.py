@@ -26,6 +26,106 @@ import geopandas as gpd
 
 import rivscale.misc
 
+import rivscale.products
+
+########## Sept 2024, modified to use product class for river stretch processing
+def init_dict_from_keys(keys):
+    """
+    generic way to initialize a dictionary with
+    empty lists from a list of keys
+    """
+    data = dict.fromkeys(keys)
+    for key in data.keys():
+        data[key] = []
+    return data
+
+def check_connected_stretch(stretch_reaches, sword_df, d_up, d_down):
+    this_sword_df = sword_df[sword_df['reach_id'].isin(stretch_reaches)]
+    reaches_str = [str(reach) for reach in stretch_reaches]
+    up_reaches = np.roll(stretch_reaches, -1)
+    down_reaches = np.roll(stretch_reaches, 1)
+    down_reaches[0] = -1
+    up_reaches[-1] = -1
+    good = False
+    for reach_str, up_reach, down_reach in zip(reaches_str, up_reaches, down_reaches):
+        up_good = True
+        if up_reach > 0:
+            up_good = up_reach in d_up[reach_str]
+        down_good = True
+        if down_reach > 0:
+            down_good = down_reach in d_down[reach_str]
+        good = up_good and down_good
+    return good
+
+def make_stretch_stack(stretch_reaches, swot_node_df, sword_node_df, d_up, d_down):
+    """
+    create and populate a RiverStretchData object from node dataframes and SWORD
+    stretch_reaches = list of connected reaches along a river
+    swot_node_df    = the swot node data (multiple cycles)
+    sword_node_df, d_up, d_down   = SWORD info as output by rivscale.io.read_SWORD()
+    """
+    # Init the potentially multireach stretch stack 
+    data = rivscale.products.RiverStretchData()
+    data['stretch_reaches'] = stretch_reaches
+    # check that stretch_reaches list is a connected stretch
+    if not check_connected_stretch(stretch_reaches, sword_node_df, d_up, d_down):
+        print('WARNING: THE INPUT REACHES NOT A CONNECTED STRETCH:', stretch_reaches)
+        return data
+    swot_keys = [*swot_node_df.keys()]
+    data_keys = [*data.VARIABLES.keys()]
+    keys_2D = []
+    keys_1D = []
+    for key in data_keys:
+        siz = len(data.VARIABLES[key]['dimensions'])
+        if siz==2:
+            keys_2D.append(key)
+        elif siz==1:
+            keys_1D.append(key)
+    keys = list(set(swot_keys) & set(keys_2D))
+    # get separate list of the 1D keys
+    sword_keys = ['dist_out', 'node_id','local_node_id']
+    extra_keys = sword_keys + ['time_id',]
+    time_ids = np.sort(np.unique(np.floor(swot_node_df['time']/60/60)))
+    stretch_data = init_dict_from_keys(keys + extra_keys)
+    # go through each reach and stack the various items
+    for reach in stretch_reaches:
+        this_df = swot_node_df[
+            swot_node_df['reach_id']==reach].sort_values(['local_node_id', 'time'])
+        local_node_ids = np.unique(this_df['local_node_id'])
+        this_sword_df = sword_node_df[
+            sword_node_df['reach_id']==reach].sort_values('node_id')
+        if 'local_node_id' not in this_sword_df.keys():
+            this_sword_df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(
+                this_sword_df['node_id'])
+        nodes = this_sword_df['local_node_id']
+        node_ids = this_sword_df['node_id']
+        dist_out = this_sword_df['dist_out']
+        signal = init_dict_from_keys(keys + extra_keys)
+        # go through the time/cycles
+        for t_id in time_ids:
+            that_df = this_df[np.floor(this_df['time']/60/60)==t_id]
+            this_nodes = np.array(that_df['local_node_id'])
+            for key in keys:
+                this_key = np.array(that_df[key])
+                full_key = np.ones(np.shape(nodes)) + np.nan
+                for n,kk in zip(this_nodes, this_key):
+                    full_key[nodes==n] = kk
+                signal[key].append(full_key)
+            signal['time_id'].append(t_id)
+        if len(np.array(signal[keys[0]]))==0:
+            continue
+        for key in keys:
+            stretch_data[key].append(np.array(signal[key]).T)
+        for key in sword_keys:
+            stretch_data[key].append(this_sword_df[key])
+        stretch_data['time_id'].append(np.array(signal['time_id']))
+    # now smash each consecutive reach together
+    for key in keys + sword_keys:
+        data[key] = np.concatenate(stretch_data[key])
+    data['time_id'] = stretch_data['time_id'][0]
+    return data
+
+########## Older code ... TODO: clean up/delete/revise
 def init_swot_reach_rivertile():
     d = {
         'wse':[],
@@ -132,7 +232,23 @@ def get_reach_average_df(pt_df, reaches):
         reach_average_df = pd.DataFrame(d)
     return reach_average_df
 
-def init_full_profile_data():
+def init_full_profile_data(keys=[
+        'wse_stack',
+        'time_stack',
+        'wse_u_stack', 
+        'node_q_stack',
+        'area_stack',
+        'area_total_stack',
+        'node_id',
+        'dist_out',
+        'nodes',
+        'reach',
+        'cycle',
+        'network',]):
+    full_profile_data = dict.fromkeys(keys)
+    for key in full_profile_data.keys():
+        full_profile_data[key] = []
+    """
     full_profile_data = {
         'wse_stack':[],
         'time_stack':[],
@@ -147,6 +263,7 @@ def init_full_profile_data():
         'cycle':[],
         'network':[],
         }
+    """
     return full_profile_data
 
 def make_swot_data_stack(swot_node_df, sword_node_df):
@@ -229,11 +346,62 @@ def make_swot_data_stack(swot_node_df, sword_node_df):
     #full_profile_data['cycle'] = cycles
     return full_profile_data
 
-def stack_mean_and_covariance(full_profile_data):
+def make_generic_stack(swot_node_df, sword_node_df,
+        keys=['wse','node_q_b','width','area_total',
+            'wse_r_u','area_tot_u','time', 'lat', 'lon']):
+    # make stack for each reach for list of key values
+    # do the filtering for quality etc before calling this function
+    reaches = np.unique(swot_node_df['reach_id'])
+    full_profile_data = init_full_profile_data(keys)#dict.fromkeys(keys, [])
+    full_profile_data['node_id'] = []
+    full_profile_data['nodes'] = []
+    full_profile_data['dist_out'] = []
+    full_profile_data['reach'] = []
+    full_profile_data['time_id'] = []
+    full_profile_data['network'] = []
+    time_ids = np.sort(np.unique(np.floor(swot_node_df['time']/60/60)))
+    for k,reach in enumerate(reaches):
+        #print(reach)
+        this_df = swot_node_df[
+            swot_node_df['reach_id']==reach].sort_values(['local_node_id', 'time'])
+        local_node_ids = np.unique(this_df['local_node_id'])
+        this_sword_df = sword_node_df[
+            sword_node_df['reach_id']==reach].sort_values('node_id')
+        nodes = rivscale.misc.node_id_to_local_node_id(this_sword_df['node_id'])
+        node_ids = this_sword_df['node_id']
+        dist_out = this_sword_df['dist_out']
+        signal = init_full_profile_data(keys)#dict.fromkeys(keys, [])
+        signal['time_id'] = []
+        for t_id in time_ids:
+            #print(t_id)
+            that_df = this_df[np.floor(this_df['time']/60/60)==t_id]
+            this_nodes = np.array(that_df['local_node_id'])
+            for key in keys:
+                this_key = np.array(that_df[key])
+                full_key = np.ones(np.shape(nodes)) + np.nan
+                for n,kk in zip(this_nodes, this_key):
+                    full_key[nodes==n] = kk
+                signal[key].append(full_key)
+            signal['time_id'].append(t_id)
+        #print(keys)
+        if len(np.array(signal[keys[0]]))==0:
+            continue
+        for key in keys:
+            full_profile_data[key].append(np.array(signal[key]).T)
+        full_profile_data['node_id'].append(node_ids)
+        full_profile_data['nodes'].append(nodes)
+        full_profile_data['dist_out'].append(dist_out)
+        full_profile_data['reach'].append([reach,])
+        full_profile_data['time_id'].append(np.array(signal['time_id']))
+        full_profile_data['network'].append(k)
+    return full_profile_data
+
+def stack_mean_and_covariance(full_profile_data,
+        signal_key='wse_stack_interp', uncert_key='wse_u_stack'):
     stats = {'mean':[], 'median':[], 'Ry':[], 'reach':[], 'network':[]}
     for k, network in enumerate(full_profile_data['network']):
-        signal = full_profile_data['wse_stack_interp'][k]
-        signal_u = full_profile_data['wse_u_stack'][k]
+        signal = full_profile_data[signal_key][k]
+        signal_u = full_profile_data[uncert_key][k]
         mn = np.nanmean(signal, axis=1)
         med = np.nanmedian(signal, axis=1)
         # define the zero-mean signal
@@ -323,9 +491,12 @@ def get_connected_networks(sword_df, d_up, d_down):
     return network_list
 
 def network_stack(full_profile_data, network_list):
-    out_profile_data = init_full_profile_data()
+    out_profile_data = init_full_profile_data(full_profile_data.keys())
+    #out_profile_data = dict.fromkeys(full_profile_data.keys(), [])#init_full_profile_data()
     for j, reaches in enumerate(network_list):
-        this_profile_data = init_full_profile_data()
+        this_profile_data = init_full_profile_data(full_profile_data.keys())
+        #this_profile_data = dict.fromkeys(full_profile_data.keys(), [])#init_full_profile_data()
+        #breakpoint()
         for k,reach in enumerate(reaches):
             rs = np.squeeze(full_profile_data['reach'])
             ind = np.where(rs==reach)
@@ -342,15 +513,23 @@ def network_stack(full_profile_data, network_list):
                 #print(key, ind)
                 if key == 'reach':
                     this_profile_data[key].append(rs[ind])
-                elif key not in ['cycle', 'network']:
+                elif key not in ['time_id','cycle','network']:
+                    if 'wse' in key:
+                        print(key, ind, np.shape(full_profile_data[key][ind]))
                     this_profile_data[key].append(full_profile_data[key][ind])
         for key in full_profile_data.keys():
             print(key)
+            #breakpoint()
             if key == 'network':
                 out_profile_data[key].append(j)
-            elif key=='cycle':
-                out_profile_data[key].append(full_profile_data[key][0]) 
-            elif key not in ['cycle','reach']:
+            elif key in ['time_id','cycle']:#key=='cycle':
+                out_profile_data[key].append(full_profile_data[key][0])
+            elif key not in ['time_id','cycle','reach']:
+                #breakpoint()
+                if 'wse' in key:
+                    for ii in range(len(this_profile_data[key])):
+                        print(key, ii, np.shape(this_profile_data[key][ii]))
+                    #print(np.shape(this_profile_data[key][7]))
                 if len(this_profile_data[key])>0:
                     out_profile_data[key].append(np.concatenate(this_profile_data[key]))
                 else:
