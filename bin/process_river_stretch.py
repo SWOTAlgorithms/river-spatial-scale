@@ -32,7 +32,7 @@ import rivscale.filter
 
 from errtools.misc import swot_time_to_field_time
 import errtools.plots
-
+import os.path
 
 def process_stretch(stretch_reaches, swot_node_df, sword_node_df, d_up, d_down):
     # make the stretch multitemporal stack object
@@ -75,7 +75,8 @@ def process_stretch(stretch_reaches, swot_node_df, sword_node_df, d_up, d_down):
 def main():
     #df = pd.read_csv('swot_data_Ocmulgee_River.csv')
     #df = pd.read_csv('swot_data_ocmulgee.csv')
-    df = pd.read_csv('swot_data_all.csv')
+    #df = pd.read_csv('swot_data_all.csv')
+    df = pd.read_csv('calval_nodes_delivery_merged_240826_v5.csv')
     #df = df[df['river_name']=='Ocmulgee River']
     # drop elements with no_data times
     df = df[df['time_str']!='no_data']
@@ -90,17 +91,28 @@ def main():
     df['wse_u'] = df['wse_r_u']
     #
     swot_node_df = df
-    sword_file = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf/na_sword_v16.nc'
-    sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(sword_file)
+    sword_dir = '/u/swot-fn-r0/swot/sim_proc_inputs/river_database/20230802/v16/netcdf'
+    #sword_file = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf/na_sword_v16.nc'
+    #sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(sword_file)
     #breakpoint()
     #sword_df = sword_df[sword_df['river_name'] == 'Ocmulgee River']
     #network_list = rivscale.data.get_connected_networks(sword_df, d_up, d_down)
     #network_list = [np.unique(np.sort(swot_node_df['reach_id']))]
-    df_stretches = pd.read_csv('Flow_wave_reaches_fixed.csv')
+    #df_stretches = pd.read_csv('Flow_wave_reaches_fixed.csv')
+    df_stretches = pd.read_csv('calval_stretches.csv')
     stretch_list = []
     for key in df_stretches.keys():
+        sword_name = 'na_sword_v16.nc'
+        if key == 'Waimak':
+            sword_name = 'oc_sword_v16.nc'
+        if key == 'Garonne':
+            sword_name = 'eu_sword_v16.nc'
+        sword_file = os.path.join(sword_dir,sword_name)
+        sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(sword_file)
+        #stretch_reaches = np.array(
+        #    df_stretches[np.isfinite(df_stretches[key])][key]).astype(int)
         stretch_reaches = np.array(
-            df_stretches[np.isfinite(df_stretches[key])][key]).astype(int)
+            df_stretches[df_stretches[key]>0][key]).astype(int)
         print("processing stretch:", key, ", Reaches:",stretch_reaches)
         # process the stretch
         stretch_data = process_stretch(stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
