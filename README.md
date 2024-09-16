@@ -1,6 +1,15 @@
 # river-spatial-scale
 Repo for code to estimate river spatial scale parameters (e.g., along-river wse covariance/spectra etc)
 
+The hydrochron.py script grabs data for the Ocmulgee, Colorado, and Yellowstone rivers and puts them in a pandas dataframe
+
+The process_river_stretch.py script creates the multitemporal stack of multi-reach stretches an runs Bayes reconstruction
+returning RiverSreatchData product instances.
+
+
+# intial code for proposal
+This is the description for the state of the code at the time of the original science team proposal submission
+
 The main script that stacks multitemporal SWOT data for one tile and estimates the mean wse profile and
 covariance is bin/analyze_networks.py  
 

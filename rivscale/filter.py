@@ -26,6 +26,111 @@ import geopandas as gpd
 
 import rivscale.data
 
+########## Sept 2024 stretch-based processing
+def filter_node_qual(df, height=True, area=False, dark_thresh=0.8):
+    """
+    filter out swot data based on quality, dark_frac, ice,
+    location in swath etc...
+    """
+    # filter out swath edges
+    #df = df[np.abs(df['xtrk_dist']) > 10000]
+    #df = df[np.abs(df['xtrk_dist']) < 60000]
+    df = df[np.bitwise_and(df['node_q_b'], 2**13) == 0]
+    df = df[np.bitwise_and(df['node_q_b'], 2**14) == 0]
+    # filter out high dark frac
+    df = df[df['dark_frac'] < dark_thresh]
+    # filter out ice
+    #df = df[df['ice_clim_f']==0]
+    # filter out bad qual
+    df = df[df['node_q'] < 3]
+    # drop xovr_cal_q == 2
+    df = df[df['xovr_cal_q'] < 2]
+    # now drop bitwise qual if commanded
+    if height:
+        # fill values
+        df = df[df['wse'] > -99999999.0]
+        # geolocation_qual_degraded
+        #df = df[np.bitwise_and(df['node_q_b'], 2**19) == 0]
+        # wse outlier
+        df = df[np.bitwise_and(df['node_q_b'], 2**23) == 0]
+    if area:
+        df = df[df['area_total'] > -99999999.0]
+        # classification_qual_degraded
+        df = df[np.bitwise_and(df['node_q_b'], 2**18) == 0]
+    return df
+
+def filter_bad_stretch_data(stretch_data_in):
+    """
+    Filter the streach data based on comparing uncertainty to local variability
+    for both wse and width.
+
+    inputs:
+        stretch_data_in = a RiverStretchData instance with populated input data
+
+    outputs:
+        streach_data    = copy of stretch_data_in with bad values set to NaN
+
+    NOTE: User should first drop the bad stuff based on node_q_b and
+    other standard node quality indicators before creating the
+    RiverStretchData object since we dont carry all those
+    indicators in the RiverStretchData object to do it here
+    """
+    # find the anomolous wse data by looking for inconsistency between
+    # node uncertainty and local node variability (TODO: but ignoring
+    # nodes near actual diconstinuities?)
+    stretch_data = stretch_data_in.copy()
+    wse = stretch_data['wse']
+    wse_ref_1d = rivscale.estimate.get_med_profile(
+        stretch_data['wse'], stretch_data['dist_out'])
+    wse_std = rivscale.estimate.get_local_std(wse, wse_ref_1d)
+    bad_wse_mask = wse_std / stretch_data['wse_u'] > 100
+    stretch_data['wse'][bad_wse_mask] = np.nan
+    # also drop the very noisy nodes
+    noisy_wse_mask = stretch_data['wse_u'] > 0.5
+    stretch_data['wse'][noisy_wse_mask] = np.nan
+    # now do the width
+    width = stretch_data['width']
+    width_ref_1d = rivscale.estimate.get_med_profile(
+        stretch_data['width'], stretch_data['dist_out'])
+    width_std = rivscale.estimate.get_local_std(width, width_ref_1d)
+    bad_width_mask = width_std / stretch_data['width_u'] > 100
+    stretch_data['width'][bad_width_mask] = np.nan
+    return stretch_data
+
+def drop_stretch_nans(stretch_data, min_nodes=10):
+    """
+    Prune out the time/cycle observations with too little
+    good data in either wse or width.
+
+    inputs:
+        stretch_data = a RiverStretchData instance with populated input data
+        min_nodes    = min number of valid nodes to consider to keep
+    
+    outputs:
+        data_out     = copy of streach_data with rows dropped
+    """
+    #create a new container instance
+    data_out = rivscale.products.RiverStretchData()
+    wse = stretch_data['wse']
+    width = stretch_data['width']
+    num = np.sum(np.logical_or(np.isfinite(wse), np.isfinite(width)), axis=0)
+    # go through each data that is populated
+    for key in stretch_data.variables.keys():
+        if 'num_times' in stretch_data.VARIABLES[key]['dimensions'].keys():
+            dim = [*stretch_data.VARIABLES[key]['dimensions'].keys()].index('num_times')
+            #print(key, dim)
+            if dim==0:
+                data_out[key] = stretch_data[key][num>min_nodes].copy()
+            if dim==1:
+                data_out[key] = stretch_data[key][:,num>min_nodes].copy()
+            if dim==2:
+                data_out[key] = stretch_data[key][:,:,num>min_nodes].copy()
+        else:
+            # just copy the data over to output
+            data_out[key] = stretch_data[key].copy()
+    return data_out
+
+############ Old code TODO: delete/revise etc
 def drop_underobserved_reaches(drift_df, reaches):
     good_reaches = []
     for reach in reaches:
@@ -666,11 +771,12 @@ def filter_stack(full_profile_data, plotem=False):
     return full_profile_data
 
 def exclude_bad_stack_cycles(full_profile_data):
-    out_data = rivscale.data.init_full_profile_data()
+    out_data = rivscale.data.init_full_profile_data(full_profile_data.keys())
     for k,network in enumerate(full_profile_data['network']):
         wse_stack = full_profile_data['wse_stack'][k]
         cycles = full_profile_data['cycle'][k]
-        this_out_data = rivscale.data.init_full_profile_data()
+        this_out_data = rivscale.data.init_full_profile_data(
+            full_profile_data.keys())
         for j,cycl in enumerate(cycles):
             wse = wse_stack[:,j]
             if np.sum(np.isfinite(wse)) > len(wse) / 2:
@@ -698,14 +804,20 @@ def exclude_bad_stack_cycles(full_profile_data):
     #breakpoint()
     return out_data
 
-def interp_stack(full_profile_data, left=None, right=None):
+def interp_stack(full_profile_data,
+        signal_key='wse_stack', left=None, right=None):
     wse_stack_out = []
     for k, network in enumerate(full_profile_data['network']):
-        wse_stack = full_profile_data['wse_stack'][k]
-        nodes = full_profile_data['nodes'][k]
+        wse_stack = full_profile_data[signal_key][k]
+        #nodes = full_profile_data[node_key][k]
         dist_out = full_profile_data['dist_out'][k]
         this_wse_stack = []
-        for j,cycl in enumerate(full_profile_data['cycle'][k]):
+        time_key = 'time_id'
+        try:
+            full_profile_data[time_key]
+        except KeyError:
+            time_key='cycle'
+        for j,cycl in enumerate(full_profile_data[time_key][k]):
             #breakpoint()
             wse = wse_stack[:,j]
             msk = np.isfinite(wse)
@@ -719,7 +831,7 @@ def interp_stack(full_profile_data, left=None, right=None):
             #    wse_interp = np.zeros(np.shape(nodes)) + np.nan
             this_wse_stack.append(wse_interp)
         wse_stack_out.append(np.array(this_wse_stack).T)
-    full_profile_data['wse_stack_interp'] = wse_stack_out
+    full_profile_data[signal_key+'_interp'] = wse_stack_out
     return full_profile_data
 
 
@@ -811,7 +923,8 @@ def modify_uncert(full_profile_data):
     """
     set the uncert high for nodes close to bad/nan ones 
     """
-    out_profile_data = rivscale.data.init_full_profile_data()
+    out_profile_data = rivscale.data.init_full_profile_data(
+        full_profile_data.keys())
     for key in full_profile_data:
         out_profile_data[key] = full_profile_data[key].copy()
     for k, network in enumerate(full_profile_data['network']):
