@@ -35,6 +35,7 @@ def plot_stretch_profiles(
         plot_anom=False,
         maskem=True,
         title='',
+        show=False,
         outdir=None):
     """
     function for plotting profiles
@@ -63,7 +64,8 @@ def plot_stretch_profiles(
     plt.figure()
     plt.subplot(2,1,1)
     plt.plot(x, y)
-    plt.ylabel('{}{}'.format(y_key, anom_str))
+    ylabel = '{}{}'.format(y_key, anom_str)
+    plt.ylabel(ylabel)
     plt.grid()
     plt.subplot(2,1,2)
     plt.plot(x, y2)
@@ -71,6 +73,16 @@ def plot_stretch_profiles(
     plt.xlabel(x_key)
     plt.suptitle(title)
     plt.grid()
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}_profile_{}_vs_{}'.format(title,ylabel, x_key)
+        plt.savefig(os.path.join(outdir, fname))
+        plt.close()
+    else:
+        if show:
+            plt.show() 
 
 def plot_stretch_width_vs_wse(
         stretch_data,
@@ -78,6 +90,7 @@ def plot_stretch_width_vs_wse(
         width_key='width',
         maskem=True,
         title='',
+        show=False,
         outdir=None):
     wse = stretch_data[wse_key]
     width = stretch_data[width_key]
@@ -110,8 +123,18 @@ def plot_stretch_width_vs_wse(
         fig.set_ylim(ylim)
         fig.set_xlim(xlim)
         fig.set_title(title)
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}_density_{}_vs{}'.format(title, width_key, wse_key)
+        plt.savefig(os.path.join(outdir, fname))
+        plt.close()
+    else:
+        if show:
+            plt.show()
 
-def plot_stretch_spacetime(stretch_data, title='', outdir=None):
+def plot_stretch_spacetime(stretch_data, title='', show=False, outdir=None):
     """
     make plot of time/space sampling
     """
@@ -137,6 +160,16 @@ def plot_stretch_spacetime(stretch_data, title='', outdir=None):
     plt.xticks(rotation=15)
     plt.title(title)
     plt.tight_layout()
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}_spacetime'.format(title)
+        plt.savefig(os.path.join(outdir, fname))
+        plt.close()
+    else:
+        if show:
+            plt.show()
 
 def plot_stretch(stretch_data, title='', outdir=None):
         # wse

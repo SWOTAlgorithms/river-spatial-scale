@@ -17,14 +17,15 @@ def main():
     #stretch_names = ['Ocmulgee', 'Colorado', 'Yellowstone']
     stretch_names = ['Willamette', 'Connecticut', 'North_Sask', 'Yukon', 'Garonne', 'Waimak']
     #stretch_names = ['Waimak',]
+    outdir = 'calval_plots'
     for name in stretch_names:
         # read in the already processed data
         stretch_data = rivscale.products.RiverStretchData.from_ncfile(
             '{}_stretch.nc'.format(name))
         #breakpoint()
-        rivscale.plot.plot_stretch(stretch_data, title=name)
-        plt.show()
-        breakpoint()
+        rivscale.plot.plot_stretch(stretch_data, title=name, outdir=outdir)
+        #plt.show()
+        #breakpoint()
 
 if __name__ == "__main__":
     main()
