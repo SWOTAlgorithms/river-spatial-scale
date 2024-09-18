@@ -3,6 +3,10 @@ import numpy as np
 import scipy.ndimage
 
 
+def reach_id_from_node_id_int(node_id_arr):
+    return (node_id_arr/10000).astype(int)*10 + node_id_arr - (
+        node_id_arr/10).astype(int)*10
+
 def node_id_to_local_node_id(node_ids):
     """
     maps node_id to local node_id without the reach_id prefix

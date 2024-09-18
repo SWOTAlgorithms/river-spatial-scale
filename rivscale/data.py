@@ -93,7 +93,7 @@ def make_stretch_stack(stretch_reaches, swot_node_df, sword_node_df, d_up, d_dow
             swot_node_df['reach_id']==reach].sort_values(['local_node_id', 'time'])
         local_node_ids = np.unique(this_df['local_node_id'])
         this_sword_df = sword_node_df[
-            sword_node_df['reach_id']==reach].sort_values('node_id')
+            sword_node_df['reach_id']==reach].sort_values(['dist_out','node_id'])
         if 'local_node_id' not in this_sword_df.keys():
             this_sword_df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(
                 this_sword_df['node_id'])

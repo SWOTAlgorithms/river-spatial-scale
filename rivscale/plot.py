@@ -24,7 +24,189 @@ import statsmodels.api
 
 import geopandas as gpd
 
+import rivscale.misc
+import seaborn as sns
 
+########## Sept 2024 stretch-based processing
+def plot_stretch_profiles(
+        stretch_data,
+        x_key='dist_out',
+        y_key='wse',
+        plot_anom=False,
+        maskem=True,
+        title='',
+        outdir=None):
+    """
+    function for plotting profiles
+    """
+    x = stretch_data[x_key]
+    y = stretch_data[y_key]
+    y2 = stretch_data['bayes_'+y_key]
+    anom_str = ''
+    if plot_anom:
+        # handle anomaly plots
+        ref = stretch_data['{}_reference'.format(y_key)]
+        ref2 = np.broadcast_to(ref, np.shape(y.T)).T
+        y = y - ref2
+        y2 = y2 - ref2
+        anom_str = ' anomaly'
+    if x_key=='time_id':
+        # convert to datetime
+        x = swot_time_to_field_time(x*60*60)
+        y = y.T
+        y2 = y2.T
+    if maskem:
+        nanmask = np.ones_like(y)
+        nanmask[~np.isfinite(y)] = np.nan
+        y = y * nanmask
+        y2 = y2 * nanmask
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.plot(x, y)
+    plt.ylabel('{}{}'.format(y_key, anom_str))
+    plt.grid()
+    plt.subplot(2,1,2)
+    plt.plot(x, y2)
+    plt.ylabel('{}{}'.format('bayes_'+y_key, anom_str))
+    plt.xlabel(x_key)
+    plt.suptitle(title)
+    plt.grid()
+
+def plot_stretch_width_vs_wse(
+        stretch_data,
+        wse_key='wse',
+        width_key='width',
+        maskem=True,
+        title='',
+        outdir=None):
+    wse = stretch_data[wse_key]
+    width = stretch_data[width_key]
+    wse_ref = stretch_data['wse_reference']
+    width_ref = stretch_data['width_reference']
+
+    anom = wse - np.broadcast_to(wse_ref, np.shape(wse.T)).T
+    anom_w = width - np.broadcast_to(width_ref, np.shape(width.T)).T
+    if maskem:
+        nanmask = np.ones_like(anom)
+        nanmask[~np.isfinite(anom)] = np.nan
+        nanmask[~np.isfinite(anom_w)] = np.nan
+        anom = anom * nanmask
+        anom_w = anom_w * nanmask
+    # also do the wse vs width
+    key_wse = '{} anomaly'.format(wse_key)
+    key_width = '{} anomaly'.format(width_key)
+    dic = {
+        key_wse:anom[np.isfinite(anom*anom_w)],
+        key_width:anom_w[np.isfinite(anom*anom_w)]
+    }
+    df = pd.DataFrame(dic)
+    fig =errtools.plots.scatterdensity(
+        df, key_wse, key_width, show=False)
+    ylim = (np.nanpercentile(df[key_width], 2),
+        np.nanpercentile(df[key_width], 95))
+    xlim = (np.nanpercentile(df[key_wse], 2),
+        np.nanpercentile(df[key_wse], 95))
+    if fig is not None:
+        fig.set_ylim(ylim)
+        fig.set_xlim(xlim)
+        fig.set_title(title)
+
+def plot_stretch_spacetime(stretch_data, title='', outdir=None):
+    """
+    make plot of time/space sampling
+    """
+    wse = stretch_data['wse']
+    dist_out = stretch_data['dist_out']
+    #time_id = stretch_data['time_id']
+    time_id = swot_time_to_field_time(stretch_data['time_id']*60*60)
+    reach_id = rivscale.misc.reach_id_from_node_id_int(
+        stretch_data['node_id'])
+    # make plot of time/space sampling
+    dist_out2 = np.broadcast_to(dist_out, np.shape(wse.T)).T
+    time_id2 = np.broadcast_to(time_id, np.shape(wse))
+    reach_id2 = np.broadcast_to(reach_id, np.shape(wse.T)).T
+    dic = {
+        'time_id':time_id2[wse>0],
+        'dist_out':dist_out2[wse>0],
+        'reach_id':reach_id2[wse>0]
+        }
+    df_tmp = pd.DataFrame(dic)
+    plt.figure()
+    sns.scatterplot(data=df_tmp, x='time_id', y='dist_out',
+        hue='reach_id', palette='tab20')#"deep")
+    plt.xticks(rotation=15)
+    plt.title(title)
+    plt.tight_layout()
+
+def plot_stretch(stretch_data, title='', outdir=None):
+        # wse
+        plot_stretch_profiles(
+            stretch_data,
+            x_key='dist_out',
+            y_key='wse',
+            plot_anom=False,
+            title=title,
+            outdir=outdir)
+        # wse anom
+        plot_stretch_profiles(
+            stretch_data,
+            x_key='dist_out',
+            y_key='wse',
+            plot_anom=True,
+            title=title,
+            outdir=outdir)
+        # width
+        plot_stretch_profiles(
+            stretch_data,
+            x_key='dist_out',
+            y_key='width',
+            plot_anom=False,
+            title=title,
+            outdir=outdir)
+        # width anom
+        plot_stretch_profiles(
+            stretch_data,
+            x_key='dist_out',
+            y_key='width',
+            plot_anom=True,
+            title=title,
+            outdir=outdir)
+        # wse anom vs time
+        plot_stretch_profiles(
+            stretch_data,
+            x_key='time_id',
+            y_key='wse',
+            plot_anom=True,
+            title=title,
+            outdir=outdir)
+        # width anom vs time
+        plot_stretch_profiles(
+            stretch_data,
+            x_key='time_id',
+            y_key='width',
+            plot_anom=True,
+            title=title,
+            outdir=outdir)
+        # plot the width vs wse desnity plots
+        plot_stretch_width_vs_wse(
+            stretch_data,
+            wse_key='wse',
+            width_key='width',
+            maskem=True,
+            title=title,
+            outdir=outdir)
+        plot_stretch_width_vs_wse(
+            stretch_data,
+            wse_key='bayes_wse',
+            width_key='bayes_width',
+            maskem=True,
+            title=title,
+            outdir=outdir)
+        # make space-time sampling plot
+        plot_stretch_spacetime(stretch_data, title=title, outdir=outdir)
+
+
+######### TODO: clean-up/delete.revise stuff below
 def plot_swot_profiles(swot_df, swot_node_df, full_profile_df, swot_mean_df):
     # plot some stuff
     reaches = np.unique(np.array(swot_df['reach_id']))

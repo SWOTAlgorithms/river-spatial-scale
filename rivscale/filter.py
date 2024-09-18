@@ -40,7 +40,7 @@ def filter_node_qual(df, height=True, area=False, dark_thresh=0.8):
     # filter out high dark frac
     df = df[df['dark_frac'] < dark_thresh]
     # filter out ice
-    #df = df[df['ice_clim_f']==0]
+    df = df[df['ice_clim_f']==0]
     # filter out bad qual
     df = df[df['node_q'] < 3]
     # drop xovr_cal_q == 2
@@ -50,7 +50,7 @@ def filter_node_qual(df, height=True, area=False, dark_thresh=0.8):
         # fill values
         df = df[df['wse'] > -99999999.0]
         # geolocation_qual_degraded
-        #df = df[np.bitwise_and(df['node_q_b'], 2**19) == 0]
+        df = df[np.bitwise_and(df['node_q_b'], 2**19) == 0]
         # wse outlier
         df = df[np.bitwise_and(df['node_q_b'], 2**23) == 0]
     if area:

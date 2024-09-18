@@ -39,12 +39,19 @@ def get_med_profile(signal, dist_out, kernel_size=35):
     med_filt = median profile with holes onterpolated over and spatially median-filter smoothed
     """
     med = np.nanmedian(signal, axis=1)
-    msk = ~np.isnan(med)
+    msk = np.isfinite(med)
     # interplate over holes (but don't extrapolate. e.g., nan-fill outside)
+    #med_interp = np.interp(
+    #    dist_out, dist_out[msk], med[msk], left=np.nan, right=np.nan)
+    # TODO: handle remaining nans by filling with linear fit or sword prior? 
+    #       just fill with max or min for now
+    med_min = np.nanmin(med)
+    med_max = np.nanmax(med)
     med_interp = np.interp(
-        dist_out, dist_out[msk], med[msk], left=np.nan, right=np.nan)
+        dist_out, dist_out[msk], med[msk], left=med_min, right=med_max)
     # do along-river smoothing, preserving discontinuitites
-    med_filt = scipy.signal.medfilt(med_interp, kernel_size=kernel_size)
+    #med_filt = scipy.signal.medfilt(med_interp, kernel_size=kernel_size)
+    med_filt = scipy.ndimage.median_filter(med_interp, size=kernel_size, mode='nearest')
     return med_filt
 
 def get_local_std(signal, signal_ref_1d, size=10):

@@ -53,7 +53,7 @@ def process_stretch(stretch_reaches, swot_node_df, sword_node_df, d_up, d_down):
     stretch_data['wse_reference'] = rivscale.estimate.get_med_profile(
         stretch_data['wse'], stretch_data['dist_out'])
     stretch_data['width_reference'] = rivscale.estimate.get_med_profile(
-        stretch_data['width'], stretch_data['dist_out'])
+        stretch_data['width'], stretch_data['dist_out'], kernel_size=1)# don't smooth width
     # set up the bayes estimator signal covariance
     char_length_tau = 100000 # TODO: estimate these from the data
     prior_unc_alpha = 1.5
@@ -89,9 +89,12 @@ def main():
     df['cycle'] = df['cycle_id']
     df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(df['node_id'])
     df['wse_u'] = df['wse_r_u']
+    df['dist_out'] = df['p_dist_out']
+    #breakpoint()
     #
     swot_node_df = df
-    sword_dir = '/u/swot-fn-r0/swot/sim_proc_inputs/river_database/20230802/v16/netcdf'
+    #sword_dir = '/u/swot-fn-r0/swot/sim_proc_inputs/river_database/20230802/v16/netcdf'
+    sword_dir = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf'
     #sword_file = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf/na_sword_v16.nc'
     #sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(sword_file)
     #breakpoint()
@@ -99,7 +102,7 @@ def main():
     #network_list = rivscale.data.get_connected_networks(sword_df, d_up, d_down)
     #network_list = [np.unique(np.sort(swot_node_df['reach_id']))]
     #df_stretches = pd.read_csv('Flow_wave_reaches_fixed.csv')
-    df_stretches = pd.read_csv('calval_stretches.csv')
+    df_stretches = pd.read_csv('calval_stretches_NSYukonGaronnefix.csv')
     stretch_list = []
     for key in df_stretches.keys():
         sword_name = 'na_sword_v16.nc'
@@ -120,7 +123,7 @@ def main():
         # write out the data to ncfile
         stretch_data.to_ncfile('{}_stretch.nc'.format(key))
         #breakpoint()
-    breakpoint()
+    #breakpoint()
 
 if __name__ == "__main__":
     main()

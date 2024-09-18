@@ -33,8 +33,8 @@ def reconstruct_stretch(stretch_data_in,
     # copy the input data to output data
     stretch_data = stretch_data_in.copy()
     # get the bayes parameters
-    mn = stretch_data['{}_reference'.format(signal_key)]
-    Ry = stretch_data['{}_cov'.format(signal_key)]
+    mn = stretch_data['{}_reference'.format(signal_key)]#.filled(np.nan)
+    Ry = stretch_data['{}_cov'.format(signal_key)]#.filled(0)
     # TODO: should this be local_node_id (i.e., indexing starting at 1)?
     nodes = np.arange(len(stretch_data['node_id']), dtype=int)
     signal_hats = []
