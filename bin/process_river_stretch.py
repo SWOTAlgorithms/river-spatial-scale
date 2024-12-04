@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 '''
-Copyright (c) 2024-, California Institute of Technology ("Caltech"). U.S.
-Government sponsorship acknowledged.
-All rights reserved.
+Copyright 2024, by the California Institute of Technology. ALL RIGHTS RESERVED. United States Government Sponsorship acknowledged. Any commercial use must be negotiated with the Office of Technology Transfer at the California Institute of Technology.
+ 
+This software may be subject to U.S. export control laws. By accepting this software, the user agrees to comply with all applicable U.S. export laws and regulations. User has the responsibility to obtain export licenses, or other export authority as may be required before exporting such information to foreign countries or providing access to foreign persons.
 
 Author(s): Brent Williams
 
@@ -76,7 +76,14 @@ def main():
     #df = pd.read_csv('swot_data_Ocmulgee_River.csv')
     #df = pd.read_csv('swot_data_ocmulgee.csv')
     #df = pd.read_csv('swot_data_all.csv')
-    df = pd.read_csv('calval_nodes_delivery_merged_240826_v5.csv')
+    #df = pd.read_csv('calval_nodes_delivery_merged_240826_v5.csv')
+    df = pd.read_csv('calval_nodes_wse_sm_q_b_241112_v1_a.csv')
+    use_wse_sm = True
+    if use_wse_sm:
+        df['wse'] = np.array(df['wse_sm']).copy()
+        df['wse_u'] = np.array(df['wse_sm_u']).copy()
+        df['wse_q'] = np.array(df['wse_sm_q']).copy()
+        df['wse_q_b'] = np.array(df['wse_sm_q_b']).copy()
     #df = df[df['river_name']=='Ocmulgee River']
     # drop elements with no_data times
     df = df[df['time_str']!='no_data']
@@ -93,8 +100,9 @@ def main():
     #breakpoint()
     #
     swot_node_df = df
+    sword_dir = 'SWORD/v16/netcdf'
     #sword_dir = '/u/swot-fn-r0/swot/sim_proc_inputs/river_database/20230802/v16/netcdf'
-    sword_dir = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf'
+    #sword_dir = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf'
     #sword_file = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf/na_sword_v16.nc'
     #sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(sword_file)
     #breakpoint()
@@ -102,7 +110,9 @@ def main():
     #network_list = rivscale.data.get_connected_networks(sword_df, d_up, d_down)
     #network_list = [np.unique(np.sort(swot_node_df['reach_id']))]
     #df_stretches = pd.read_csv('Flow_wave_reaches_fixed.csv')
-    df_stretches = pd.read_csv('calval_stretches_NSYukonGaronnefix.csv')
+    #df_stretches = pd.read_csv('calval_stretches_NSYukonGaronnefix.csv')
+    df_stretches = pd.read_csv('calval_stretches.csv')
+    #
     stretch_list = []
     for key in df_stretches.keys():
         sword_name = 'na_sword_v16.nc'
