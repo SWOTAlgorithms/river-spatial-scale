@@ -15,9 +15,10 @@ import rivscale.products
 import matplotlib.pyplot as plt
 def main():
     #stretch_names = ['Ocmulgee', 'Colorado', 'Yellowstone']
-    stretch_names = ['Willamette', 'Connecticut', 'North_Sask', 'Yukon', 'Garonne', 'Waimak']
+    #stretch_names = ['Willamette', 'Connecticut', 'North_Sask', 'Yukon', 'Garonne', 'Waimak']
     #stretch_names = ['Waimak',]
-    outdir = 'calval_plots'
+    stretch_names = ['Willamette',]
+    outdir = 'Willamette_plots'
     for name in stretch_names:
         # read in the already processed data
         stretch_data = rivscale.products.RiverStretchData.from_ncfile(

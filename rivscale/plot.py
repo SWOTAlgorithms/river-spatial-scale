@@ -27,6 +27,88 @@ import geopandas as gpd
 import rivscale.misc
 import seaborn as sns
 
+########## Jan 2025 add spectral plots
+def plot_spectra(
+        stretch_data,
+        y_key='wse',
+        char_length_tau=10000,
+        prior_unc_alpha=2,
+        title='',
+        show=False,
+        outdir=None):
+    # zero-fill in the nomanom
+    # plot along-river spectra of the anomaly fields
+    dist_out = stretch_data['dist_out']
+    y = stretch_data[y_key]
+    ref = stretch_data['{}_reference'.format(y_key)]
+    ref2 = np.broadcast_to(ref, np.shape(y.T)).T
+    anom = y - ref2
+    # now get anomanom
+    med_anom = np.nanmedian(anom,axis=0)
+    med_anom_prof_stack = np.tile(med_anom.T, (len(y[:,0]),1))
+    anomanom = anom - med_anom_prof_stack
+    tmp = anomanom.copy()
+    tmp[~np.isfinite(tmp)] = 0
+    figsize=(7,6)
+    plt.figure(figsize=figsize)
+    plt.subplot(2,1,1)
+    avg = 0     
+    for k in range(len(tmp[0,:])): 
+        f, pxx = scipy.signal.periodogram(tmp[:,k])
+        #f=f0[1:]
+        #f = np.linspace(0.01, 10, 1000)
+        #msk = np.where(np.isfinite(tmp20[:,k]))
+        #wse = tmp20[:,k]
+        #breakpoint()
+        #pxx = scipy.signal.lombscargle(wse[msk], dist[msk], f)
+        plt.loglog(f, pxx)
+        #plt.semilogy(f, pxx)
+        avg = avg + pxx
+        #plt.show()
+    ylim = (1e-6, 1000)
+    plt.grid()
+    plt.ylabel('power spectral density')
+    #plt.xlabel('wave-number/spatial-frequency (1/node)')
+    plt.ylim(ylim)
+    avg = avg / len(tmp[0,:])
+    plt.title(title)
+    #plt.figure()
+    plt.subplot(2,1,2)
+    plt.loglog(f, avg)
+    #char_length_tau = 100000
+    #prior_unc_alpha = 1.5
+    i0 = int(np.floor(len(dist_out)/2))
+    t = dist_out - dist_out[i0]
+    exp_cov = np.exp(-np.abs(t) / char_length_tau)
+    exp_cov = exp_cov * np.max(exp_cov) * prior_unc_alpha ** 2
+    #f2, pxx_exp = scipy.signal.periodogram(exp_cov)
+    ft = np.abs(np.fft.fft(exp_cov))
+    plt.loglog(f, ft[0:i0+1])
+    # also plot an estimte of the noise floor
+    #breakpoint()
+    #noise = np.sqrt(0.01) * np.random.randn(len(exp_cov))
+    #ft_noise = np.abs(np.fft.fft(noise))
+    #plt.loglog(f, ft_noise[0:i0+1])
+    noise_floor = 0.05 * np.ones_like(f)
+    plt.loglog(f, noise_floor)
+    plt.loglog(f, noise_floor + ft[0:i0+1])
+    plt.ylim(ylim)
+    plt.grid()
+    plt.legend(['average power spectrum','exp cov', 'noise floor', 'exp cov with noise floor'])
+    plt.ylabel('power spectral density')
+    plt.xlabel('wave-number/spatial-frequency (1/node)')
+    #plt.title(title)
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}_spectrum_of_{}'.format(title, y_key)
+        plt.savefig(os.path.join(outdir, fname), dpi=300)
+        plt.close()
+    else:
+        if show:
+            plt.show()
+
 ########## Sept 2024 stretch-based processing
 def plot_stretch_profiles(
         stretch_data,
@@ -36,18 +118,27 @@ def plot_stretch_profiles(
         maskem=True,
         title='',
         show=False,
-        outdir=None):
+        outdir=None,
+        withBayes=False,
+        withAnom=True,
+        BayesOnly=False):
     """
     function for plotting profiles
     """
     x = stretch_data[x_key]
     y = stretch_data[y_key]
     y2 = stretch_data['bayes_'+y_key]
+    bayes_tag = ''
+    if BayesOnly:
+        y = y2
+        bayes_tag = 'bayes_'
     anom_str = ''
+    ref = stretch_data['{}_reference'.format(y_key)]
+    ref2 = np.broadcast_to(ref, np.shape(y.T)).T
     if plot_anom:
         # handle anomaly plots
-        ref = stretch_data['{}_reference'.format(y_key)]
-        ref2 = np.broadcast_to(ref, np.shape(y.T)).T
+        #ref = stretch_data['{}_reference'.format(y_key)]
+        #ref2 = np.broadcast_to(ref, np.shape(y.T)).T
         y = y - ref2
         y2 = y2 - ref2
         anom_str = ' anomaly'
@@ -61,24 +152,44 @@ def plot_stretch_profiles(
         nanmask[~np.isfinite(y)] = np.nan
         y = y * nanmask
         y2 = y2 * nanmask
-    plt.figure()
-    plt.subplot(2,1,1)
-    plt.plot(x, y)
-    ylabel = '{}{}'.format(y_key, anom_str)
+    figsize=(10,5)
+    xlim = (min(x), max(x))
+    plt.figure(figsize=figsize)
+    if withBayes or withAnom:
+        plt.subplot(2,1,1)
+    plt.plot(x, y, 'o', markersize=1)
+    if x_key !='time_id':
+        plt.plot(x, ref, '-k',linewidth=2)
+    ylabel = '{}{}'.format(bayes_tag+y_key, anom_str)
     plt.ylabel(ylabel)
     plt.grid()
-    plt.subplot(2,1,2)
-    plt.plot(x, y2)
-    plt.ylabel('{}{}'.format('bayes_'+y_key, anom_str))
-    plt.xlabel(x_key)
-    plt.suptitle(title)
-    plt.grid()
+    plt.xlim(xlim)
+    if withAnom:
+        plt.subplot(2,1,2)
+        #breakpoint()
+        if x_key =='time_id':
+            plt.plot(x, y - ref2.T,'o', markersize=1)
+        else:
+            plt.plot(x, y - ref2,'o', markersize=1)
+        plt.ylabel('{}{}'.format(bayes_tag+y_key, ' anomaly'))
+        plt.xlabel(x_key)
+        plt.suptitle(title)
+        plt.grid()
+        plt.xlim(xlim)
+    elif withBayes:
+        plt.subplot(2,1,2)
+        plt.plot(x, y2,'o')
+        plt.ylabel('{}{}'.format('bayes_'+y_key, anom_str))
+        plt.xlabel(x_key)
+        plt.suptitle(title)
+        plt.grid()
+        plt.xlim(xlim)
     if outdir is not None:
         # create output dir if not exist
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        fname = '{}_profile_{}_vs_{}'.format(title,ylabel, x_key)
-        plt.savefig(os.path.join(outdir, fname))
+        fname = '{}_profile_{}_vs_{}'.format(title, bayes_tag+ylabel, x_key)
+        plt.savefig(os.path.join(outdir, fname), dpi=300)
         plt.close()
     else:
         if show:
@@ -114,7 +225,7 @@ def plot_stretch_width_vs_wse(
     }
     df = pd.DataFrame(dic)
     fig =errtools.plots.scatterdensity(
-        df, key_wse, key_width, show=False)
+        df, key_wse, key_width, show=False, abs_val=False)
     ylim = (np.nanpercentile(df[key_width], 2),
         np.nanpercentile(df[key_width], 95))
     xlim = (np.nanpercentile(df[key_wse], 2),
@@ -128,7 +239,7 @@ def plot_stretch_width_vs_wse(
         if not os.path.exists(outdir):
             os.makedirs(outdir)
         fname = '{}_density_{}_vs{}'.format(title, width_key, wse_key)
-        plt.savefig(os.path.join(outdir, fname))
+        plt.savefig(os.path.join(outdir, fname), dpi=300)
         plt.close()
     else:
         if show:
@@ -172,38 +283,50 @@ def plot_stretch_spacetime(stretch_data, title='', show=False, outdir=None):
             plt.show()
 
 def plot_stretch(stretch_data, title='', outdir=None):
-        # wse
+        # wse / anom
         plot_stretch_profiles(
             stretch_data,
             x_key='dist_out',
             y_key='wse',
             plot_anom=False,
             title=title,
-            outdir=outdir)
-        # wse anom
+            outdir=outdir,
+            withAnom=True,
+            withBayes=False,
+            BayesOnly=False)
+        # bayes wse / anom
         plot_stretch_profiles(
             stretch_data,
             x_key='dist_out',
             y_key='wse',
-            plot_anom=True,
+            plot_anom=False,
             title=title,
-            outdir=outdir)
-        # width
+            outdir=outdir,
+            withBayes=False,
+            withAnom=True,
+            BayesOnly=True)
+        # width / anom
         plot_stretch_profiles(
             stretch_data,
             x_key='dist_out',
             y_key='width',
             plot_anom=False,
             title=title,
-            outdir=outdir)
-        # width anom
+            outdir=outdir,
+            withAnom=True,
+            withBayes=False,
+            BayesOnly=False)
+        # bayes width / anom
         plot_stretch_profiles(
             stretch_data,
             x_key='dist_out',
             y_key='width',
-            plot_anom=True,
+            plot_anom=False,
             title=title,
-            outdir=outdir)
+            outdir=outdir,
+            withAnom=True,
+            withBayes=False,
+            BayesOnly=True)
         # wse anom vs time
         plot_stretch_profiles(
             stretch_data,
@@ -211,7 +334,10 @@ def plot_stretch(stretch_data, title='', outdir=None):
             y_key='wse',
             plot_anom=True,
             title=title,
-            outdir=outdir)
+            outdir=outdir,
+            withAnom=False,
+            withBayes=False,
+            BayesOnly=False)
         # width anom vs time
         plot_stretch_profiles(
             stretch_data,
@@ -219,7 +345,10 @@ def plot_stretch(stretch_data, title='', outdir=None):
             y_key='width',
             plot_anom=True,
             title=title,
-            outdir=outdir)
+            outdir=outdir,
+            withAnom=False,
+            withBayes=False,
+            BayesOnly=False)
         # plot the width vs wse desnity plots
         plot_stretch_width_vs_wse(
             stretch_data,
@@ -237,6 +366,15 @@ def plot_stretch(stretch_data, title='', outdir=None):
             outdir=outdir)
         # make space-time sampling plot
         plot_stretch_spacetime(stretch_data, title=title, outdir=outdir)
+        # make spectra plots
+        char_length_tau=10000
+        prior_unc_alpha=0.25
+        plot_spectra(stretch_data,
+            y_key='wse',
+            char_length_tau=char_length_tau,
+            prior_unc_alpha=prior_unc_alpha,
+            title=title,
+            outdir=outdir)
 
 
 ######### TODO: clean-up/delete.revise stuff below
