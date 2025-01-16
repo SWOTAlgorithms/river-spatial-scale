@@ -522,8 +522,10 @@ def network_stack(full_profile_data, network_list):
                 if key == 'reach':
                     this_profile_data[key].append(rs[ind])
                 elif key not in ['time_id','cycle','network']:
-                    if 'wse' in key:
-                        print(key, ind, np.shape(full_profile_data[key][ind]))
+                    # for some reason the print statement below doesnt pass
+                    # the Cryptography.InsecureAlgorithm checks
+                    #if 'wse' in key:
+                    #    print(key, ind, np.shape(full_profile_data[key][ind]))
                     this_profile_data[key].append(full_profile_data[key][ind])
         for key in full_profile_data.keys():
             print(key)
@@ -534,10 +536,12 @@ def network_stack(full_profile_data, network_list):
                 out_profile_data[key].append(full_profile_data[key][0])
             elif key not in ['time_id','cycle','reach']:
                 #breakpoint()
-                if 'wse' in key:
-                    for ii in range(len(this_profile_data[key])):
-                        print(key, ii, np.shape(this_profile_data[key][ii]))
-                    #print(np.shape(this_profile_data[key][7]))
+                # for some reason the print statement below doesnt pass
+                # the Cryptography.InsecureAlgorithm checks
+                #if 'wse' in key:
+                #    for ii in range(len(this_profile_data[key])):
+                #        print(key, ii, np.shape(this_profile_data[key][ii]))
+                #    #print(np.shape(this_profile_data[key][7]))
                 if len(this_profile_data[key])>0:
                     out_profile_data[key].append(np.concatenate(this_profile_data[key]))
                 else:
