@@ -10,7 +10,6 @@ This code processes the river streaches in an input csv file.  Note you first ne
 to create the swot_node_df data either bby calling the hydrocron.py script (to get
 data from podaac), or by creating one from the off-lone rerun river-tiles.
 
- TODO: need to update this to be more generic with input arguments etc instead of hard-coding them
 '''
 
 import pandas as pd
@@ -33,107 +32,216 @@ import rivscale.filter
 from errtools.misc import swot_time_to_field_time
 import errtools.plots
 import os.path
+import configparser
+import argparse
+import glob
+import scipy.ndimage
 
-def process_stretch(stretch_reaches, swot_node_df, sword_node_df, d_up, d_down):
+EXAMPLE=''
+
+def smooth_widths(stretch_data, size=11):
+    widths = stretch_data['width'].copy()
+    w_mask = np.zeros(np.shape(widths))
+    w_mask[np.isfinite(widths)] = 1
+    widths[w_mask==0] = 0
+    w_filt = scipy.ndimage.uniform_filter1d(widths, size, axis=0)
+    w_cnt = scipy.ndimage.uniform_filter1d(w_mask, size, axis=0)
+    width_filt = w_filt / w_cnt
+    width_filt[w_mask==0] = np.nan
+    return width_filt
+
+def process_stretch(
+        stretch_reaches,
+        swot_node_df,
+        sword_node_df,
+        d_up,
+        d_down,
+        char_length_tau_wse = 100000,
+        prior_unc_alpha_wse = 1.5,
+        char_length_tau_width = 100000,
+        prior_unc_alpha_width = 50, #200,
+        rho_wse_width = 0.7):
+    """
+    This function processes the original stack of multitemporal 
+    SWOT data node-level measurements over a multi-reach streach.
+    The following operations are performed:
+        1) generating the stacked stretch_stack object from the measurment dataframe
+        2) data quality filtering of WSE and width
+        3) estimating of multitemproal statistics (e.g., median, percentiles etc)
+        4) estimating a reference profile for both WSE and width
+        5) estimating the Bayes reconstructed measurements for each pass
+           measurement profile. TODO: specify options handling
+    """
     # make the stretch multitemporal stack object
     stretch_data = rivscale.data.make_stretch_stack(
         stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
     # populate witdh_u
-    stretch_data['width_u'] = (stretch_data['area_tot_u'] * stretch_data['width']) / (
-        stretch_data['area_total'])
+    node_len = stretch_data['area_total'] / stretch_data['width']
+    stretch_data['width_u'] = stretch_data['area_tot_u'] / node_len
+    # make measurement uncert at least as much as signal uncert we assume
+    stretch_data['width_u'] = stretch_data['width_u'] + 100#2*prior_unc_alpha_width
+    # first smooth widths to mitigate wedging artifacts
+    #stretch_data['width'] = smooth_widths(stretch_data, size=5)
+    # TODO: quantify amount of flagged out data?
     # filter out bad data (call it twice to get them all)
     stretch_data = rivscale.filter.filter_bad_stretch_data(stretch_data)
     stretch_data = rivscale.filter.filter_bad_stretch_data(stretch_data)
     # drop times/cycles with too little good quality data
     stretch_data = rivscale.filter.drop_stretch_nans(stretch_data)
     # compute statistics
-    stretch_data = rivscale.estimate.get_stretch_stats(stretch_data, signal_key='wse')
-    stretch_data = rivscale.estimate.get_stretch_stats(stretch_data, signal_key='width')
+    stretch_data = rivscale.estimate.get_stretch_stats(
+        stretch_data, signal_key='wse')
+    stretch_data = rivscale.estimate.get_stretch_stats(
+        stretch_data, signal_key='width')
+    stretch_data = rivscale.estimate.get_stretch_stats(
+        stretch_data, signal_key='dark_frac')
     # compute the reference profiles
     stretch_data['wse_reference'] = rivscale.estimate.get_med_profile(
         stretch_data['wse'], stretch_data['dist_out'])
     stretch_data['width_reference'] = rivscale.estimate.get_med_profile(
         stretch_data['width'], stretch_data['dist_out'], kernel_size=1)# don't smooth width
+    # TODO: enable estimation of char_length_tau and prior_unc_alpha from data
+    # get the reach-level averages
+    stretch_data = rivscale.reconstruct.reach_average(stretch_data)
+    # fit the curve to reach-level averages
+    stretch_data = rivscale.reconstruct.get_height_width_fit(stretch_data)
     # set up the bayes estimator signal covariance
-    char_length_tau = 100000 # TODO: estimate these from the data
-    prior_unc_alpha = 1.5
-    stretch_data['wse_cov'] = rivscale.reconstruct.exponential_cov(
-            stretch_data['dist_out'], char_length_tau=char_length_tau,
-            prior_unc_alpha=prior_unc_alpha)
-    char_length_tau = 100000 # TODO: estimate these from the data
-    prior_unc_alpha = 200
-    stretch_data['width_cov'] = rivscale.reconstruct.exponential_cov(
-            stretch_data['dist_out'], char_length_tau=char_length_tau,
-            prior_unc_alpha=prior_unc_alpha)
+    # first create signal covariance (possibly different for each line because of height/width model)
+    time_key = 'time_id'
+    # go through each time/cycle observation in the stack 
+    wse_cov = []
+    width_cov = []
+    wse_width_cov = []
+    for j,cycl in enumerate(stretch_data[time_key]):
+        this_rho_wse_width = rho_wse_width
+        # constrain the height and width std magnitudes using the h/w-model
+        dw_dh = rivscale.reconstruct.get_dw_dh_from_model(stretch_data, j)
+        this_prior_unc_alpha_width = dw_dh * prior_unc_alpha_wse
+        # handle bad h/w-fits
+        if dw_dh < 1e-8:
+            # use default and do not impose correlation
+            this_prior_unc_alpha_width = prior_unc_alpha_width
+            this_rho_wse_width = 0
+        Rh = rivscale.reconstruct.exponential_cov(
+            stretch_data['dist_out'],
+            char_length_tau=char_length_tau_wse,
+            prior_unc_alpha=prior_unc_alpha_wse)
+        Rw = rivscale.reconstruct.exponential_cov(
+            stretch_data['dist_out'],
+            char_length_tau=char_length_tau_width,
+            prior_unc_alpha=this_prior_unc_alpha_width)
+        Rhw = this_rho_wse_width * np.real(scipy.linalg.sqrtm(Rh) @ scipy.linalg.sqrtm(Rw.T))
+        wse_cov.append(Rh)
+        width_cov.append(Rw)
+        wse_width_cov.append(Rhw)
+        #wse_width_cov.append(
+        #        this_rho_wse_width * prior_unc_alpha_wse * this_prior_unc_alpha_width * np.eye(
+        #            len(stretch_data['wse_reference'])))
+    # update the object
+    stretch_data['wse_cov'] = np.moveaxis(
+        np.array(wse_cov), 0, -1)
+    stretch_data['width_cov'] = np.moveaxis(
+        np.array(width_cov), 0, -1)
+    stretch_data['wse_width_cov'] = np.moveaxis(
+        np.array(wse_width_cov), 0, -1)
     # now do the bayes reconstruction
-    stretch_data = rivscale.reconstruct.reconstruct_stretch(
-        stretch_data, signal_key='wse', uncert_key='wse_u')
-    stretch_data = rivscale.reconstruct.reconstruct_stretch(
-        stretch_data, signal_key='width', uncert_key='width_u')
+    stretch_data = rivscale.reconstruct.joint_reconstruct_stretch(stretch_data)
+    #stretch_data = rivscale.reconstruct.reconstruct_stretch(
+    #    stretch_data, signal_key='wse', uncert_key='wse_u')
+    #stretch_data = rivscale.reconstruct.reconstruct_stretch(
+    #    stretch_data, signal_key='width', uncert_key='width_u')
+    
     return stretch_data
 
-def main():
-    #df = pd.read_csv('swot_data_Ocmulgee_River.csv')
-    #df = pd.read_csv('swot_data_ocmulgee.csv')
-    #df = pd.read_csv('swot_data_all.csv')
-    #df = pd.read_csv('calval_nodes_delivery_merged_240826_v5.csv')
-    df = pd.read_csv('calval_nodes_wse_sm_q_b_241112_v1_a.csv')
-    use_wse_sm = True
+def manage_fields(df, use_wse_sm=False):
     if use_wse_sm:
         df['wse'] = np.array(df['wse_sm']).copy()
         df['wse_u'] = np.array(df['wse_sm_u']).copy()
         df['wse_q'] = np.array(df['wse_sm_q']).copy()
         df['wse_q_b'] = np.array(df['wse_sm_q_b']).copy()
-    #df = df[df['river_name']=='Ocmulgee River']
     # drop elements with no_data times
     df = df[df['time_str']!='no_data']
     df['time_str'] = pd.to_datetime(df['time_str'])
     df['date'] = [ dt.date() for dt in df['time_str']]
-    
+
     # drop bad data
     df = rivscale.filter.filter_node_qual(df, height=True, area=False)
     #
-    df['cycle'] = df['cycle_id']
+    if 'cycle_id' in df.keys():
+        df['cycle'] = df['cycle_id']
     df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(df['node_id'])
     df['wse_u'] = df['wse_r_u']
     df['dist_out'] = df['p_dist_out']
-    #breakpoint()
+    return df
+
+def get_swot_node_data(cfg, stretch_reaches, sword_node_df):
+    if cfg['data']['method'] == 'csv':
+        df = pd.read_csv(cfg['data']['data_path'])
+        # TODO: filter out orbit and granules we want
+    elif cfg['data']['method'] == 'reach':
+        # go through all the RiverSP data for the desired granules/orbit
+        orbit = cfg['data']['orbit']
+        pass_cont = cfg['data']['granule']
+        df = None
+        #breakpoint()
+        for reach in stretch_reaches:#df_stretches.keys():
+            fle_str = os.path.join(cfg['data']['data_path'],
+                '{}/{}/Multitemporal_Node/{}_Node_{}_{}.csv'.format(
+                    orbit, pass_cont, reach, pass_cont, orbit))
+            fles = glob.glob(fle_str)
+            for fle in fles:
+                print(fle)
+                # TODO: should catch if file doesnt exist or cant read it?
+                if df is None:
+                    # note that keep_default_na=False handles the 'NA'
+                    # fields so they dont become 'NaN'
+                    df = pd.read_csv(fle, keep_default_na=False)
+                else:
+                    df = pd.concat([df, pd.read_csv(fle, keep_default_na=False)], ignore_index=True)
     #
-    swot_node_df = df
-    sword_dir = 'SWORD/v16/netcdf'
-    #sword_dir = '/u/swot-fn-r0/swot/sim_proc_inputs/river_database/20230802/v16/netcdf'
-    #sword_dir = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf'
-    #sword_file = '/Users/bawillia/Desktop/data/SWORD/v16/netcdf/na_sword_v16.nc'
-    #sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(sword_file)
-    #breakpoint()
-    #sword_df = sword_df[sword_df['river_name'] == 'Ocmulgee River']
-    #network_list = rivscale.data.get_connected_networks(sword_df, d_up, d_down)
-    #network_list = [np.unique(np.sort(swot_node_df['reach_id']))]
-    #df_stretches = pd.read_csv('Flow_wave_reaches_fixed.csv')
-    #df_stretches = pd.read_csv('calval_stretches_NSYukonGaronnefix.csv')
-    df_stretches = pd.read_csv('calval_stretches.csv')
+    use_wse_sm = False
+    sm = cfg['data']['use_wse_sm']
+    if ((sm == 'True') or (sm == 'True') or (sm is True)):
+        use_wse_sm = True
     #
+    df = manage_fields(df, use_wse_sm=use_wse_sm)
+    return df
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Process river stretch, reach, or multireach',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=EXAMPLE)
+    parser.add_argument('config', help='config file')
+    args = parser.parse_args()
+    # read in the config file
+    cfg = configparser.ConfigParser()
+    cfg.read(args.config)
+    # read int he SWORD file
+    sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(cfg['main']['sword_file'])
+    # get the list of stretches (or multireaches)
+    stretch_list = ['{}'.format(t) for t in cfg['main']['stretch_subset'].split()]
+    df_stretches = pd.read_csv(cfg['main']['stretch_file'], usecols=stretch_list)
+    # get the SWOT node data
+    #swot_node_df = get_swot_node_data(cfg, df_stretches, sword_node_df)
+    # make the output dir if needed
+    outdir = os.path.join(cfg['data']['out_path'],cfg['data']['orbit'])
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+    # go through each stretch and process it
     stretch_list = []
     for key in df_stretches.keys():
-        sword_name = 'na_sword_v16.nc'
-        if key == 'Waimak':
-            sword_name = 'oc_sword_v16.nc'
-        if key == 'Garonne':
-            sword_name = 'eu_sword_v16.nc'
-        sword_file = os.path.join(sword_dir,sword_name)
-        sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(sword_file)
-        #stretch_reaches = np.array(
-        #    df_stretches[np.isfinite(df_stretches[key])][key]).astype(int)
         stretch_reaches = np.array(
             df_stretches[df_stretches[key]>0][key]).astype(int)
         print("processing stretch:", key, ", Reaches:",stretch_reaches)
+        # get the SWOT node data
+        swot_node_df = get_swot_node_data(cfg, stretch_reaches, sword_node_df)
         # process the stretch
         stretch_data = process_stretch(stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
-    
         # write out the data to ncfile
-        stretch_data.to_ncfile('{}_stretch.nc'.format(key))
-        #breakpoint()
-    #breakpoint()
+        outfile = os.path.join(outdir, '{}_stretch.nc'.format(key))
+        stretch_data.to_ncfile(outfile)
 
 if __name__ == "__main__":
     main()
+

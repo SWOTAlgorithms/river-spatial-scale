@@ -18,6 +18,7 @@ import errtools.plots
 import matplotlib.pyplot as plt
 
 import scipy.ndimage
+from scipy import odr
 from scipy.linalg import pinv, svd, eigh, norm
 
 from errtools.misc import (split_utc_time, field_time_to_swot_time,
@@ -33,15 +34,242 @@ import geopandas as gpd
 
 import rivscale.data
 
+####### Jan 2025, updated for joint height/width river stretch processing
+def piecewise_linear(p, x):
+    """
+    """
+    x0, y0, slope1, slope2 = p
+    return np.piecewise(
+            x,
+            [x < x0],
+            [lambda x: slope1 * x + y0 - slope1 * x0,
+                lambda x: slope2 * x + y0 - slope2 * x0]
+            )
+
+
+def fit_model(x, y, xu, yu, beta=[0,0,0, 0]):
+    # fits a curve of type model() assuming errror in both dimensions
+    data = odr.RealData(x, y, sx=xu, sy=yu)
+    #my_model = odr.Model(poly_model)
+    my_model = odr.Model(piecewise_linear)
+    fitter = odr.ODR(data, my_model, beta0=beta)
+    out = fitter.run()
+    p_est = out.beta
+    p_err = out.sd_beta
+    return p_est, p_err
+
+def get_height_width_fit(stretch_data_in):
+    stretch_data= stretch_data_in.copy()
+    p_est, p_err = fit_model(
+        stretch_data.stretch_wse_mean,#mn,
+        stretch_data.stretch_width_mean,#mn_w,
+        stretch_data.stretch_wse_std,#std_res,
+        stretch_data.stretch_width_std,#std_w_res,
+        beta=[0,0,50/1.5,50/1.5])
+    stretch_data['hw_params'] = p_est
+    stretch_data['hw_params_err'] = p_err
+    return stretch_data
+
+def reach_average(stretch_data_in, keys=['wse', 'width']):
+    stretch_data = stretch_data_in.copy()
+    for key in keys:
+        data = stretch_data[key]
+        ref = stretch_data['{}_reference'.format(key)]
+        ref2 = np.broadcast_to(ref, np.shape(data.T)).T
+        anom = data - ref2
+        mn = np.nanmean(anom, axis=0)
+        std = np.nanstd(anom, axis=0)
+        mask = np.isfinite(anom)
+        cnt = np.sum(mask, axis=0)
+        # set output
+        stretch_data['stretch_{}_mean'.format(key)] = mn
+        stretch_data['stretch_{}_std'.format(key)] = std
+        stretch_data['stretch_{}_count'.format(key)] = cnt
+    return stretch_data
+
+def get_dw_dh_from_model(stretch_data, time_index, plot=False):
+    x0, y0, dw_dh1, dw_dh2 = stretch_data.hw_params
+    b1 = y0 - dw_dh1 * x0
+    b2 = y0 - dw_dh2 * x0
+    wse = stretch_data.stretch_wse_mean[time_index]
+    width = stretch_data.stretch_width_mean[time_index]
+    wse_std = stretch_data.stretch_wse_std[time_index]
+    width_std = stretch_data.stretch_width_std[time_index]
+    # define params of 3rd line related to noise std of wse and width
+    # passing thorugh the point (width, wse)
+    dw_dh3 = -width_std / wse_std
+    b3 = width - dw_dh3 * wse
+    # compute intersections of line 3 with line 1 and line 2
+    # intersection of line 1 and 3
+    x13 = (b3 - b1) / (dw_dh1 - dw_dh3)
+    y13 = dw_dh1 * x13 + b1
+    # intersection of line 2 and 3
+    x23 = (b3 - b2) / (dw_dh2 - dw_dh3)
+    y23 = dw_dh2 * x23 + b2
+    # find which one is "closest" to (width, wse)
+    #dist13 = np.sqrt((x13-wse)**2+(y13-width)**2)
+    #dist23 = np.sqrt((x23-wse)**2+(y23-width)**2)
+    # find the one that has the x on the line in the correct regime
+    dw_dh = dw_dh1 # default the first regime
+    if x23>x0:#dist23 < dist13:
+        # The other regime
+        dw_dh = dw_dh2
+    if plot:
+       # plot
+       wses = stretch_data.stretch_wse_mean
+       widths = stretch_data.stretch_width_mean
+       x = np.linspace(np.nanmin(wses),np.nanmax(wses))
+       y = rivscale.reconstruct.piecewise_linear(stretch_data.hw_params, x)
+       y1 = dw_dh1 * x + b1#y0 - dw_dh1 * x0
+       y2 = dw_dh2 * x + b2#y0 - dw_dh2 * x0 
+       #dw_dh3 = -width_std / wse_std
+       #b3 = width - dw_dh3 * wse
+       y3 = dw_dh3 * x + b3 
+       # compute intersections
+       # plot
+       plt.figure()
+       plt.scatter(wses, widths)
+       plt.errorbar(wse, width, xerr=wse_std, yerr=width_std, c='k')
+       plt.plot(x, y,c='r')
+       #plt.plot(x, y1)
+       #plt.plot(x, y2)
+       plt.plot(x, y3, c='g')
+       plt.plot(x13, y13, 'x')
+       plt.plot(x23, y23, 'x')
+       if x23>x0:#dist23 < dist13:
+           plt.plot(x23, y23, '^')
+       else:
+           plt.plot(x13, y13, '^')
+       #plt.show()
+       #breakpoint()
+    return dw_dh
+
+def joint_reconstruct_stretch(stretch_data_in):
+    # copy the input data to output data
+    stretch_data = stretch_data_in.copy()
+    # get the mean and cov of the stacked wse and width
+    N = len(stretch_data['wse_reference'])
+    mn = np.concatenate([
+        stretch_data['wse_reference'], stretch_data['width_reference']
+        ])    
+    nodes = np.arange(2*len(stretch_data['node_id']), dtype=int)
+    wse_hats = []
+    wse_hats_u = []
+    width_hats = []
+    width_hats_u = []
+    wse_post_covs = []
+    width_post_covs = []
+    wse_width_post_covs = []
+    time_key = 'time_id'
+    # go through each time/cycle observation in the stack 
+    for j,cycl in enumerate(stretch_data[time_key]):
+        meas = np.concatenate([
+            stretch_data['wse'][:,j], stretch_data['width'][:,j]
+            ])
+        meas_u = np.concatenate([
+            stretch_data['wse_u'][:,j], stretch_data['width_u'][:,j]
+            ])
+        Ry = np.block([
+            [stretch_data['wse_cov'][:,:,j], stretch_data['wse_width_cov'][:,:,j].T],
+            [stretch_data['wse_width_cov'][:,:,j], stretch_data['width_cov'][:,:,j]]
+            ])
+        #print(np.linalg.cond(Ry))
+        #if np.linalg.cond(Ry) > 1e
+        # call the estimator
+        signal_hat, post_cov = reconstruct_one_time_obs(
+            meas, meas_u, Ry, mn, nodes)
+        # populate the output arrays
+        wse_hats.append(signal_hat[0:N])
+        wse_post_covs.append(post_cov[0:N,0:N])
+        wse_hats_u.append(np.diag(post_cov[0:N,0:N]))
+        width_hats.append(signal_hat[N:])
+        width_post_covs.append(post_cov[N:,N:])
+        width_hats_u.append(np.diag(post_cov[N:,N:]))
+        wse_width_post_covs.append(post_cov[0:N,N:])
+    stretch_data['bayes_wse'] = np.array(wse_hats).T
+    stretch_data['bayes_width'] = np.array(width_hats).T
+    stretch_data['bayes_wse_u'] = np.array(wse_hats_u).T
+    stretch_data['bayes_width_u'] = np.array(width_hats_u).T
+    #breakpoint()
+    stretch_data['bayes_wse_post_cov'] = np.moveaxis(
+        np.array(wse_post_covs), 0, -1)
+    stretch_data['bayes_width_post_cov'] = np.moveaxis(
+        np.array(width_post_covs), 0, -1)
+    stretch_data['bayes_wse_width_post_cov'] = np.moveaxis(
+        np.array(wse_width_post_covs), 0, -1)
+    return stretch_data
+
+def joint_reconstruct_stretch_defunkt(stretch_data_in):
+    # copy the input data to output data
+    stretch_data = stretch_data_in.copy()
+    # get the mean and cov of the stacked wse and width
+    N = len(stretch_data['wse_reference'])
+    mn = np.concatenate([
+        stretch_data['wse_reference'], stretch_data['width_reference']
+        ])
+    Ry = np.block([
+        [stretch_data['wse_cov'], stretch_data['wse_width_cov'].T],
+        [stretch_data['wse_width_cov'], stretch_data['width_cov']]
+        ])
+    # make a fake stretch with the stacked data stuffed into the wse terms
+    # and then call the standard reconsruct routine
+    this_stretch_data = rivscale.products.RiverStretchData()
+    this_stretch_data['wse_reference'] = mn
+    this_stretch_data['wse_cov'] = Ry
+    this_stretch_data['wse_u'] = np.concatenate([
+        stretch_data['wse_u'], stretch_data['width_u']
+        ])
+    this_stretch_data['node_id'] = np.concatenate([
+        stretch_data['node_id'], stretch_data['node_id']
+        ])
+    this_stretch_data['wse'] = np.concatenate([
+        stretch_data['wse'], stretch_data['width']
+        ])
+    this_stretch_data['time_id'] = stretch_data['time_id']
+
+    # call the reconstruct routine
+    this_stretch_data = rivscale.reconstruct.reconstruct_stretch(
+        this_stretch_data, signal_key='wse', uncert_key='wse_u')
+    # unpack arrays into the outputs
+    stretch_data['bayes_wse'] = this_stretch_data['bayes_wse'][0:N]
+    stretch_data['bayes_width'] = this_stretch_data['bayes_wse'][N:]
+    stretch_data['bayes_wse_post_cov'] = this_stretch_data['bayes_wse_post_cov'][0:N,0:N]
+    stretch_data['bayes_width_post_cov'] = this_stretch_data['bayes_wse_post_cov'][N:,N:]
+    stretch_data['bayes_wse_width_post_cov'] = this_stretch_data['bayes_wse_post_cov'][0:N,N:]
+    stretch_data['bayes_wse_u'] = this_stretch_data['bayes_wse_u'][0:N]
+    stretch_data['bayes_width_u'] = this_stretch_data['bayes_wse_u'][N:]
+    return stretch_data
+
 ####### Sept 2024, updated for river stretch processing
+def reconstruct_one_time_obs(meas, meas_u_in, Ry, mn, nodes):
+    meas_u = meas_u_in.copy()
+    meas_u[~np.isfinite(meas_u)] = 10**5#10^5
+    msk = np.isfinite(meas)
+        #breakpoint()
+    # check for not enough data
+    if np.sum(msk) < 2:
+        # dont call bayes, just append nans
+        nan_array = np.ones_like(meas) + np.nan
+        unc_array = np.zeros_like(meas_u) + 10**5
+        signal_hats = nan_array
+        post_cov = np.diag(unc_array)
+        bayes_u = unc_array.copy()
+    else:
+        signal_hat, A_inv = bayes_estimator(
+            meas[msk], nodes[msk], mn, Ry,
+            np.sqrt(meas_u[msk]))
+        post_cov = A_inv
+        #bayes_u = np.diag(A_inv).copy()
+    return signal_hat, post_cov#, bayes_u
+
 
 def reconstruct_stretch(stretch_data_in,
-        signal_key='wse', uncert_key='wse_u'):
+        signal_key='wse', uncert_key='wse_u', constrain_hw=True):
     # copy the input data to output data
     stretch_data = stretch_data_in.copy()
     # get the bayes parameters
     mn = stretch_data['{}_reference'.format(signal_key)]#.filled(np.nan)
-    Ry = stretch_data['{}_cov'.format(signal_key)]#.filled(0)
+    #Ry = stretch_data['{}_cov'.format(signal_key)]#.filled(0)
     # TODO: should this be local_node_id (i.e., indexing starting at 1)?
     nodes = np.arange(len(stretch_data['node_id']), dtype=int)
     signal_hats = []
@@ -50,32 +278,18 @@ def reconstruct_stretch(stretch_data_in,
     time_key = 'time_id'
     # go through each time/cycle observation in the stack 
     for j,cycl in enumerate(stretch_data[time_key]):
+        Ry = stretch_data['{}_cov'.format(signal_key)][:,:,j]
         meas = stretch_data[signal_key][:,j]
         meas_u = stretch_data[uncert_key][:,j]
-        meas_u[~np.isfinite(meas_u)] = 10**5#10^5
-        msk = np.isfinite(meas)
-        #breakpoint()
-        # check for not enough data
-        if np.sum(msk) < 2:
-            # dont call bayes, just append nans
-            nan_array = np.ones_like(meas) + np.nan
-            unc_array = np.zeros_like(meas_u) + 10**5
-            signal_hats.append(nan_array)
-            post_covs.append(np.diag(unc_array))
-            bayes_us.append(unc_array.copy())
-        else:
-            signal_hat, A_inv = bayes_estimator(
-                meas[msk], nodes[msk], mn, Ry,
-                np.sqrt(meas_u[msk]))
-            signal_hats.append(signal_hat)
-            post_covs.append(A_inv)
-            bayes_us.append(np.diag(A_inv).copy())
-    #breakpoint()
+        signal_hat, post_cov = reconstruct_one_time_obs(
+            meas, meas_u, Ry, mn, nodes)
+        signal_hats.append(signal_hat)
+        post_covs.append(post_cov)
+        bayes_us.append(np.diag(post_cov).copy())
     stretch_data['bayes_{}'.format(signal_key)] = np.array(signal_hats).T
     stretch_data['bayes_{}_post_cov'.format(signal_key)] = np.moveaxis(
         np.array(post_covs), 0, -1)
     stretch_data['bayes_{}_u'.format(signal_key)] = np.array(bayes_us).T
-    #breakpoint()
     return stretch_data
 
 def bayes_estimator(meas_wse, node_index, mn, Ry0, meas_noise):
@@ -166,7 +380,8 @@ def bayes_estimator_old(meas_wse, node_index, mn, Ry0, meas_noise):
     Ry_inv = pinv(Ry0)
     Rv_inv = pinv(Rv)
     A = Ry_inv + H.T @ Rv_inv @ H
-    A_inv = np.linalg.inv(A)
+    #A_inv = np.linalg.inv(A)
+    A_inv = pinv(A)
     K = A_inv @ H.T @ Rv_inv
     K_bar = A_inv @ Ry_inv
     yp = K @ meas_wse

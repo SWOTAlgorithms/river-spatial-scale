@@ -13,21 +13,25 @@ import numpy as np
 import rivscale.plot
 import rivscale.products
 import matplotlib.pyplot as plt
+import argparse
+import os.path
+EXAMPLE = ''
+
 def main():
-    #stretch_names = ['Ocmulgee', 'Colorado', 'Yellowstone']
-    #stretch_names = ['Willamette', 'Connecticut', 'North_Sask', 'Yukon', 'Garonne', 'Waimak']
-    #stretch_names = ['Waimak',]
-    stretch_names = ['Willamette',]
-    outdir = 'Willamette_plots'
-    #outdir = 'calval_plots'
-    for name in stretch_names:
-        # read in the already processed data
-        stretch_data = rivscale.products.RiverStretchData.from_ncfile(
-            '{}_stretch.nc'.format(name))
-        #breakpoint()
-        rivscale.plot.plot_stretch(stretch_data, title=name, outdir=outdir)
-        #plt.show()
-        #breakpoint()
+    parser = argparse.ArgumentParser(
+        description='Plot river stretch, reach, or multireach',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=EXAMPLE)
+    parser.add_argument('infile', help='*_streach.nc file')
+    parser.add_argument('-o','--outdir', default=None, help='output directory to save plots')
+    args = parser.parse_args()
+    stretch_data = rivscale.products.RiverStretchData.from_ncfile(
+        args.infile)
+    name = os.path.split(args.infile)[1].split('_')[0]
+    #breakpoint()
+    rivscale.plot.plot_stretch(stretch_data, title=name, outdir=args.outdir)
+    if args.outdir is None:
+        plt.show()
 
 if __name__ == "__main__":
     main()

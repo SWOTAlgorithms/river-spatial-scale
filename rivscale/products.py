@@ -35,7 +35,8 @@ DIMENSIONS_ALL = odict([
     ['num_times', 0],
     ['num_reaches',0],
     ['num_percentiles', 0],
-    ['num_nodes2', 0]])
+    ['num_nodes2', 0],
+    ['num_hw_params',0]])
 DIMENSIONS_2D = odict([['num_nodes', 0], ['num_times', 0]])
 DIMENSIONS_PCNT = odict([['num_nodes', 0], ['num_percentiles', 0]])
 DIMENSIONS_COV = odict([['num_nodes', 0], ['num_nodes2', 0]])
@@ -66,26 +67,44 @@ class RiverStretchData(Product):
         ['width_u', odict([['dimensions', DIMENSIONS_2D]])],
         ['area_tot_u', odict([['dimensions', DIMENSIONS_2D]])],
         ['node_q_b', odict([['dimensions', DIMENSIONS_2D]])],
+        ['dark_frac', odict([['dimensions', DIMENSIONS_2D]])],
         ['bayes_wse', odict([['dimensions', DIMENSIONS_2D]])],
         ['bayes_width', odict([['dimensions', DIMENSIONS_2D]])],
         ['bayes_wse_u', odict([['dimensions', DIMENSIONS_2D]])],
         ['bayes_width_u', odict([['dimensions', DIMENSIONS_2D]])],
         ['bayes_wse_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         ['bayes_width_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
+        ['bayes_wse_width_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         ['wse_reference', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['width_reference', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['wse_cov', odict([['dimensions', DIMENSIONS_COV]])],
-        ['width_cov', odict([['dimensions', DIMENSIONS_COV]])],
+        #['wse_cov', odict([['dimensions', DIMENSIONS_COV]])],
+        #['width_cov', odict([['dimensions', DIMENSIONS_COV]])],
+        #['wse_width_cov', odict([['dimensions', DIMENSIONS_COV]])],
+        ['wse_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
+        ['width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
+        ['wse_width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         ['wse_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['width_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['dark_frac_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['wse_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['width_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['dark_frac_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['wse_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['width_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['dark_frac_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['wse_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])], 
         ['width_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
+        ['dark_frac_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
         ['percentiles', odict([['dimensions', odict([['num_percentiles', 0]])]])],
-        
+        ['dark_prob', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['stretch_wse_mean', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['stretch_wse_std', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['stretch_wse_count', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['stretch_width_mean', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['stretch_width_std', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['stretch_width_count', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['hw_params', odict([['dimensions', odict([['num_hw_params', 0]])]])],
+        ['hw_params_err', odict([['dimensions', odict([['num_hw_params', 0]])]])],
     ])
     #for name, reference in VARIABLES.items():
     #    reference['dimensions'] = DIMENSIONS

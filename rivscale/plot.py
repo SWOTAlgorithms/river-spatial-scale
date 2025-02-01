@@ -32,9 +32,23 @@ import statsmodels.api
 import geopandas as gpd
 
 import rivscale.misc
+import rivscale.reconstruct
 import seaborn as sns
 
 ########## Jan 2025 add spectral plots
+def plot_stretch_average_hw(stretch_data):
+    p_est = stretch_data['hw_params']
+    wse = stretch_data.stretch_wse_mean
+    width = stretch_data.stretch_width_mean
+    ref = stretch_data.wse_reference
+    ref_w = stretch_data.width_reference
+    plt.figure()
+    plt.scatter(wse, width)
+    x = np.linspace(np.nanmin(wse),np.nanmax(wse))
+    y = rivscale.reconstruct.piecewise_linear(p_est, x)
+    plt.plot(x,y,'k', linewidth=3)
+    plt.grid()
+
 def plot_spectra(
         stretch_data,
         y_key='wse',
@@ -116,6 +130,52 @@ def plot_spectra(
         if show:
             plt.show()
 
+def plot_stretch_stats(
+        stretch_data,
+        x_key='dist_out',
+        y_key='dark_frac',
+        title='',
+        outdir=None,
+        show=False):
+    """
+    function for plotting profile stats
+    """
+    x = stretch_data[x_key]
+    y_mean = stretch_data[y_key+'_mean']
+    y_std = stretch_data[y_key+'_std']
+    y_ptiles = stretch_data[y_key+'_percentiles']
+    #breakpoint()
+    ptiles = ['{}-%ile'.format(t) for t in stretch_data['percentiles']]
+    x2D = np.broadcast_to(x, np.shape(y_ptiles.T)).T
+    figsize=(10,5)
+    plt.figure(figsize=figsize)
+    plt.subplot(2,1,1)
+    plt.plot(x2D, y_ptiles)
+    plt.legend(ptiles)
+    plt.grid()
+    plt.xlabel(x_key)
+    plt.ylabel(y_key)
+    plt.suptitle(title+'{} statistics'.format(y_key))
+    plt.subplot(2,1,2)
+    plt.plot(x, y_mean)
+    plt.plot(x, y_mean+y_std,'--')
+    plt.plot(x, y_mean-y_std,'--')
+    plt.legend(['mean', 'mean + std', 'mean - std'])
+    plt.grid()
+    plt.xlabel(x_key)
+    plt.ylabel(y_key)
+    plt.tight_layout()
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}_profile_stats_{}_vs_{}'.format(title, y_key, x_key)
+        plt.savefig(os.path.join(outdir, fname), dpi=300)
+        plt.close()
+    else:
+        if show:
+            plt.show()
+    
 ########## Sept 2024 stretch-based processing
 def plot_stretch_profiles(
         stretch_data,
@@ -128,13 +188,23 @@ def plot_stretch_profiles(
         outdir=None,
         withBayes=False,
         withAnom=True,
-        BayesOnly=False):
+        BayesOnly=False,
+        flagBayesThresh=-1):
     """
     function for plotting profiles
     """
     x = stretch_data[x_key]
     y = stretch_data[y_key]
     y2 = stretch_data['bayes_'+y_key]
+    y2_u = stretch_data['bayes_'+y_key+'_u']
+    # always exclude bayes values with negative post std
+    nanmask = np.ones_like(y2)
+    #nanmask[y2_u<0] = np.nan
+    if flagBayesThresh>0:
+        nanmask[y2_u<0] = np.nan
+        # also flag out large values of post uncert
+        nanmask[y2_u>flagBayesThresh] = np.nan
+    y2 = y2 * nanmask
     bayes_tag = ''
     if BayesOnly:
         y = y2
@@ -311,7 +381,8 @@ def plot_stretch(stretch_data, title='', outdir=None):
             outdir=outdir,
             withBayes=False,
             withAnom=True,
-            BayesOnly=True)
+            BayesOnly=True,
+            flagBayesThresh=-1)
         # width / anom
         plot_stretch_profiles(
             stretch_data,
@@ -333,7 +404,9 @@ def plot_stretch(stretch_data, title='', outdir=None):
             outdir=outdir,
             withAnom=True,
             withBayes=False,
-            BayesOnly=True)
+            BayesOnly=True,
+            flagBayesThresh=-1)
+        #breakpoint()
         # wse anom vs time
         plot_stretch_profiles(
             stretch_data,
@@ -382,7 +455,27 @@ def plot_stretch(stretch_data, title='', outdir=None):
             prior_unc_alpha=prior_unc_alpha,
             title=title,
             outdir=outdir)
-
+        # plot stats (wse, width, dark_frac)
+        plot_stretch_stats(
+            stretch_data,
+            x_key='dist_out',
+            y_key='wse',
+            title=title,
+            outdir=outdir)
+        plot_stretch_stats(
+            stretch_data,
+            x_key='dist_out',
+            y_key='width',
+            title=title,
+            outdir=outdir)
+        plot_stretch_stats(
+            stretch_data,
+            x_key='dist_out',
+            y_key='dark_frac',
+            title=title,
+            outdir=outdir)
+        plot_stretch_average_hw(
+            stretch_data)
 
 ######### TODO: clean-up/delete.revise stuff below
 def plot_swot_profiles(swot_df, swot_node_df, full_profile_df, swot_mean_df):

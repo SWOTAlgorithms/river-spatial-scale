@@ -76,9 +76,9 @@ def make_stretch_stack(stretch_reaches, swot_node_df, sword_node_df, d_up, d_dow
     data = rivscale.products.RiverStretchData()
     data['stretch_reaches'] = stretch_reaches
     # check that stretch_reaches list is a connected stretch
-    if not check_connected_stretch(stretch_reaches, sword_node_df, d_up, d_down):
-        print('WARNING: THE INPUT REACHES NOT A CONNECTED STRETCH:', stretch_reaches)
-        return data
+    #if not check_connected_stretch(stretch_reaches, sword_node_df, d_up, d_down):
+    #    print('WARNING: THE INPUT REACHES NOT A CONNECTED STRETCH:', stretch_reaches)
+    #    return data
     swot_keys = [*swot_node_df.keys()]
     data_keys = [*data.VARIABLES.keys()]
     keys_2D = []
