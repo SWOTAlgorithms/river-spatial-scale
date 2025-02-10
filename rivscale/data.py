@@ -79,6 +79,9 @@ def make_stretch_stack(stretch_reaches, swot_node_df, sword_node_df, d_up, d_dow
     #if not check_connected_stretch(stretch_reaches, sword_node_df, d_up, d_down):
     #    print('WARNING: THE INPUT REACHES NOT A CONNECTED STRETCH:', stretch_reaches)
     #    return data
+    #if 'cycle_id' not in swot_node_df.keys():
+    #    if 'cycle' in swot_node_df.keys():
+    #        swot_node_df['cycle_id'] = swot_node_df['cycle']
     swot_keys = [*swot_node_df.keys()]
     data_keys = [*data.VARIABLES.keys()]
     keys_2D = []
@@ -90,6 +93,7 @@ def make_stretch_stack(stretch_reaches, swot_node_df, sword_node_df, d_up, d_dow
         elif siz==1:
             keys_1D.append(key)
     keys = list(set(swot_keys) & set(keys_2D))
+    #breakpoint()
     # get separate list of the 1D keys
     sword_keys = ['dist_out', 'node_id','local_node_id']
     extra_keys = sword_keys + ['time_id',]

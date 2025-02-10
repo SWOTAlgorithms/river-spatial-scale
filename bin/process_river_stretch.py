@@ -37,6 +37,10 @@ import argparse
 import glob
 import scipy.ndimage
 
+import warnings
+
+import time
+
 EXAMPLE=''
 
 def smooth_widths(stretch_data, size=11):
@@ -73,6 +77,7 @@ def process_stretch(
            measurement profile. TODO: specify options handling
     """
     # make the stretch multitemporal stack object
+    #breakpoint()
     stretch_data = rivscale.data.make_stretch_stack(
         stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
     # populate witdh_u
@@ -88,6 +93,9 @@ def process_stretch(
     stretch_data = rivscale.filter.filter_bad_stretch_data(stretch_data)
     # drop times/cycles with too little good quality data
     stretch_data = rivscale.filter.drop_stretch_nans(stretch_data)
+    if np.shape(stretch_data.width)[1]==0:
+        print('  No SWOT data left after multitemporal filtering')
+        return None
     # compute statistics
     stretch_data = rivscale.estimate.get_stretch_stats(
         stretch_data, signal_key='wse')
@@ -96,10 +104,11 @@ def process_stretch(
     stretch_data = rivscale.estimate.get_stretch_stats(
         stretch_data, signal_key='dark_frac')
     # compute the reference profiles
+    #breakpoint()
     stretch_data['wse_reference'] = rivscale.estimate.get_med_profile(
         stretch_data['wse'], stretch_data['dist_out'])
     stretch_data['width_reference'] = rivscale.estimate.get_med_profile(
-        stretch_data['width'], stretch_data['dist_out'], kernel_size=1)# don't smooth width
+        stretch_data['width'], stretch_data['dist_out'], kernel_size=11)#, kernel_size=1)# don't smooth width
     # TODO: enable estimation of char_length_tau and prior_unc_alpha from data
     # get the reach-level averages
     stretch_data = rivscale.reconstruct.reach_average(stretch_data)
@@ -153,7 +162,9 @@ def process_stretch(
     
     return stretch_data
 
-def manage_fields(df, use_wse_sm=False):
+def manage_fields(df, use_wse_sm=False, dark_thresh=0.8):
+    if df is None:
+        return None
     if use_wse_sm:
         df['wse'] = np.array(df['wse_sm']).copy()
         df['wse_u'] = np.array(df['wse_sm_u']).copy()
@@ -165,7 +176,8 @@ def manage_fields(df, use_wse_sm=False):
     df['date'] = [ dt.date() for dt in df['time_str']]
 
     # drop bad data
-    df = rivscale.filter.filter_node_qual(df, height=True, area=False)
+    df = rivscale.filter.filter_node_qual(
+        df, height=True, area=False, dark_thresh=dark_thresh)
     #
     if 'cycle_id' in df.keys():
         df['cycle'] = df['cycle_id']
@@ -174,7 +186,7 @@ def manage_fields(df, use_wse_sm=False):
     df['dist_out'] = df['p_dist_out']
     return df
 
-def get_swot_node_data(cfg, stretch_reaches, sword_node_df):
+def get_swot_node_data(cfg, stretch_reaches, sword_node_df, dark_thresh=0.8):
     if cfg['data']['method'] == 'csv':
         df = pd.read_csv(cfg['data']['data_path'])
         # TODO: filter out orbit and granules we want
@@ -183,28 +195,31 @@ def get_swot_node_data(cfg, stretch_reaches, sword_node_df):
         orbit = cfg['data']['orbit']
         pass_cont = cfg['data']['granule']
         df = None
-        #breakpoint()
         for reach in stretch_reaches:#df_stretches.keys():
             fle_str = os.path.join(cfg['data']['data_path'],
                 '{}/{}/Multitemporal_Node/{}_Node_{}_{}.csv'.format(
                     orbit, pass_cont, reach, pass_cont, orbit))
             fles = glob.glob(fle_str)
             for fle in fles:
-                print(fle)
+                print('  ',fle)
                 # TODO: should catch if file doesnt exist or cant read it?
                 if df is None:
                     # note that keep_default_na=False handles the 'NA'
                     # fields so they dont become 'NaN'
                     df = pd.read_csv(fle, keep_default_na=False)
                 else:
-                    df = pd.concat([df, pd.read_csv(fle, keep_default_na=False)], ignore_index=True)
+                    df = pd.concat(
+                        [df,pd.read_csv(fle, keep_default_na=False)],
+                        ignore_index=True)
     #
     use_wse_sm = False
     sm = cfg['data']['use_wse_sm']
     if ((sm == 'True') or (sm == 'True') or (sm is True)):
         use_wse_sm = True
     #
-    df = manage_fields(df, use_wse_sm=use_wse_sm)
+    #if 'dark_thresh' in cfg['data'].keys():
+    dark_thresh = float(cfg['data']['dark_thresh'])
+    df = manage_fields(df, use_wse_sm=use_wse_sm, dark_thresh=dark_thresh)
     return df
 
 def main():
@@ -213,35 +228,74 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=EXAMPLE)
     parser.add_argument('config', help='config file')
+    parser.add_argument('--force', default=False, action='store_true',
+        help='force rerun and overwriting of output files')
     args = parser.parse_args()
     # read in the config file
     cfg = configparser.ConfigParser()
     cfg.read(args.config)
     # read int he SWORD file
-    sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(cfg['main']['sword_file'])
+    print('reading SWORD file')
+    sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(
+        cfg['main']['sword_file'])
     # get the list of stretches (or multireaches)
-    stretch_list = ['{}'.format(t) for t in cfg['main']['stretch_subset'].split()]
-    df_stretches = pd.read_csv(cfg['main']['stretch_file'], usecols=stretch_list)
-    # get the SWOT node data
-    #swot_node_df = get_swot_node_data(cfg, df_stretches, sword_node_df)
+    stretch_list0 = [
+        '{}'.format(t) for t in cfg['main']['stretch_subset'].split()]
+    stretch_list = []
+    for stretch in stretch_list0:
+        # get all reaches in basins smaller than stretch
+        st = '{}'.format(stretch)
+        tmp = [
+            '{}'.format(r).startswith(st) for r in sword_df['reach_id']]
+        reaches = np.array(sword_df['reach_id'][tmp])
+        for r in reaches:
+            stretch_list.append('{}'.format(r))
+    df_stretches = pd.read_csv(
+        cfg['main']['stretch_file'],
+        usecols=stretch_list)
     # make the output dir if needed
     outdir = os.path.join(cfg['data']['out_path'],cfg['data']['orbit'])
     if not os.path.exists(outdir):
         os.makedirs(outdir)
     # go through each stretch and process it
+    N = len(df_stretches.keys())
+    #breakpoint()
     stretch_list = []
-    for key in df_stretches.keys():
+    for i,key in enumerate(df_stretches.keys()):
+        this_start = time.time()
         stretch_reaches = np.array(
             df_stretches[df_stretches[key]>0][key]).astype(int)
-        print("processing stretch:", key, ", Reaches:",stretch_reaches)
-        # get the SWOT node data
-        swot_node_df = get_swot_node_data(cfg, stretch_reaches, sword_node_df)
-        # process the stretch
-        stretch_data = process_stretch(stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
-        # write out the data to ncfile
+        print("processing {} of {}, stretch: {}".format(
+            i, N, key), ", Reaches:", stretch_reaches)
+        # check if already run
         outfile = os.path.join(outdir, '{}_stretch.nc'.format(key))
-        stretch_data.to_ncfile(outfile)
+        # check if output file exists, if it does skip, unless --force set
+        if (os.path.exists(outfile) and (not args.force)):
+            print("  This stretch already processed")
+            continue
+        # get the SWOT node data
+        swot_node_df = get_swot_node_data(cfg, stretch_reaches, sword_node_df) 
+        #breakpoint()
+        if swot_node_df is None:
+            # skip cases where we have no data
+            print("  No SWOT data for this stretch")
+            continue
+        if len(swot_node_df) == 0:
+            # skip cases where we have no data
+            print("  No SWOT data remains after quality filtering")
+            continue
+        # process the stretch
+        stretch_data = process_stretch(
+            stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
+        # write out the data to ncfile
+        #outfile = os.path.join(outdir, '{}_stretch.nc'.format(key))
+        if stretch_data is not None:
+            stretch_data.to_ncfile(outfile)
+        this_stop = time.time()
+        print('  execution time: {:2.2f} seconds'.format(this_stop - this_start))
 
 if __name__ == "__main__":
-    main()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        main()
 

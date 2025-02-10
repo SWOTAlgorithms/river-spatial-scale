@@ -47,7 +47,7 @@ def piecewise_linear(p, x):
             )
 
 
-def fit_model(x, y, xu, yu, beta=[0,0,0, 0]):
+def fit_model(x, y, xu, yu, beta=[0, 0, 0, 0]):
     # fits a curve of type model() assuming errror in both dimensions
     data = odr.RealData(x, y, sx=xu, sy=yu)
     #my_model = odr.Model(poly_model)
@@ -58,14 +58,33 @@ def fit_model(x, y, xu, yu, beta=[0,0,0, 0]):
     p_err = out.sd_beta
     return p_est, p_err
 
-def get_height_width_fit(stretch_data_in):
+def get_height_width_fit(
+        stretch_data_in,
+        beta=[0, 0, 50/1.5, 50/1.5],
+        n_sig=3, # num of stds to consider outlier
+        n_good=5):# num of good points needed to do a fit
     stretch_data= stretch_data_in.copy()
+    # handle reach-level outliers
+    bad_wse_mean = np.abs(stretch_data.stretch_wse_mean) > \
+        n_sig * stretch_data.stretch_wse_std
+    bad_width_mean = np.abs(stretch_data.stretch_width_mean) > \
+        n_sig * stretch_data.stretch_width_std
+    bad_wse_std = stretch_data.stretch_wse_std > \
+        n_sig * np.median(stretch_data.stretch_wse_std)
+    bad_width_std = stretch_data.stretch_width_std > \
+        n_sig * np.median(stretch_data.stretch_width_std)
+    good = np.logical_not(np.logical_or.reduce([
+        bad_wse_mean, bad_width_mean, bad_wse_std, bad_width_std]))
+    if np.sum(good)<n_good:
+        stretch_data['hw_params'] = np.array(beta)
+        stretch_data['hw_params_err'] = np.array([1,1,1,1]) * 1e10
+        return stretch_data
     p_est, p_err = fit_model(
-        stretch_data.stretch_wse_mean,#mn,
-        stretch_data.stretch_width_mean,#mn_w,
-        stretch_data.stretch_wse_std,#std_res,
-        stretch_data.stretch_width_std,#std_w_res,
-        beta=[0,0,50/1.5,50/1.5])
+        stretch_data.stretch_wse_mean[good],#mn,
+        stretch_data.stretch_width_mean[good],#mn_w,
+        stretch_data.stretch_wse_std[good],#std_res,
+        stretch_data.stretch_width_std[good],#std_w_res,
+        beta=beta)
     stretch_data['hw_params'] = p_est
     stretch_data['hw_params_err'] = p_err
     return stretch_data
@@ -74,15 +93,17 @@ def reach_average(stretch_data_in, keys=['wse', 'width']):
     stretch_data = stretch_data_in.copy()
     for key in keys:
         data = stretch_data[key]
-        ref = stretch_data['{}_reference'.format(key)]
+        ref = stretch_data['{}_reference'.format(key.split('_')[-1])]
         ref2 = np.broadcast_to(ref, np.shape(data.T)).T
         anom = data - ref2
         mn = np.nanmean(anom, axis=0)
+        med = np.nanmedian(anom, axis=0)
         std = np.nanstd(anom, axis=0)
         mask = np.isfinite(anom)
         cnt = np.sum(mask, axis=0)
         # set output
         stretch_data['stretch_{}_mean'.format(key)] = mn
+        stretch_data['stretch_{}_median'.format(key)] = med
         stretch_data['stretch_{}_std'.format(key)] = std
         stretch_data['stretch_{}_count'.format(key)] = cnt
     return stretch_data
