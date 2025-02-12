@@ -116,7 +116,10 @@ def drop_stretch_nans(stretch_data, min_nodes=10):
         data_out     = copy of streach_data with rows dropped
     """
     #create a new container instance
-    data_out = rivscale.products.RiverStretchData()
+    #data_out = rivscale.products.RiverStretchData()
+    data_out = rivscale.products.StretchData()
+    # copy the attribute
+    data_out.stretch_name = stretch_data.stretch_name
     wse = stretch_data['wse']
     width = stretch_data['width']
     num = np.sum(np.logical_or(np.isfinite(wse), np.isfinite(width)), axis=0)

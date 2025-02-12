@@ -283,8 +283,36 @@ def reconstruct_one_time_obs(meas, meas_u_in, Ry, mn, nodes):
         #bayes_u = np.diag(A_inv).copy()
     return signal_hat, post_cov#, bayes_u
 
+def reconstruct_stretch(stretch_data, bayes_data_in,
+        signal_key='wse', uncert_key='wse_u'):
+    # copy the input data to output data
+    bayes_data = bayes_data_in.copy()
+    # get the bayes parameters
+    mn = bayes_data.signal_mean
+    #Ry = bayes_data['signal_cov']
+    # TODO: should this be local_node_id (i.e., indexing starting at 1)?
+    nodes = np.arange(len(stretch_data['node_id']), dtype=int)
+    signal_hats = []
+    post_covs = []
+    bayes_us = []
+    time_key = 'time_id'
+    # go through each time/cycle observation in the stack 
+    for j,cycl in enumerate(stretch_data[time_key]):
+        Ry = bayes_data.signal_cov[:,:,j]
+        meas = stretch_data[signal_key][:,j].copy()
+        meas_u = stretch_data[uncert_key][:,j].copy()
+        signal_hat, post_cov = reconstruct_one_time_obs(
+            meas, meas_u, Ry, mn, nodes)
+        signal_hats.append(signal_hat)
+        post_covs.append(post_cov)
+        bayes_us.append(np.diag(post_cov).copy())
+    bayes_data.signal = np.array(signal_hats).T
+    bayes_data.signal_post_cov = np.moveaxis(
+        np.array(post_covs), 0, -1)
+    bayes_data.signal_u = np.array(bayes_us).T
+    return bayes_data
 
-def reconstruct_stretch(stretch_data_in,
+def reconstruct_stretch_defunkt(stretch_data_in,
         signal_key='wse', uncert_key='wse_u', constrain_hw=True):
     # copy the input data to output data
     stretch_data = stretch_data_in.copy()

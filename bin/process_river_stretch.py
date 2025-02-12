@@ -55,6 +55,7 @@ def smooth_widths(stretch_data, size=11):
     return width_filt
 
 def process_stretch(
+        stretch_name,
         stretch_reaches,
         swot_node_df,
         sword_node_df,
@@ -79,7 +80,8 @@ def process_stretch(
     # make the stretch multitemporal stack object
     #breakpoint()
     stretch_data = rivscale.data.make_stretch_stack(
-        stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
+        stretch_name, stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
+    #breakpoint()
     # populate witdh_u
     node_len = stretch_data['area_total'] / stretch_data['width']
     stretch_data['width_u'] = stretch_data['area_tot_u'] / node_len
@@ -96,9 +98,48 @@ def process_stretch(
     if np.shape(stretch_data.width)[1]==0:
         print('  No SWOT data left after multitemporal filtering')
         return None
-    # compute statistics
+    # compute multitemporal statistics
+    wse_stats = rivscale.products.AlongStretchStats.from_StretchData(
+        stretch_data, signal_key='wse')
+    width_stats = rivscale.products.AlongStretchStats.from_StretchData(
+        stretch_data, signal_key='width', kernel_size=11)
+    # do dark frac stuff?
+    # get stretch average stats
+    wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchData(
+        stretch_data, signal_key='wse', reference=wse_stats)
+    width_stretch_avg = rivscale.products.StretchAverageStats.from_StretchData(
+        stretch_data, signal_key='width', reference=width_stats)
+    # compute the slope by first doing Bayes for wse-only using the reference profile
+    wse_bayes = rivscale.products.BayesData()
+    wse_bayes.stretch_name = stretch_data.stretch_name
+    wse_bayes.signal_key = 'wse'
+    wse_bayes.signal_mean = wse_stats.reference.copy()
+    time_key = 'time_id'
+    wse_cov = []
+    for j,cycl in enumerate(stretch_data[time_key]):
+        Rh = rivscale.reconstruct.exponential_cov(
+            stretch_data['dist_out'], # should probably use the actual node distances?
+            char_length_tau=char_length_tau_wse,
+            prior_unc_alpha=prior_unc_alpha_wse)
+        wse_cov.append(Rh)
+    wse_bayes.signal_cov = np.moveaxis(
+        np.array(wse_cov), 0, -1) 
+    wse_bayes = rivscale.reconstruct.reconstruct_stretch(
+        stretch_data, wse_bayes, signal_key='wse', uncert_key='wse_u')
+    # now estimate slope
+    reach_str = [str(n)[0:-4]+str(n)[-1] for n in stretch_data.node_id]
+    inds = np.where(np.array(reach_str) == stretch_data.stretch_name)[0]
+    first_node = inds[0]
+    last_node = inds[-1]
+    dist_out2 = np.broadcast_to(stretch_data.dist_out, np.shape(wse_bayes.signal.T)).T
+    slope = (wse_bayes.signal[last_node,:] - wse_bayes.signal[first_node,:]) / (
+        dist_out2[last_node,:] - dist_out2[first_node,:])
+    breakpoint()
+    """
+    #breakpoint()
     stretch_data = rivscale.estimate.get_stretch_stats(
         stretch_data, signal_key='wse')
+    #breakpoint()
     stretch_data = rivscale.estimate.get_stretch_stats(
         stretch_data, signal_key='width')
     stretch_data = rivscale.estimate.get_stretch_stats(
@@ -109,9 +150,14 @@ def process_stretch(
         stretch_data['wse'], stretch_data['dist_out'])
     stretch_data['width_reference'] = rivscale.estimate.get_med_profile(
         stretch_data['width'], stretch_data['dist_out'], kernel_size=11)#, kernel_size=1)# don't smooth width
+    
     # TODO: enable estimation of char_length_tau and prior_unc_alpha from data
     # get the reach-level averages
+    wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchData(
+        stretch_data, signal_key='wse', reference=wse_stats)
     stretch_data = rivscale.reconstruct.reach_average(stretch_data)
+    breakpoint()
+    """ 
     # fit the curve to reach-level averages
     stretch_data = rivscale.reconstruct.get_height_width_fit(stretch_data)
     # set up the bayes estimator signal covariance
@@ -286,7 +332,7 @@ def main():
             continue
         # process the stretch
         stretch_data = process_stretch(
-            stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
+            key, stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
         # write out the data to ncfile
         #outfile = os.path.join(outdir, '{}_stretch.nc'.format(key))
         if stretch_data is not None:
