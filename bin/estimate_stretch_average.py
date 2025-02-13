@@ -54,41 +54,24 @@ def smooth_widths(stretch_stack, size=11):
     width_filt[w_mask==0] = np.nan
     return width_filt
 
-def process_along_stats(stretch_stack_in, crop=True):
-    """
-        stretch_name,
-        stretch_reaches,
-        swot_node_df,
-        sword_node_df,
-        d_up,
-        d_down,
+def process_stretch_average(
+        stretch_stack,
+        wse_stats,
+        width_stats,
         char_length_tau_wse = 100000,
         prior_unc_alpha_wse = 1.5,
         char_length_tau_width = 100000,
         prior_unc_alpha_width = 50, #200,
         rho_wse_width = 0.7):
-    """
-    """
-    This function processes the original stack of multitemporal 
-    SWOT data node-level measurements over a multi-reach streach.
-    The following operations are performed:
-        1) generating the stacked stretch_stack object from the measurment dataframe
-        2) data quality filtering of WSE and width
-        3) estimating of multitemproal statistics (e.g., median, percentiles etc)
-        4) estimating a reference profile for both WSE and width
-        5) estimating the Bayes reconstructed measurements for each pass
-           measurement profile. TODO: specify options handling
-    """
-    stretch_stack = stretch_stack_in.copy()
+    # do some filtering and massaging of the data
     # populate witdh_u
     node_len = stretch_stack['area_total'] / stretch_stack['width']
     stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
     # make measurement uncert at least as much as signal uncert we assume
     stretch_stack['width_u'] = stretch_stack['width_u'] + 100#2*prior_unc_alpha_width
     # first smooth widths to mitigate wedging artifacts
-    #stretch_data['width'] = smooth_widths(stretch_data, size=5)
+    #stretch_stack['width'] = smooth_widths(stretch_stack, size=5)
     # TODO: quantify amount of flagged out data?
-    # TODO: filter on dark frac here too?
     # filter out bad data (call it twice to get them all)
     stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
     stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
@@ -97,16 +80,38 @@ def process_along_stats(stretch_stack_in, crop=True):
     if np.shape(stretch_stack.width)[1]==0:
         print('  No SWOT data left after multitemporal filtering')
         return None
-    # compute multitemporal statistics
-    wse_stats = rivscale.products.AlongStretchStats.from_StretchStack(
-        stretch_stack, signal_key='wse')
-    width_stats = rivscale.products.AlongStretchStats.from_StretchStack(
-        stretch_stack, signal_key='width', kernel_size=11)
-    if crop:
-        # crop to reach
-        wse_stats = wse_stats.crop_to_reach()
-        width_stats = width_stats.crop_to_reach()
-    return wse_stats, width_stats
+    # get stretch average stats
+    wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
+        stretch_stack, signal_key='wse', reference=wse_stats)
+    width_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
+        stretch_stack, signal_key='width', reference=width_stats)
+    # compute the slope by first doing Bayes for wse-only using the reference profile
+    wse_bayes = rivscale.products.BayesData()
+    wse_bayes.stretch_name = stretch_stack.stretch_name
+    wse_bayes.signal_key = 'wse'
+    wse_bayes.signal_mean = wse_stats.reference.copy()
+    time_key = 'time_id'
+    wse_cov = []
+    for j,cycl in enumerate(stretch_stack[time_key]):
+        Rh = rivscale.reconstruct.exponential_cov(
+            stretch_stack['dist_out'], # should probably use the actual node distances?
+            char_length_tau=char_length_tau_wse,
+            prior_unc_alpha=prior_unc_alpha_wse)
+        wse_cov.append(Rh)
+    wse_bayes.signal_cov = np.moveaxis(
+        np.array(wse_cov), 0, -1)
+    wse_bayes = rivscale.reconstruct.reconstruct_stretch(
+        stretch_stack, wse_bayes, signal_key='wse', uncert_key='wse_u')
+    # now estimate slope
+    reach_str = [str(n)[0:-4]+str(n)[-1] for n in stretch_stack.node_id]
+    inds = np.where(np.array(reach_str) == stretch_stack.stretch_name)[0]
+    first_node = inds[0]
+    last_node = inds[-1]
+    dist_out2 = np.broadcast_to(stretch_stack.dist_out, np.shape(wse_bayes.signal.T)).T
+    slope = (wse_bayes.signal[last_node,:] - wse_bayes.signal[first_node,:]) / (
+        dist_out2[last_node,:] - dist_out2[first_node,:])
+    breakpoint()
+    
 
 def main():
     parser = argparse.ArgumentParser(
@@ -151,24 +156,26 @@ def main():
             i, N, key), ", Reaches:", stretch_reaches)
         # check if already run
         infile_stretch = os.path.join(outdir, '{}_stretch_stack.nc'.format(key))
-        outfile_wse_stats = os.path.join(outdir, '{}_wse_stats.nc'.format(key))
-        outfile_width_stats = os.path.join(outdir, '{}_width_stats.nc'.format(key))
+        infile_wse_stats = os.path.join(outdir, '{}_wse_stats.nc'.format(key))
+        # TODO: prefer to use Pekel for width?
+        #infile_width_stats = os.path.join(outdir, '{}_width_stats.nc'.format(key))
+        infile_width_stats = os.path.join(outdir, '{}_pekel_stats.nc'.format(key))
+        outfile = os.path.join(outdir, '{}_stretch_average.nc'.format(key))
         if not(os.path.exists(infile_stretch)):
             print("  The input stretch has not been created")
             continue
         # check if output file exists, if it does skip, unless --force set
-        if (os.path.exists(outfile_width_stats) and (not args.force)):
+        if (os.path.exists(outfile) and (not args.force)):
             print("  This stretch already processed")
             continue
         # read the stretch data
         stretch_stack = rivscale.products.StretchStack.from_ncfile(infile_stretch)
+        wse_stats = rivscale.products.AlongStretchStats.from_ncfile(infile_wse_stats)
+        width_stats = rivscale.products.AlongStretchStats.from_ncfile(infile_width_stats)
         #
-        wse_stats, width_stats = process_along_stats(stretch_stack, crop=False)# TODO: put arg for crop
-
-        if wse_stats is not None:
-            wse_stats.to_ncfile(outfile_wse_stats)
-        if width_stats is not None:
-            width_stats.to_ncfile(outfile_width_stats)
+        stretch_avg = process_stretch_average(stretch_stack, wse_stats, width_stats)
+        if stretch_avg is not None:
+            stretch_avg.to_ncfile(outfile)
         this_stop = time.time()
         print('  execution time: {:2.2f} seconds'.format(this_stop - this_start))
 
