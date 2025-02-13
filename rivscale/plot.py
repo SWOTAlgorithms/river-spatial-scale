@@ -131,6 +131,52 @@ def plot_spectra(
             plt.show()
 
 def plot_stretch_stats(
+        stats,
+        x_key='dist_out',
+        outdir=None,
+        show=False,
+        figsize=(10,5)):
+    title = stats.stretch_name
+    x = stats[x_key]
+    y_key = stats.signal_key
+    y_ref = stats.reference
+    y_mean = stats.mean
+    y_std = stats.std
+    y_ptiles = stats.percentiles
+    ptiles = ['{}-%ile'.format(t) for t in stats['percentile_list']]
+    x2D = np.broadcast_to(x, np.shape(y_ptiles.T)).T
+    figsize=(10,5)
+    plt.figure(figsize=figsize)
+    plt.subplot(2,1,1)
+    plt.plot(x2D, y_ptiles)
+    plt.plot(x, y_ref, 'k', linewidth=2)
+    plt.legend(ptiles+['ref',])
+    plt.grid()
+    plt.xlabel(x_key)
+    plt.ylabel(y_key)
+    plt.suptitle(title+'{} statistics'.format(y_key))
+    plt.subplot(2,1,2)
+    plt.plot(x, y_mean)
+    plt.plot(x, y_mean+y_std,'--')
+    plt.plot(x, y_mean-y_std,'--')
+    plt.plot(x, y_ref, 'k', linewidth=2)
+    plt.legend(['mean', 'mean + std', 'mean - std', 'ref'])
+    plt.grid()
+    plt.xlabel(x_key)
+    plt.ylabel(y_key)
+    plt.tight_layout()
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}_profile_stats_{}_vs_{}'.format(title, y_key, x_key)
+        plt.savefig(os.path.join(outdir, fname), dpi=300)
+        plt.close()
+    else:
+        if show:
+            plt.show()
+
+def plot_stretch_stats_defunkt(
         stretch_data,
         x_key='dist_out',
         y_key='dark_frac',
@@ -170,6 +216,57 @@ def plot_stretch_stats(
         if not os.path.exists(outdir):
             os.makedirs(outdir)
         fname = '{}_profile_stats_{}_vs_{}'.format(title, y_key, x_key)
+        plt.savefig(os.path.join(outdir, fname), dpi=300)
+        plt.close()
+    else:
+        if show:
+            plt.show()
+
+def plot_stretch_stack(
+        stretch_stack,
+        x_key='dist_out',
+        y_keys=['wse','width'],
+        y_reference=[None, None],
+        outdir=None,
+        figsize=(10,5),
+        show = False,
+        marker='-'):
+    ttl = stretch_stack.stretch_name
+    ylabel = ''
+    x = stretch_stack[x_key]
+    y = stretch_stack[y_keys[0]]
+    y2 = y.copy()
+    if len(y_keys)==2:
+        y2 = stretch_stack[y_keys[1]]
+    if x_key=='time_id':
+        # convert to datetime
+        x = swot_time_to_field_time(x*60*60)
+        y = y.T
+        y2 = y2.T
+    plt.figure(figsize=figsize)
+    if len(y_keys)==2:
+        plt.subplot(2,1,1)
+        ylabel = '{},{}'.format(y_keys[0], y_keys[1])
+    plt.plot(x, y, marker, markersize=1)
+    plt.ylabel(y_keys[0])
+    plt.grid()
+    # TODO: enable plotting reference
+    # make first plot
+    if len(y_keys)==2:
+        plt.subplot(2,1,2)
+        # make second plot
+        plt.plot(x, y2, marker, markersize=1)
+        plt.ylabel(y_keys[1])
+        plt.suptitle(ttl)
+        plt.grid()
+    else:
+        plt.title(ttl)
+    plt.xlabel(x_key)
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}_profile_{}_vs_{}'.format(title, ylabel, x_key)
         plt.savefig(os.path.join(outdir, fname), dpi=300)
         plt.close()
     else:

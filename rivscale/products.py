@@ -18,6 +18,8 @@ from SWOTWater.products.constants import FILL_VALUES
 from swot.lr.base_classes import AttrFillerMixIn
 
 import rivscale.estimate
+import rivscale.plot
+import matplotlib.pyplot as plt
 
 def textjoin(text):
     """Dedent join and strip text"""
@@ -64,85 +66,7 @@ DIMENSIONS_POSTCOV = odict([
     ['num_nodes2', 0],
     ['num_times', 0]])
 
-class RiverStretchData(Product):
-    ATTRIBUTES = odict([
-        ['description',{'dtype':'str', 'value': textjoin("""
-            Container for potentially multireach sections of rivers
-            holding 2D multitemporal data and Bayes reconstruction
-            processing parameters and results
-            """)}],
-        ])
-    DIMENSIONS = DIMENSIONS_ALL
-    VARIABLES = odict([
-        ['reaches', odict([['dimensions', odict([['num_reaches', 0]])]])],
-        ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['cycle_id', odict([['dimensions', odict([['num_times', 0]])]])],
-        #['swot_time', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['date_hour', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['wse', odict([['dimensions', DIMENSIONS_2D]])],
-        ['width', odict([['dimensions', DIMENSIONS_2D]])],
-        ['area_total', odict([['dimensions', DIMENSIONS_2D]])],
-        ['wse_u', odict([['dimensions', DIMENSIONS_2D]])],
-        ['width_u', odict([['dimensions', DIMENSIONS_2D]])],
-        ['area_tot_u', odict([['dimensions', DIMENSIONS_2D]])],
-        ['node_q_b', odict([['dimensions', DIMENSIONS_2D]])],
-        ['dark_frac', odict([['dimensions', DIMENSIONS_2D]])],
-        ['bayes_wse', odict([['dimensions', DIMENSIONS_2D]])],
-        ['bayes_width', odict([['dimensions', DIMENSIONS_2D]])],
-        ['bayes_wse_u', odict([['dimensions', DIMENSIONS_2D]])],
-        ['bayes_width_u', odict([['dimensions', DIMENSIONS_2D]])],
-        ['bayes_wse_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['bayes_width_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['bayes_wse_width_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['wse_reference', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['width_reference', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        #['wse_cov', odict([['dimensions', DIMENSIONS_COV]])],
-        #['width_cov', odict([['dimensions', DIMENSIONS_COV]])],
-        #['wse_width_cov', odict([['dimensions', DIMENSIONS_COV]])],
-        ['wse_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['wse_width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['wse_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['width_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['dark_frac_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['wse_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['width_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['dark_frac_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['wse_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['width_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['dark_frac_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['wse_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])], 
-        ['width_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
-        ['dark_frac_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
-        ['percentiles', odict([['dimensions', odict([['num_percentiles', 0]])]])],
-        ['dark_prob', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['stretch_wse_mean', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_wse_median', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_wse_std', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_wse_count', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_width_mean', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_width_median', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_width_std', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_width_count', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_wse_mean', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_wse_median', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_wse_std', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_wse_count', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_width_mean', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_width_median', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_width_std', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_width_count', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['hw_params', odict([['dimensions', odict([['num_hw_params', 0]])]])],
-        ['hw_params_err', odict([['dimensions', odict([['num_hw_params', 0]])]])],
-    ])
-    #for name, reference in VARIABLES.items():
-    #    reference['dimensions'] = DIMENSIONS
-
-
-class StretchData(Product):
+class StretchStack(Product):
     ATTRIBUTES = odict([
         ['description',{'dtype':'str', 'value': textjoin("""
             Container for potentially multireach sections of rivers
@@ -173,36 +97,20 @@ class StretchData(Product):
         ['dark_frac', odict([['dimensions', DIMENSIONS_2D]])],
     ])
 
-class RiverStretchStats(Product):
-    ATTRIBUTES = odict([
-        ['description',{'dtype':'str', 'value': textjoin("""
-            Container for potentially multireach sections of rivers
-            holding along-river statistics and spatial-scale covariance
-            estimates derived from 2D multitemporal data
-            """)}],
-        ])
-    DIMENSIONS = DIMENSIONS_ALL
-    VARIABLES = odict([
-        ['wse_reference', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['width_reference', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['wse_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['wse_width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['wse_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['width_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['dark_frac_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['wse_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['width_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['dark_frac_std', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['wse_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['width_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['dark_frac_count', odict([['dimensions', odict([['num_nodes', 0]])]])],
-        ['wse_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
-        ['width_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
-        ['dark_frac_percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
-        ['percentiles', odict([['dimensions', odict([['num_percentiles', 0]])]])],
-        ['dark_prob', odict([['dimensions', odict([['num_nodes', 0]])]])],
-    ])
+    def plot(self, outdir=None):
+        rivscale.plot.plot_stretch_stack(
+            self,
+            x_key='dist_out',
+            y_keys=['wse','width'],
+            outdir=outdir)
+        rivscale.plot.plot_stretch_stack(
+            self,
+            x_key='time_id',
+            y_keys=['wse','width'],
+            outdir=outdir,
+            marker='o')
+        if outdir is None:
+            plt.show()
 
 class AlongStretchStats(Product):
     ATTRIBUTES = odict([
@@ -212,6 +120,10 @@ class AlongStretchStats(Product):
             estimates derived from 2D multitemporal data
             """)}],
         ['signal_key',{'dtype':'str', 'value':'wse, width, or dark_frac'}],
+        ['stretch_name',{'dtype':'str', 'value': textjoin("""
+            Name given to this stretch instance (e.g., center reach
+            or river name)
+            """)}],
         ])
     DIMENSIONS = DIMENSIONS_ALL
     VARIABLES = odict([
@@ -228,8 +140,15 @@ class AlongStretchStats(Product):
         ['percentile_list', odict([['dimensions', odict([['num_percentiles', 0]])]])],
     ])
 
+
+    def plot(self, outdir=None):
+        rivscale.plot.plot_stretch_stats(
+            self,
+            x_key='dist_out',
+            outdir=outdir)
+
     @classmethod
-    def from_StretchData(
+    def from_StretchStack(
             cls,
             stretch_data,
             signal_key,
@@ -238,7 +157,7 @@ class AlongStretchStats(Product):
         stats = cls()
         stats.signal_key = signal_key
         # copy over common items
-        #breakpoint()
+        stats.stretch_name = stretch_data.stretch_name
         stats.reaches = stretch_data.reaches.copy()
         stats.dist_out = stretch_data.dist_out.copy()
         stats.node_id = stretch_data.node_id.copy()
@@ -264,37 +183,92 @@ class AlongStretchStats(Product):
         for k, ptile in enumerate(percentiles):
             ptiles[:,k] = np.nanpercentile(stretch_data[signal_key], ptile, axis=1)
         stats.percentiles = ptiles
+        stats.percentile_list = np.array(percentiles)
         return stats
 
-class RiverStretchAverage(Product):
-    ATTRIBUTES = odict([
-        ['description',{'dtype':'str', 'value': textjoin("""
-            Container for potentially multireach sections of rivers
-            holding stretch_average estimates (over all nodes) of wse
-            and width derived from 2D multitemporal data
-            """)}],
-        ])
-    DIMENSIONS = DIMENSIONS_SAVG
-    VARIABLES = odict([
-        ['reaches', odict([['dimensions', odict([['num_reaches', 0]])]])],
-        ['dist_out', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_wse_mean', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_wse_median', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_wse_std', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_wse_count', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_width_mean', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_width_median', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_width_std', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_width_count', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_wse_mean', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_wse_median', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_wse_std', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_wse_count', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_width_mean', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_width_median', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_width_std', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['stretch_bayes_width_count', odict([['dimensions', odict([['num_times', 0]])]])],
-    ])
+    @classmethod
+    def from_pekel_df(cls, df_list, reaches, name, in_stats):
+        stats = cls()
+        stats.stretch_name = name
+        stats.reaches = np.array(reaches)
+        stats.signal_key = 'width'
+        def df_to_dict(df, node_id, dist_out):
+            #df = df_in.sort_values('node_id')
+            d = {
+                #'node_id':node_id,
+                'percentiles':[],
+                'percentile_list':[],
+                #'dist_out':dist_out}
+                }
+            # Pekel occurrence threshold is packed in cycle field
+            ptiles = np.sort(100-np.unique(df.cycle))
+            for ptile in ptiles:
+                this_df = df[df.cycle==100-ptile]
+                #if d['dist_out'] is None:
+                #    d['dist_out'] = dist_out
+                #if d['node_id'] is None:
+                #    d['node_id'] = node_id
+                w = np.zeros(np.shape(node_id))+np.nan
+                this_node_id = np.array(this_df.node_id)
+                for wid, nid in zip(this_df.width, this_df.node_id):
+                    w[node_id==nid] = wid
+                d['percentiles'].append(w)
+            d['percentile_list'] = ptiles
+            return d
+        # stack up all the variables
+        d = {
+            'node_id':None,
+            'percentiles':None,
+            'percentile_list':None,
+            'dist_out':None}
+        in_nodes = in_stats.node_id
+        in_reaches = np.array([int(str(n)[0:10]+str(n)[-1]) for n in in_nodes])
+        in_dist_out = in_stats.dist_out
+        for k,reach in enumerate(reaches):
+            this_df = df_list[k]
+            #this_d = df_to_dict(this_df)
+            this_msk = np.where(in_reaches==reach)
+            this_node_id = in_nodes[this_msk]
+            this_dist_out = in_dist_out[this_msk]
+            this_d = df_to_dict(this_df, this_node_id, this_dist_out)
+            if k ==0:
+                d['node_id'] = this_node_id
+                #if d['dist_out'] is None:
+                d['dist_out'] = this_dist_out
+                #if d['percentile_list'] is None:# assumes same percentile list for every df
+                d['percentile_list'] = np.array(this_d['percentile_list'])
+                d['percentiles'] = np.array(this_d['percentiles'])
+            else:
+                d['node_id'] = np.append(d['node_id'], this_node_id)
+                d['dist_out'] = np.append(d['dist_out'], this_dist_out)
+                d['percentiles'] = np.append(d['percentiles'], np.array(this_d['percentiles']), axis=1)
+        for key in d.keys():
+            if key == 'percentiles':
+                stats[key] = d[key].T
+            else:
+                stats[key] = d[key]
+        return stats
+
+    def crop_to_reach(
+            self,
+            reach_id=None):
+        stats = AlongStretchStats()
+        if reach_id is None:
+            if self.stretch_name.isdigit():
+                reach_id = self.stretch_name
+            else:
+                reach_id = 'bad'
+        if not((reach_id.isdigit()) and (len(reach_id)==11)):
+            print('reach_id is not a valid value, not cropping')
+            return None
+        # now get the mask
+        reach_ids = np.array([str(n)[0:10]+str(n)[-1] for n in self.node_id])
+        mask = np.where(reach_ids==reach_id)[0]
+        stats.reaches = np.array([int(reach_id),])
+        stats.signal_key = self.signal_key
+        for key in set(self.variables.keys()) - set(['reaches',]):
+            stats[key] = self[key][mask[0]:mask[-1]]
+        return stats
 
 class StretchAverageStats(Product):
     ATTRIBUTES = odict([
@@ -303,8 +277,12 @@ class StretchAverageStats(Product):
             holding stretch_average estimates (over all nodes) of wse
             and width derived from 2D multitemporal data
             """)}],
+        ['stretch_name',{'dtype':'str', 'value': textjoin("""
+            Name given to this stretch instance (e.g., center reach
+            or river name)
+            """)}],
         ['signal_key',{'dtype':'str', 'value':'wse, width, or dark_frac'}],
-        ['reference_mean',{'dtype':'float', 'value':0.0}]
+        ['reference_mean',{'dtype':'float', 'value':0.0}],
         ])
     DIMENSIONS = DIMENSIONS_ALL
     VARIABLES = odict([
@@ -322,7 +300,7 @@ class StretchAverageStats(Product):
     ])
 
     @classmethod
-    def from_StretchData(
+    def from_StretchStack(
             cls,
             stretch_data,
             signal_key,
@@ -367,6 +345,10 @@ class BayesData(Product):
             holding Bayes reconstruction parameters and the
             reconstructed signals for each time observation in the
             multitemproal stack of data.
+            """)}],
+        ['stretch_name',{'dtype':'str', 'value': textjoin("""
+            Name given to this stretch instance (e.g., center reach
+            or river name)
             """)}],
         ['signal_key',{'dtype':'str', 'value':'wse, width, or dark_frac'}],
         ])

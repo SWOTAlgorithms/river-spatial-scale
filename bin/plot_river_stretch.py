@@ -8,9 +8,9 @@ Author(s): Brent Williams
 
 '''
 
-import pandas as pd
+#import pandas as pd
 import numpy as np
-import rivscale.plot
+#import rivscale.plot
 import rivscale.products
 import matplotlib.pyplot as plt
 import argparse
@@ -23,13 +23,22 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=EXAMPLE)
     parser.add_argument('infile', help='*_streach.nc file')
+    parser.add_argument('-t','--filetype', type=str, default='StretchData',
+        help='StreachData, AlongStretchStats')
     parser.add_argument('-o','--outdir', default=None, help='output directory to save plots')
     args = parser.parse_args()
-    stretch_data = rivscale.products.RiverStretchData.from_ncfile(
-        args.infile)
-    name = os.path.split(args.infile)[1].split('_')[0]
     #breakpoint()
-    rivscale.plot.plot_stretch(stretch_data, title=name, outdir=args.outdir)
+    #
+    if args.filetype=='StretchData':
+        data = rivscale.products.StretchData.from_ncfile(
+            args.infile)
+    if args.filetype=='AlongStretchStats':
+        data = rivscale.products.AlongStretchStats.from_ncfile(
+            args.infile)
+    #name = os.path.split(args.infile)[1].split('_')[0]
+    #breakpoint()
+    #rivscale.plot.plot_stretch(stretch_data, title=name, outdir=args.outdir)
+    data.plot(outdir=args.outdir)
     if args.outdir is None:
         plt.show()
 

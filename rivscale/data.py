@@ -67,7 +67,7 @@ def check_connected_stretch(stretch_reaches, sword_df, d_up, d_down):
 
 def make_stretch_stack(stretch_name, stretch_reaches, swot_node_df, sword_node_df, d_up, d_down):
     """
-    create and populate a RiverStretchData object from node dataframes and SWORD
+    create and populate a StretchStack object from node dataframes and SWORD
     stretch_reaches = list of connected reaches along a river
     swot_node_df    = the swot node data (multiple cycles)
     sword_node_df, d_up, d_down   = SWORD info as output by rivscale.io.read_SWORD()
@@ -75,7 +75,7 @@ def make_stretch_stack(stretch_name, stretch_reaches, swot_node_df, sword_node_d
     # Init the potentially multireach stretch stack 
     #data = rivscale.products.RiverStretchData()
     #data['stretch_reaches'] = stretch_reaches
-    data = rivscale.products.StretchData()
+    data = rivscale.products.StretchStack()
     data['reaches'] = stretch_reaches
     data['stretch_name'] = stretch_name
     # check that stretch_reaches list is a connected stretch

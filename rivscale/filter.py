@@ -65,7 +65,7 @@ def filter_node_qual(df, height=True, area=False, dark_thresh=0.8):
         df = df[np.bitwise_and(df['node_q_b'], 2**18) == 0]
     return df
 
-def filter_bad_stretch_data(stretch_data_in):
+def filter_bad_stretch_stack(stretch_stack_in):
     """
     Filter the streach data based on comparing uncertainty to local variability
     for both wse and width.
@@ -81,62 +81,64 @@ def filter_bad_stretch_data(stretch_data_in):
     RiverStretchData object since we dont carry all those
     indicators in the RiverStretchData object to do it here
     """
+    #TODO: make this a class method
     # find the anomolous wse data by looking for inconsistency between
     # node uncertainty and local node variability (TODO: but ignoring
     # nodes near actual diconstinuities?)
-    stretch_data = stretch_data_in.copy()
-    wse = stretch_data['wse']
+    stretch_stack = stretch_stack_in.copy()
+    wse = stretch_stack['wse']
     wse_ref_1d = rivscale.estimate.get_med_profile(
-        stretch_data['wse'], stretch_data['dist_out'])
+        stretch_stack['wse'], stretch_stack['dist_out'])
     wse_std = rivscale.estimate.get_local_std(wse, wse_ref_1d)
-    bad_wse_mask = wse_std / stretch_data['wse_u'] > 100
-    stretch_data['wse'][bad_wse_mask] = np.nan
+    bad_wse_mask = wse_std / stretch_stack['wse_u'] > 100
+    stretch_stack['wse'][bad_wse_mask] = np.nan
     # also drop the very noisy nodes
-    noisy_wse_mask = stretch_data['wse_u'] > 0.5
-    stretch_data['wse'][noisy_wse_mask] = np.nan
+    noisy_wse_mask = stretch_stack['wse_u'] > 0.5
+    stretch_stack['wse'][noisy_wse_mask] = np.nan
     # now do the width
-    width = stretch_data['width']
+    width = stretch_stack['width']
     width_ref_1d = rivscale.estimate.get_med_profile(
-        stretch_data['width'], stretch_data['dist_out'])
+        stretch_stack['width'], stretch_stack['dist_out'])
     width_std = rivscale.estimate.get_local_std(width, width_ref_1d)
-    bad_width_mask = width_std / stretch_data['width_u'] > 100
-    stretch_data['width'][bad_width_mask] = np.nan
-    return stretch_data
+    bad_width_mask = width_std / stretch_stack['width_u'] > 100
+    stretch_stack['width'][bad_width_mask] = np.nan
+    return stretch_stack
 
-def drop_stretch_nans(stretch_data, min_nodes=10):
+def drop_stretch_nans(stretch_stack, min_nodes=10):
     """
     Prune out the time/cycle observations with too little
     good data in either wse or width.
 
     inputs:
-        stretch_data = a RiverStretchData instance with populated input data
+        stretch_stack = a StretchStack instance with populated input data
         min_nodes    = min number of valid nodes to consider to keep
     
     outputs:
         data_out     = copy of streach_data with rows dropped
     """
+    # TODO make this a class method?
     #create a new container instance
     #data_out = rivscale.products.RiverStretchData()
-    data_out = rivscale.products.StretchData()
+    data_out = rivscale.products.StretchStack()
     # copy the attribute
-    data_out.stretch_name = stretch_data.stretch_name
-    wse = stretch_data['wse']
-    width = stretch_data['width']
+    data_out.stretch_name = stretch_stack.stretch_name
+    wse = stretch_stack['wse']
+    width = stretch_stack['width']
     num = np.sum(np.logical_or(np.isfinite(wse), np.isfinite(width)), axis=0)
     # go through each data that is populated
-    for key in stretch_data.variables.keys():
-        if 'num_times' in stretch_data.VARIABLES[key]['dimensions'].keys():
-            dim = [*stretch_data.VARIABLES[key]['dimensions'].keys()].index('num_times')
+    for key in stretch_stack.variables.keys():
+        if 'num_times' in stretch_stack.VARIABLES[key]['dimensions'].keys():
+            dim = [*stretch_stack.VARIABLES[key]['dimensions'].keys()].index('num_times')
             #print(key, dim)
             if dim==0:
-                data_out[key] = stretch_data[key][num>min_nodes].copy()
+                data_out[key] = stretch_stack[key][num>min_nodes].copy()
             if dim==1:
-                data_out[key] = stretch_data[key][:,num>min_nodes].copy()
+                data_out[key] = stretch_stack[key][:,num>min_nodes].copy()
             if dim==2:
-                data_out[key] = stretch_data[key][:,:,num>min_nodes].copy()
+                data_out[key] = stretch_stack[key][:,:,num>min_nodes].copy()
         else:
             # just copy the data over to output
-            data_out[key] = stretch_data[key].copy()
+            data_out[key] = stretch_stack[key].copy()
     return data_out
 
 ############ Old code TODO: delete/revise etc
