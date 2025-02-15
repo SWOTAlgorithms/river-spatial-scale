@@ -97,19 +97,49 @@ class StretchStack(Product):
         ['dark_frac', odict([['dimensions', DIMENSIONS_2D]])],
     ])
 
-    def plot(self, outdir=None):
-        rivscale.plot.plot_stretch_stack(
+    def plot(
             self,
-            x_key='dist_out',
-            y_keys=['wse','width'],
-            outdir=outdir)
+            wse_reference=None,
+            width_reference=None,
+            x_key='dist_out', # or 'time_id'
+            outdir=None,
+            show=False):
+        if wse_reference is not None:
+            # plot the wse and wse_anom together
+            rivscale.plot.plot_stretch_stack(
+                self,
+                x_key=x_key,
+                y_keys=['wse','wse'],
+                y_reference=[wse_reference, wse_reference],
+                y_anom=[False, True],
+                outdir=outdir)
+        if width_reference is not None:
+            # plot the width and width_anom together
+            rivscale.plot.plot_stretch_stack(
+                self,
+                x_key=x_key,
+                y_keys=['width','width'],
+                y_reference=[width_reference, width_reference],
+                y_anom=[False, True],
+                outdir=outdir)
+        if (wse_reference is None) and (width_reference is None):
+            # plot the height and width together
+            rivscale.plot.plot_stretch_stack(
+                self,
+                x_key=x_key,
+                y_keys=['wse','width'],
+                y_reference=[None, None],
+                y_anom=[False, False],
+                outdir=outdir) 
+        """
         rivscale.plot.plot_stretch_stack(
             self,
             x_key='time_id',
             y_keys=['wse','width'],
             outdir=outdir,
             marker='o')
-        if outdir is None:
+        """
+        if show:
             plt.show()
 
 class AlongStretchStats(Product):
@@ -124,6 +154,8 @@ class AlongStretchStats(Product):
             Name given to this stretch instance (e.g., center reach
             or river name)
             """)}],
+        ['char_length_tau',{'dtype':'float', 'value':100000}],
+        ['prior_unc_alpha',{'dtype':'float', 'value':1.5}],
         ])
     DIMENSIONS = DIMENSIONS_ALL
     VARIABLES = odict([
@@ -150,30 +182,35 @@ class AlongStretchStats(Product):
     @classmethod
     def from_StretchStack(
             cls,
-            stretch_data,
+            stretch_stack,
             signal_key,
             percentiles=[5, 25, 32, 50, 68, 75, 95],
-            kernel_size=35):
+            kernel_size=35,
+            char_length_tau=None,
+            prior_unc_alpha=None):
         stats = cls()
         stats.signal_key = signal_key
         # copy over common items
-        stats.stretch_name = stretch_data.stretch_name
-        stats.reaches = stretch_data.reaches.copy()
-        stats.dist_out = stretch_data.dist_out.copy()
-        stats.node_id = stretch_data.node_id.copy()
-        stats.local_node_id = stretch_data.local_node_id.copy()
+        stats.stretch_name = stretch_stack.stretch_name
+        stats.reaches = stretch_stack.reaches.copy()
+        stats.dist_out = stretch_stack.dist_out.copy()
+        stats.node_id = stretch_stack.node_id.copy()
+        stats.local_node_id = stretch_stack.local_node_id.copy()
         # get the reference profile
         stats.reference = rivscale.estimate.get_med_profile(
-            stretch_data[signal_key],
-            stretch_data['dist_out'],
+            stretch_stack[signal_key],
+            stretch_stack['dist_out'],
             kernel_size = kernel_size)
-        # TODO: get the spatial covariance estimate
-         
+        # TODO: get the spatial covariance estimate from data
+        if char_length_tau is not None:
+            stats.char_length_tau = char_length_tau
+        if prior_unc_alpha is not None:
+            stats.prior_unc_alpha = prior_unc_alpha
         # get the stats
-        stats.mean = np.nanmean(stretch_data[signal_key], axis=1)
-        stats.std = np.nanstd(stretch_data[signal_key], axis=1)
-        mask = np.zeros(np.shape(stretch_data[signal_key]))
-        mask[np.isfinite(stretch_data[signal_key])] = 1
+        stats.mean = np.nanmean(stretch_stack[signal_key], axis=1)
+        stats.std = np.nanstd(stretch_stack[signal_key], axis=1)
+        mask = np.zeros(np.shape(stretch_stack[signal_key]))
+        mask[np.isfinite(stretch_stack[signal_key])] = 1
         stats.count = np.nansum(mask, axis=1)
         stats.percentiles_list = percentiles
         ptiles = np.zeros((
@@ -181,8 +218,8 @@ class AlongStretchStats(Product):
             len(percentiles),
             )) + np.nan
         for k, ptile in enumerate(percentiles):
-            ptiles[:,k] = np.nanpercentile(stretch_data[signal_key], ptile, axis=1)
-        stats.percentiles = ptiles
+            ptiles[:,k] = np.nanpercentile(stretch_stack[signal_key], ptile, axis=1)
+        stats.percentiles = np.array(ptiles)
         stats.percentile_list = np.array(percentiles)
         return stats
 
@@ -194,24 +231,18 @@ class AlongStretchStats(Product):
         stats.signal_key = 'width'
         def df_to_dict(df, node_id, dist_out):
             #df = df_in.sort_values('node_id')
-            d = {
-                #'node_id':node_id,
-                'percentiles':[],
-                'percentile_list':[],
-                #'dist_out':dist_out}
-                }
+            d = {'percentiles':[], 'percentile_list':[]}
             # Pekel occurrence threshold is packed in cycle field
             ptiles = np.sort(100-np.unique(df.cycle))
             for ptile in ptiles:
                 this_df = df[df.cycle==100-ptile]
-                #if d['dist_out'] is None:
-                #    d['dist_out'] = dist_out
-                #if d['node_id'] is None:
-                #    d['node_id'] = node_id
                 w = np.zeros(np.shape(node_id))+np.nan
                 this_node_id = np.array(this_df.node_id)
                 for wid, nid in zip(this_df.width, this_df.node_id):
                     w[node_id==nid] = wid
+                # fill in any missing nodes with the average
+                avg_w = np.nanmean(w)
+                w[np.isnan(w)] = avg_w
                 d['percentiles'].append(w)
             d['percentile_list'] = ptiles
             return d
@@ -233,20 +264,25 @@ class AlongStretchStats(Product):
             this_d = df_to_dict(this_df, this_node_id, this_dist_out)
             if k ==0:
                 d['node_id'] = this_node_id
-                #if d['dist_out'] is None:
                 d['dist_out'] = this_dist_out
-                #if d['percentile_list'] is None:# assumes same percentile list for every df
+                # assumes same percentile list for every df
                 d['percentile_list'] = np.array(this_d['percentile_list'])
                 d['percentiles'] = np.array(this_d['percentiles'])
             else:
                 d['node_id'] = np.append(d['node_id'], this_node_id)
                 d['dist_out'] = np.append(d['dist_out'], this_dist_out)
-                d['percentiles'] = np.append(d['percentiles'], np.array(this_d['percentiles']), axis=1)
+                d['percentiles'] = np.append(
+                    d['percentiles'],
+                    np.array(this_d['percentiles']), axis=1)
         for key in d.keys():
             if key == 'percentiles':
                 stats[key] = d[key].T
             else:
                 stats[key] = d[key]
+        # put the 50%ile in as the reference
+        msk = stats.percentile_list==50
+        if np.sum(msk)>0:
+            stats.reference = stats.percentiles[:,msk].squeeze()
         return stats
 
     def crop_to_reach(
@@ -282,7 +318,8 @@ class StretchAverageStats(Product):
             or river name)
             """)}],
         ['signal_key',{'dtype':'str', 'value':'wse, width, or dark_frac'}],
-        ['reference_mean',{'dtype':'float', 'value':0.0}],
+        #['reference_mean',{'dtype':'float', 'value':0.0}],
+        #['reference_slope',{'dtype':'float', 'value':-9999.0}],
         ])
     DIMENSIONS = DIMENSIONS_ALL
     VARIABLES = odict([
@@ -291,51 +328,154 @@ class StretchAverageStats(Product):
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['cycle_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['mean', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['mean_reference', odict([['dimensions', odict([['num_times', 0]])]])],
         ['std', odict([['dimensions', odict([['num_times', 0]])]])],
         ['count', odict([['dimensions', odict([['num_times', 0]])]])],
         ['percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
         ['percentile_list', odict([['dimensions', odict([['num_percentiles', 0]])]])],
-        #['slope', odict([['dimensions', odict([['num_times', 0]])]])],
-        #['slope_reference', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['slope', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['slope_reference', odict([['dimensions', odict([['num_times', 0]])]])],
     ])
+    def plot(self, outdir=None, show=False):
+        rivscale.plot.plot_stretch_stats(
+            self,
+            x_key='time_id',
+            outdir=outdir)
+        if show:
+            plt.show()
 
     @classmethod
     def from_StretchStack(
             cls,
-            stretch_data,
+            stretch_stack,
             signal_key,
+            along_stats=None,
             percentiles=[5, 25, 32, 50, 68, 75, 95],
-            reference=None):
+            reach_id=None,
+            average_method='weighted',
+            slope_method='bayes'):
+        # average_method = 'simple', 'weighted', 'bayes_weighted'
+        # slope_method = 'simple', 'bayes'
+        # TODO: maybe just fit a line to the deviation from reference?
         stats = cls()
         # copy common things
-        stats.reaches = stretch_data.reaches.copy()
-        stats.time_id = stretch_data.time_id.copy()
-        stats.cycle_id = stretch_data.cycle_id.copy()
+        stats.stretch_name = stretch_stack.stretch_name
+        stats.signal_key = signal_key
+        stats.reaches = stretch_stack.reaches.copy()
+        stats.time_id = stretch_stack.time_id.copy()
+        stats.cycle_id = stretch_stack.cycle_id.copy()
         # get stats
-        stats.dist_out = np.nanmean(stretch_data.dist_out, axis=0)
-        if reference is None:
-            reference = np.zeros_like(stretch_data[signal_key][:,0])
-        elif isinstance(reference, AlongStretchStats):
-            reference = reference.reference.copy()
+        signal = stretch_stack[signal_key]
+        signal_u = stretch_stack[signal_key+'_u']
+        first_node = 0
+        last_node = -1
+        if along_stats is not None:
+            if ('bayes' in average_method) or 'bayes' in slope_method:
+                bayes = BayesData.simple(
+                    stretch_stack,
+                    along_stats,
+                    signal_key)
+                    #char_length_tau,
+                    #prior_unc_alpha)
+            if 'bayes' in average_method:
+                signal = bayes.signal
+            if 'bayes' in slope_method:
+                signal_u = bayes.signal_u
+        # get weighting mask for reach average
+        window = np.ones_like(signal)
+        window_valid = window.copy()
+        #window[~np.isfinite(stretch_stack[signal_key])] = 0
+        #window_valid[~np.isfinite(stretch_stack[signal_key])] = np.nan
+        if reach_id is None:
+            if stretch_stack.stretch_name.isdigit():
+                reach_id = stretch_stack.stretch_name
+            else:
+                reach_id = 'bad'
+        if ((reach_id.isdigit()) and (len(reach_id)==11)):
+            print('windowing to reach {}'.format(reach_id))
+            reach_ids = np.array(
+                [str(n)[0:10]+str(n)[-1] for n in stretch_stack.node_id])
+            #window_mask = np.where(reach_ids==reach_id)[0]
+            window[reach_ids!=reach_id] = 0
+            window_valid[reach_ids!=reach_id] = np.nan
+            inds = np.where(
+                np.array(reach_ids) == stretch_stack.stretch_name)[0]
+            first_node = inds[0]
+            last_node = inds[-1]
+        
+        # inverse variance weighting with along-river windowing
+        weight = 1/signal_u**2 * window
+        sum_weight = np.nansum(weight, axis=0)
+        sum_window = np.nansum(window, axis=0)
+        #
+        stats.dist_out = np.nanmean(stretch_stack.dist_out, axis=0)
+        if along_stats is None:
+            ref = np.zeros_like(signal[:,0])
+        elif isinstance(along_stats, AlongStretchStats):
+            ref = along_stats.reference.copy()
         reference = np.broadcast_to(
-            reference, np.shape(stretch_data[signal_key].T)).T
-        stats.reference_mean = np.nanmean(np.array(reference), axis=0)
-        stats.mean = np.nanmean(stretch_data[signal_key]-reference, axis=0)\
-            + stats.reference_mean
-        stats.std = np.nanstd(stretch_data[signal_key]-reference, axis=0)
-        mask = np.zeros(np.shape(stretch_data[signal_key]))
-        mask[np.isfinite(stretch_data[signal_key]-reference)] = 1
+            ref, np.shape(signal.T)).T
+        #stats.reference_mean = np.nanmean(
+        #        np.array(reference) * weight, axis=0) / mean_weight
+        # always do simple mean of reference
+        #stats.mean_reference = np.nanmean(np.array(reference), axis=0)
+        # weighted mean of ref too
+        stats.mean_reference = np.nansum(
+            reference * window, axis=0) / (
+                sum_window)#).filled(np.nan)
+        if isinstance(stats.mean_reference, np.ma.MaskedArray):
+            stats.mean_reference.filled(np.nan)
+        if 'simple' in average_method:
+            stats.mean = np.nanmean(signal*window_valid - reference, axis=0) \
+                + stats.mean_reference
+        elif 'weighted' in average_method:
+            stats.mean = np.nansum(
+                (signal-reference) * weight, axis=0) / (
+                    sum_weight) + stats.mean_reference#).filled(np.nan)
+        if isinstance(stats.mean, np.ma.MaskedArray):
+            stats.mean.filled(np.nan)
+        #stats_mean = np.nansum(
+        #        (stretch_stack[signal_key]-reference)*weight, axis=0) / (
+        #                sum_weight) + stats.reference_mean
+        #stats.mean = stats_mean.filled(np.nan)
+        # TODO: output the estimate of the sqrt(variance)
+        stats.std = np.nanstd((
+            signal-reference) * window_valid, axis=0)
+        mask = np.zeros(np.shape(signal))
+        mask[np.isfinite((
+            signal-reference) * window_valid)] = 1
         stats.count = np.nansum(mask, axis=0)
-        stats.percentiles_list = percentiles
+        stats.percentile_list = np.array(percentiles)
         ptiles = np.zeros((
             len(stats.mean),
             len(percentiles),
             )) + np.nan
         for k, ptile in enumerate(percentiles):
             ptiles[:,k] = np.nanpercentile(
-                stretch_data[signal_key]-reference, ptile, axis=0)\
-                    + stats.reference_mean
+                (signal-reference) * window_valid,
+                ptile, axis=0) + stats.mean_reference
         stats.percentiles = ptiles
+        # now compute slope
+        if along_stats is not None:
+            bayes = BayesData.simple(
+                stretch_stack,
+                along_stats,
+                signal_key)
+            if 'bayes' in average_method:
+                signal = bayes.signal
+            if 'bayes' in slope_method:
+                signal_u = bayes.signal_u
+
+        dist_out = np.broadcast_to(
+            stretch_stack.dist_out, np.shape(signal.T)).T
+        slope = (
+            signal[last_node,:] - signal[first_node,:]) / (
+            dist_out[last_node,:] - dist_out[first_node,:])
+        slope_ref = (
+            reference[last_node,:] - reference[first_node,:]) / (
+            dist_out[last_node,:] - dist_out[first_node,:])
+        stats.slope = slope
+        stats.slope_referecne = slope_ref
         return stats
 
 class BayesData(Product):
@@ -368,6 +508,37 @@ class BayesData(Product):
         #['wse_width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
     ])
 
+    @classmethod
+    def simple(
+            cls,
+            stretch_stack,
+            stats,
+            signal_key,
+            char_length_tau=None,
+            prior_unc_alpha=None):
+        bayes = cls()#rivscale.products.BayesData()
+        bayes.stretch_name = stretch_stack.stretch_name
+        bayes.signal_key = signal_key
+        bayes.signal_mean = stats.reference.copy()
+        time_key = 'time_id'
+        if (char_length_tau is not None) and (prior_unc_alpha is not None):
+            bayes.signal_cov = rivscale.reconstruct.generate_cov_matrix(
+                stretch_stack,
+                char_length_tau,
+                prior_unc_alpha)
+        elif isinstance(stats, AlongStretchStats):
+            # use what is in the stats
+            bayes.signal_cov = rivscale.reconstruct.generate_cov_matrix(
+                stretch_stack,
+                stats.char_length_tau,
+                stats.prior_unc_alpha)
+            # TODO: use the cov in there...
+        # actually run it
+        bayes = rivscale.reconstruct.reconstruct_stretch(
+            stretch_stack, bayes,
+            signal_key=signal_key,
+            uncert_key=signal_key+'_u')
+        return bayes
 
 class HeightWidthModel(Product):
     ATTRIBUTES = odict([

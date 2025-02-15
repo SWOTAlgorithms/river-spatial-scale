@@ -38,7 +38,7 @@ def main():
     #name = os.path.split(args.infile)[1].split('_')[0]
     #breakpoint()
     #rivscale.plot.plot_stretch(stretch_data, title=name, outdir=args.outdir)
-    data.plot(outdir=args.outdir)
+    data.plot(outdir=args.outdir, show=False)
     if args.outdir is None:
         plt.show()
 

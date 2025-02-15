@@ -31,6 +31,21 @@ import statsmodels.api
 
 import geopandas as gpd
 
+"""
+def generate_cov_matrix(
+        stretch_stack,
+        char_length_tau,
+        prior_unc_alpha,
+        time_key='time_id'):
+    signal_cov = []
+    for j,cycl in enumerate(stretch_stack[time_key]):
+        R = rivscale.reconstruct.exponential_cov(
+            stretch_stack['dist_out'], # should probably use the actual node distances?
+            char_length_tau=char_length_tau,
+            prior_unc_alpha=prior_unc_alpha)
+        signal_cov.append(Rh)
+    return np.moveaxis(np.array(signal_cov), 0, -1)
+"""
 ########## Sept 2024, modified to use product class for river stretch processing
 def get_med_profile(signal, dist_out, kernel_size=35):
     """

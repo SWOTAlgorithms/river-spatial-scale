@@ -65,7 +65,10 @@ def filter_node_qual(df, height=True, area=False, dark_thresh=0.8):
         df = df[np.bitwise_and(df['node_q_b'], 2**18) == 0]
     return df
 
-def filter_bad_stretch_stack(stretch_stack_in):
+def filter_bad_stretch_stack(
+        stretch_stack_in,
+        wse_dark_thresh=0.8,
+        width_dark_thresh=0.8):
     """
     Filter the streach data based on comparing uncertainty to local variability
     for both wse and width.
@@ -78,8 +81,8 @@ def filter_bad_stretch_stack(stretch_stack_in):
 
     NOTE: User should first drop the bad stuff based on node_q_b and
     other standard node quality indicators before creating the
-    RiverStretchData object since we dont carry all those
-    indicators in the RiverStretchData object to do it here
+    StretchStack object since we dont carry all those
+    indicators in the StretchStack object to do it here
     """
     #TODO: make this a class method
     # find the anomolous wse data by looking for inconsistency between
@@ -102,9 +105,13 @@ def filter_bad_stretch_stack(stretch_stack_in):
     width_std = rivscale.estimate.get_local_std(width, width_ref_1d)
     bad_width_mask = width_std / stretch_stack['width_u'] > 100
     stretch_stack['width'][bad_width_mask] = np.nan
+    # also do the dark_thresh flagging
+    dark_frac = stretch_stack['dark_frac']
+    stretch_stack['wse'][dark_frac > wse_dark_thresh] = np.nan
+    stretch_stack['width'][dark_frac > width_dark_thresh] = np.nan
     return stretch_stack
 
-def drop_stretch_nans(stretch_stack, min_nodes=10):
+def drop_stretch_nans(stretch_stack, min_nodes=10, reach_id=None):
     """
     Prune out the time/cycle observations with too little
     good data in either wse or width.
@@ -120,12 +127,27 @@ def drop_stretch_nans(stretch_stack, min_nodes=10):
     #create a new container instance
     #data_out = rivscale.products.RiverStretchData()
     data_out = rivscale.products.StretchStack()
-    # copy the attribute
+    # copy the attributes
     data_out.stretch_name = stretch_stack.stretch_name
     wse = stretch_stack['wse']
     width = stretch_stack['width']
-    num = np.sum(np.logical_or(np.isfinite(wse), np.isfinite(width)), axis=0)
+    #num = np.sum(np.logical_or(np.isfinite(wse), np.isfinite(width)), axis=0)
+    # optionally null out data outside the desired reach
+    window_valid = np.ones_like(wse)
+    if reach_id is None:
+        if stretch_stack.stretch_name.isdigit():
+            reach_id = stretch_stack.stretch_name
+        else:
+            reach_id = 'bad'
+    if ((reach_id.isdigit()) and (len(reach_id)==11)):
+        print('windowing to reach {}'.format(reach_id))
+        reach_ids = np.array(
+            [str(n)[0:10]+str(n)[-1] for n in stretch_stack.node_id])
+        window_valid[reach_ids!=reach_id] = np.nan
     # go through each data that is populated
+    num = np.sum(np.logical_or(
+        np.isfinite(wse * window_valid),
+        np.isfinite(width * window_valid)), axis=0)
     for key in stretch_stack.variables.keys():
         if 'num_times' in stretch_stack.VARIABLES[key]['dimensions'].keys():
             dim = [*stretch_stack.VARIABLES[key]['dimensions'].keys()].index('num_times')

@@ -138,21 +138,32 @@ def plot_stretch_stats(
         figsize=(10,5)):
     title = stats.stretch_name
     x = stats[x_key]
+    x_label = x_key
+    if x_key=='time_id':
+        # convert to datetime
+        x = swot_time_to_field_time(x*60*60)
+        x_label = 'time'
     y_key = stats.signal_key
-    y_ref = stats.reference
     y_mean = stats.mean
+    file_tag = 'profile_stats'
+    try:
+        y_ref = stats.reference
+    except AttributeError:
+        # it must be a stretch_average object
+        y_ref = stats.mean_reference + np.zeros_like(y_mean)
+        file_tag = 'stretch_avg'
     y_std = stats.std
     y_ptiles = stats.percentiles
     ptiles = ['{}-%ile'.format(t) for t in stats['percentile_list']]
     x2D = np.broadcast_to(x, np.shape(y_ptiles.T)).T
-    figsize=(10,5)
+    #figsize=(10,5)
     plt.figure(figsize=figsize)
     plt.subplot(2,1,1)
     plt.plot(x2D, y_ptiles)
     plt.plot(x, y_ref, 'k', linewidth=2)
     plt.legend(ptiles+['ref',])
     plt.grid()
-    plt.xlabel(x_key)
+    plt.xlabel(x_label)
     plt.ylabel(y_key)
     plt.suptitle(title+'{} statistics'.format(y_key))
     plt.subplot(2,1,2)
@@ -162,14 +173,14 @@ def plot_stretch_stats(
     plt.plot(x, y_ref, 'k', linewidth=2)
     plt.legend(['mean', 'mean + std', 'mean - std', 'ref'])
     plt.grid()
-    plt.xlabel(x_key)
+    plt.xlabel(x_label)
     plt.ylabel(y_key)
     plt.tight_layout()
     if outdir is not None:
         # create output dir if not exist
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        fname = '{}_profile_stats_{}_vs_{}'.format(title, y_key, x_key)
+        fname = '{}_{}_{}_vs_{}'.format(title, file_tag, y_key, x_label)
         plt.savefig(os.path.join(outdir, fname), dpi=300)
         plt.close()
     else:
@@ -227,6 +238,7 @@ def plot_stretch_stack(
         x_key='dist_out',
         y_keys=['wse','width'],
         y_reference=[None, None],
+        y_anom=[False, False],
         outdir=None,
         figsize=(10,5),
         show = False,
@@ -238,17 +250,43 @@ def plot_stretch_stack(
     y2 = y.copy()
     if len(y_keys)==2:
         y2 = stretch_stack[y_keys[1]]
+    y_labels = y_keys.copy()
+    ref = np.zeros_like(x) + np.nan
+    ref2 = np.zeros_like(x) + np.nan
+    ref_2D = np.zeros_like(y)
+    ref2_2D = np.zeros_like(y) 
+    if y_reference[0] is not None:
+        ref = y_reference[0].reference
+        ref_2D = np.broadcast_to(ref, np.shape(y.T)).T
+        if y_anom[0]:
+            y_labels[0] = y_keys[0]+'_anom'
+    if len(y_reference)==2:
+        if y_reference[1] is not None:
+            ref2 = y_reference[1].reference
+            ref2_2D = np.broadcast_to(ref2, np.shape(y.T)).T
+        if y_anom[1]:
+            y_labels[1] = y_keys[1]+'_anom'
+    if y_anom[0]:
+        y = y - ref_2D
+    if len(y_anom)==2:
+        if y_anom[1]:
+            y2 = y2 - ref2_2D
+    x_label = x_key
     if x_key=='time_id':
         # convert to datetime
         x = swot_time_to_field_time(x*60*60)
         y = y.T
         y2 = y2.T
+        x_label = 'time'
     plt.figure(figsize=figsize)
     if len(y_keys)==2:
         plt.subplot(2,1,1)
-        ylabel = '{},{}'.format(y_keys[0], y_keys[1])
+        ylabel = '{},{}'.format(y_keys[0], y_labels[1])
     plt.plot(x, y, marker, markersize=1)
-    plt.ylabel(y_keys[0])
+    if np.sum(np.isfinite(ref)):
+        plt.plot(x, ref, 'k', linewidth=2, label='reference')
+        plt.legend()
+    plt.ylabel(y_labels[0])
     plt.grid()
     # TODO: enable plotting reference
     # make first plot
@@ -256,17 +294,17 @@ def plot_stretch_stack(
         plt.subplot(2,1,2)
         # make second plot
         plt.plot(x, y2, marker, markersize=1)
-        plt.ylabel(y_keys[1])
+        plt.ylabel(y_labels[1])
         plt.suptitle(ttl)
         plt.grid()
     else:
         plt.title(ttl)
-    plt.xlabel(x_key)
+    plt.xlabel(x_label)
     if outdir is not None:
         # create output dir if not exist
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        fname = '{}_profile_{}_vs_{}'.format(title, ylabel, x_key)
+        fname = '{}_profile_{}_vs_{}'.format(title, ylabel, x_label)
         plt.savefig(os.path.join(outdir, fname), dpi=300)
         plt.close()
     else:

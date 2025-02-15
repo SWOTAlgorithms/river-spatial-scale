@@ -34,6 +34,20 @@ import geopandas as gpd
 
 import rivscale.data
 
+def generate_cov_matrix(
+        stretch_stack,
+        char_length_tau,
+        prior_unc_alpha,
+        time_key='time_id'):
+    signal_cov = []
+    for j,cycl in enumerate(stretch_stack[time_key]):
+        R = exponential_cov(
+            stretch_stack['dist_out'], # should probably use the actual node distances?
+            char_length_tau=char_length_tau,
+            prior_unc_alpha=prior_unc_alpha)
+        signal_cov.append(R)
+    return np.moveaxis(np.array(signal_cov), 0, -1)
+
 ####### Jan 2025, updated for joint height/width river stretch processing
 def piecewise_linear(p, x):
     """
