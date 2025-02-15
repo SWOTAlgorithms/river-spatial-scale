@@ -135,7 +135,13 @@ def plot_stretch_stats(
         x_key='dist_out',
         outdir=None,
         show=False,
-        figsize=(10,5)):
+        figsize=(10,5),
+        plot_slope=False):
+    nplots = 2
+    if 'slope' in (stats.variables.keys()):
+        plot_slope = True
+        figsize = (figsize[0], figsize[1] + 2)
+        nplots = 3
     title = stats.stretch_name
     x = stats[x_key]
     x_label = x_key
@@ -158,7 +164,7 @@ def plot_stretch_stats(
     x2D = np.broadcast_to(x, np.shape(y_ptiles.T)).T
     #figsize=(10,5)
     plt.figure(figsize=figsize)
-    plt.subplot(2,1,1)
+    plt.subplot(nplots,1,1)
     plt.plot(x2D, y_ptiles)
     plt.plot(x, y_ref, 'k', linewidth=2)
     plt.legend(ptiles+['ref',])
@@ -166,7 +172,7 @@ def plot_stretch_stats(
     plt.xlabel(x_label)
     plt.ylabel(y_key)
     plt.suptitle(title+'{} statistics'.format(y_key))
-    plt.subplot(2,1,2)
+    plt.subplot(nplots,1,2)
     plt.plot(x, y_mean)
     plt.plot(x, y_mean+y_std,'--')
     plt.plot(x, y_mean-y_std,'--')
@@ -175,6 +181,14 @@ def plot_stretch_stats(
     plt.grid()
     plt.xlabel(x_label)
     plt.ylabel(y_key)
+    if plot_slope:
+        plt.subplot(nplots,1,3)
+        plt.plot(x, stats.slope, label='data')
+        plt.plot(x, stats.slope_reference, label='reference')
+        plt.legend()
+        plt.grid()
+        plt.xlabel(x_label)
+        plt.ylabel(y_key+'_slope')
     plt.tight_layout()
     if outdir is not None:
         # create output dir if not exist

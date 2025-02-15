@@ -138,8 +138,8 @@ def process_stretch_average(
         wse_stats,
         width_stats,
         wse_dark_thresh = 0.8,
-        width_dark_thresh=1.0,
-        width_outlier_scale=5,
+        width_dark_thresh=0.2,
+        width_outlier_scale=1.5,
         char_length_tau_wse = 100000,
         prior_unc_alpha_wse = 1.5,
         char_length_tau_width = 100000,
@@ -178,7 +178,7 @@ def process_stretch_average(
         stretch_stack.dark_frac>wse_dark_thresh] = np.nan
     # drop rows with too  little data
     reach_id = None
-    #reach_id = 'nope'
+    reach_id = 'nope'
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
     # set up the cov params
@@ -190,17 +190,18 @@ def process_stretch_average(
     # get stretch average stats
     wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
         stretch_stack, signal_key='wse', along_stats=wse_stats,
-        average_method='weighted',
+        average_method='bayes_weighted',
         slope_method='bayes',
         reach_id=reach_id)
     width_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
         stretch_stack, signal_key='width', along_stats=width_stats,
-        average_method='simple',
+        average_method='bayes_weighted',
         slope_method='bayes',
         reach_id=reach_id)
     # also filter stretch-outliers
     #width_stretch_avg = filter_width_stretch_outliers(
     #        width_stretch_avg, width_stats, width_outlier_scale)
+    # plot the slope
     """
     # do some filtering
     stretch_stack2 = filter_width_outliers(stretch_stack, width_stats, 3)
@@ -277,7 +278,8 @@ def process_stretch_average(
     plt.legend()
     plt.grid()
     plt.show()
-
+    breakpoint()
+    """
     breakpoint()
     # compute the slope by first doing Bayes for wse-only using the reference profile
     wse_bayes = rivscale.products.BayesData()
@@ -310,6 +312,7 @@ def process_stretch_average(
     # TODO: Bayes width using the best Pekel threshold from
     #       fully observed nodes (no-dark water). (maybe line
     #       to Pekel %, or put smooth function on Pekel %).
+    """
     return wse_stretch_avg, width_stretch_avg
     
 

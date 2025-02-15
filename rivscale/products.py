@@ -356,7 +356,7 @@ class StretchAverageStats(Product):
             slope_method='bayes'):
         # average_method = 'simple', 'weighted', 'bayes_weighted'
         # slope_method = 'simple', 'bayes'
-        # TODO: maybe just fit a line to the deviation from reference?
+        # TODO: add method to fit a line to the deviation from reference
         stats = cls()
         # copy common things
         stats.stretch_name = stretch_stack.stretch_name
@@ -370,7 +370,7 @@ class StretchAverageStats(Product):
         first_node = 0
         last_node = -1
         if along_stats is not None:
-            if ('bayes' in average_method) or 'bayes' in slope_method:
+            if ('bayes' in average_method) or ('bayes' in slope_method):
                 bayes = BayesData.simple(
                     stretch_stack,
                     along_stats,
@@ -379,7 +379,6 @@ class StretchAverageStats(Product):
                     #prior_unc_alpha)
             if 'bayes' in average_method:
                 signal = bayes.signal
-            if 'bayes' in slope_method:
                 signal_u = bayes.signal_u
         # get weighting mask for reach average
         window = np.ones_like(signal)
@@ -456,16 +455,10 @@ class StretchAverageStats(Product):
                 ptile, axis=0) + stats.mean_reference
         stats.percentiles = ptiles
         # now compute slope
-        if along_stats is not None:
-            bayes = BayesData.simple(
-                stretch_stack,
-                along_stats,
-                signal_key)
-            if 'bayes' in average_method:
-                signal = bayes.signal
-            if 'bayes' in slope_method:
-                signal_u = bayes.signal_u
-
+        if 'bayes' in slope_method:
+            signal = bayes.signal
+        else:
+            signal = stretch_stack[signal_key]
         dist_out = np.broadcast_to(
             stretch_stack.dist_out, np.shape(signal.T)).T
         slope = (
@@ -475,7 +468,9 @@ class StretchAverageStats(Product):
             reference[last_node,:] - reference[first_node,:]) / (
             dist_out[last_node,:] - dist_out[first_node,:])
         stats.slope = slope
-        stats.slope_referecne = slope_ref
+        stats.slope_reference = slope_ref
+        # TODO: handle missing data in endpoints
+        # TODO: get estimate of slope_u
         return stats
 
 class BayesData(Product):
