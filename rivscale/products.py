@@ -20,6 +20,7 @@ from swot.lr.base_classes import AttrFillerMixIn
 import rivscale.estimate
 import rivscale.plot
 import matplotlib.pyplot as plt
+import scipy.interpolate
 
 def textjoin(text):
     """Dedent join and strip text"""
@@ -545,12 +546,76 @@ class HeightWidthModel(Product):
         ])
     DIMENSIONS = odict([['num_hw_params',0],])
     VARIABLES = odict([
-        ['hw_params', odict([['dimensions', odict([['num_hw_params', 0]])]])],
-        ['hw_params_err', odict([['dimensions', odict([['num_hw_params', 0]])]])],
+        ['width_coords', odict([['dimensions', odict([['num_hw_params', 0]])]])],
+        ['wse_coords', odict([['dimensions', odict([['num_hw_params', 0]])]])],
+        #['hw_params', odict([['dimensions', odict([['num_hw_params', 0]])]])],
+        #['hw_params_err', odict([['dimensions', odict([['num_hw_params', 0]])]])],
     ])
     #for name, reference in VARIABLES.items():
     #    reference['dimensions'] = DIMENSIONS
+    @classmethod
+    def from_objects(
+            cls,
+            wse_stretch_avg,
+            width_stretch_avg,
+            width_along_stats,
+            sigma_n=30):
+        height_width = cls()
+        ptile_list = width_along_stats.percentile_list
+        # percentile method
+        Pg = np.nanmean(width_along_stats.percentiles, axis=0)
+        Pm = np.nanpercentile(width_stretch_avg.mean, ptile_list)
+        Ph = np.nanpercentile(wse_stretch_avg.mean,ptile_list)
+        # now find Pl the no-noise width measurement distribution
+        # assuming zeros mean noise with known sqrt(variances) (sigma_n).
+        if (50 in ptile_list):
+            # get the mean of the prior and measured width distribution
+            ind = np.where(ptile_list==50)
+            mu_g = Pg[ind]
+            mu_m = Pm[ind]
+        else:
+            print('50th ptile not in prior percentile list')
+            return None
+        #sigma_g = 1/2*(Pg[4]-Pg[2])
+        #sigma_m = 1/2*(Pm[4]-Pm[2])
+        if (25 in ptile_list) and (75 in ptile_list):
+            # Use IQR to adjust the prior width distribution
+            # to the measured distribution (using Gaussian assumptions)
+            ind75 = np.where(ptile_list==75)
+            ind25 = np.where(ptile_list==25)
+            sigma_g = 1/1.349*(Pg[ind75]-Pg[ind25])
+            sigma_m = 1/1.349*(Pm[ind75]-Pm[ind25])
+        else:
+            print('25th or 75th ptile not in prior percentile list')
+            return None
+        if sigma_n>sigma_m:
+            print('replacing noise std')
+            sigma_n = sigma_m/2
+        a = np.sqrt(sigma_m**2-sigma_n**2) / sigma_g
+        Pl_hat = a*(Pg - mu_g) + mu_m
+        # now match-up the height and width percentiles
+        # and make a wse a piecewise-linear function of width
+        # ignore nosie on height for now (TODO: handle it)
+        height_width.width_coords = Pl_hat
+        height_width.wse_coords = Ph
+        return height_width
 
-
-
+    def sample(self, x, x_key='width',kind='linear'):
+        """
+        x: sample location(s) of the 'signal_key' dimension
+        returns: the sampled value(s) of other dimension
+        e.g., if signal_key=='width' retun the wse at the point
+        by interpolating in between the width samples and 
+        """
+        y_key = 'wse'
+        if y_key=='wse':
+            x_key='width'
+        intrp = scipy.interpolate.interp1d(
+            self[x_key+'_coords'],
+            self[y_key+'_coords'],
+            kind=kind,
+            bounds_error=False,
+            fill_value="extrapolate"
+            )
+        return intrp(x)
 

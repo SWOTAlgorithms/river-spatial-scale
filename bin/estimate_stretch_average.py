@@ -177,7 +177,7 @@ def process_stretch_average(
     stretch_stack.wse[
         stretch_stack.dark_frac>wse_dark_thresh] = np.nan
     # drop rows with too  little data
-    reach_id = None
+    #reach_id = None
     reach_id = 'nope'
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
@@ -201,6 +201,7 @@ def process_stretch_average(
     # also filter stretch-outliers
     #width_stretch_avg = filter_width_stretch_outliers(
     #        width_stretch_avg, width_stats, width_outlier_scale)
+    return wse_stretch_avg, width_stretch_avg
     # plot the slope
     """
     # do some filtering
@@ -379,7 +380,7 @@ def main():
         #
         wse_stretch_avg, width_stretch_avg = process_stretch_average(stretch_stack, wse_stats, width_stats)
         if wse_stretch_avg is not None:
-            width_stretch_avg.to_ncfile(outfile_wse)
+            wse_stretch_avg.to_ncfile(outfile_wse)
         if width_stretch_avg is not None:
             width_stretch_avg.to_ncfile(outfile_width)
         this_stop = time.time()
