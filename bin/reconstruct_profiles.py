@@ -43,132 +43,23 @@ import time
 
 EXAMPLE=''
 
-def smooth_widths(widths_in, size=11):
-    #widths = stretch_stack['width'].copy()
-    widths = widths_in.copy()
-    w_mask = np.zeros(np.shape(widths))
-    w_mask[np.isfinite(widths)] = 1
-    widths[w_mask==0] = 0
-    w_filt = scipy.ndimage.uniform_filter1d(widths, size, axis=0)
-    w_cnt = scipy.ndimage.uniform_filter1d(w_mask, size, axis=0)
-    width_filt = w_filt / w_cnt
-    width_filt[w_mask==0] = np.nan
-    return width_filt
-'''
-def scaled_spread_outlier_rejector(arr_in, mean, spread, scale=5.0):
-    """
-    This method rejects outliers defined as being farther than
-    some multiple of the spread away from the mean.
-    The spread is an estimate of the dispersion of the distribution
-    (e.g., the std or IQR etc).  Scale is how far from the mean.
-    """
-    arr = arr_in.copy()
-    upper = mean + scale * spread
-    lower = mean - scale * spread
-    # handle the cases of 2D arr and 1D mean/dis
-    if np.shape(arr)!=np.shape(np.array(upper)):
-        upper = np.broadcast_to(upper, np.shape(arr.T)).T
-        lower = np.broadcast_to(lower, np.shape(arr.T)).T
-    # set outlier values to nan
-    arr[arr > upper] = np.nan
-    arr[arr < lower] = np.nan
-    return arr
-
-def filter_width_stretch_outliers(
-        width_stretch_avg_in,
-        width_stats,
-        IQR_scale=5.0):
-    # TODO make this a method of StretchAverage
-    width_stretch_avg = width_stretch_avg_in.copy()
-    width = width_stretch_avg.mean
-    ref = np.nanmean(width_stats.reference)
-    p = width_stats.percentile_list
-    p25 = np.nanmean(width_stats.percentiles[:,p==25].squeeze())
-    p75 = np.nanmean(width_stats.percentiles[:,p==75].squeeze())
-    IQR = p75 - p25
-    width = scaled_spread_outlier_rejector(width, ref, IQR, IQR_scale)
-    width_stretch_avg.mean = width
-    return width_stretch_avg
-
-def filter_width_node_outliers(
-        stretch_stack_in,
-        width_stats,
-        IQR_scale=5.0,
-        plot=False):
-    # TODO: make this a method of StretchStack
-    stretch_stack = stretch_stack_in.copy()
-    width = stretch_stack.width
-    ref = width_stats.reference
-    p = width_stats.percentile_list
-    p25 = width_stats.percentiles[:,p==25].squeeze()
-    p75 = width_stats.percentiles[:,p==75].squeeze()
-    IQR = p75 - p25
-    #
-    width = scaled_spread_outlier_rejector(width, ref, IQR, IQR_scale)
-    #IQR2D = np.broadcast_to(IQR, np.shape(width.T)).T
-    #ref2D = np.broadcast_to(ref, np.shape(width.T)).T
-    ## filter out the bad ones
-    #width[width > ref2D + IQR_scale*IQR2D] = np.nan
-    #width[width < ref2D - IQR_scale*IQR2D] = np.nan
-    stretch_stack.width = width
-    if plot:
-        all_widths = stretch_stack_in.width
-        kept_widths = stretch_stack.width
-        outlier_mask = np.logical_and(
-            np.isfinite(all_widths),
-            np.isnan(kept_widths))
-        dist_out = np.broadcast_to(
-            stretch_stack_in.dist_out,
-            np.shape(all_widths.T)).T
-        plt.figure()
-        plt.plot(dist_out, all_widths)
-        plt.plot(
-            dist_out[outlier_mask],
-            all_widths[outlier_mask],'x')
-        plt.plot(
-            stretch_stack_in.dist_out,
-            ref + IQR_scale*IQR,'k', linewidth=2)
-        plt.plot(
-            stretch_stack_in.dist_out,
-            ref - IQR_scale*IQR,'k', linewidth=2)
-    return stretch_stack
-'''
-def process_stretch_average(
+def process_bayes_reconstruction(
         stretch_stack,
         wse_stats,
         width_stats,
-        wse_dark_thresh = 0.8,
+        height_width,
+        wse_dark_thresh=0.8,
         width_dark_thresh=0.2,
-        width_outlier_scale=1.5,
-        char_length_tau_wse = 100000,
-        prior_unc_alpha_wse = 1.5,
-        char_length_tau_width = 100000,
-        prior_unc_alpha_width = 50, #200,
-        rho_wse_width = 0.7,
+        width_outlier_scale=10,
+        rho_wse_width=0.999
         ):
-    """
-    # do some filtering and massaging of the data
+    #
     # populate witdh_u
     node_len = stretch_stack['area_total'] / stretch_stack['width']
     stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
     # make measurement uncert at least as much as signal uncert we assume
-    stretch_stack['width_u'] = stretch_stack['width_u'] + 100#2*prior_unc_alpha_width
-     
-    # TODO: quantify amount of flagged out data?
-    # filter out bad data (call it twice to get them all)
-    stretch_stack = rivscale.filter.filter_bad_stretch_stack(
-        stretch_stack, wse_dark_thresh, width_dark_thresh)
-    stretch_stack = rivscale.filter.filter_bad_stretch_stack(
-        stretch_stack, wse_dark_thresh, width_dark_thresh)
-    # drop times/cycles with too little good quality data
-    stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack)
-    if np.shape(stretch_stack.width)[1]==0:
-        print('  No SWOT data left after multitemporal filtering')
-        return None
-    """
-    #stretch_stack = rivscale.filter.filter_bad_stretch_stack(
-    #    stretch_stack, wse_dark_thresh, width_dark_thresh)
-    # filter width outlier
+    #stretch_stack['width_u'] = stretch_stack['width_u'] + 500#2*prior_unc_alpha_width
+    # filter out bad data
     stretch_stack = rivscale.filter.filter_width_node_outliers(
         stretch_stack, width_stats, width_outlier_scale, plot=True)
     # filter out high dark_frac nodes
@@ -181,65 +72,57 @@ def process_stretch_average(
     reach_id = 'nope'
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
-    # set up the cov params
-    wse_stats.char_length_tau=char_length_tau_wse
-    wse_stats.prior_unc_alpha=prior_unc_alpha_wse
-    width_stats.char_length_tau=char_length_tau_width
-    width_stats.prior_unc_alpha=prior_unc_alpha_width
+    # now do the reconstruction
+    joint_bayes = rivscale.products.BayesData.joint(
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        height_width,
+        rho_wse_width=rho_wse_width)
+    bayes_wse, bayes_width, bayes_wse_width_post_cov = joint_bayes.unpack_joint()
+    stretch_stack.plot()
+    plt.figure()
+    plt.plot(stretch_stack.dist_out, bayes_wse.signal)
+    plt.figure()
+    plt.plot(stretch_stack.dist_out, bayes_width.signal)
+    ref2 = np.broadcast_to(wse_stats.reference, np.shape(bayes_width.signal.T)).T
+    ref2_w = np.broadcast_to(width_stats.reference, np.shape(bayes_width.signal.T)).T
+    plt.figure()
+    plt.plot(bayes_width.signal - ref2_w, bayes_wse.signal - ref2,'o')
+    plt.show()
+    breakpoint()
 
-    # get stretch average stats
-    wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
-        stretch_stack, signal_key='wse', along_stats=wse_stats,
-        average_method='bayes_weighted',
-        slope_method='bayes',
-        reach_id=reach_id)
-    width_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
-        stretch_stack, signal_key='width', along_stats=width_stats,
-        average_method='bayes_weighted',
-        slope_method='bayes',
-        reach_id=reach_id)
-    # also filter stretch-outliers
-    #width_stretch_avg = rivscale.filter.filter_width_stretch_outliers(
-    #        width_stretch_avg, width_stats, width_outlier_scale)
-    return wse_stretch_avg, width_stretch_avg
-    # plot the slope
-    """
-    # do some filtering
-    stretch_stack2 = filter_width_outliers(stretch_stack, width_stats, 3)
-    #stretch_stack2 = stretch_stack.copy()
-    stretch_stack2.width[stretch_stack2.dark_frac>0.1] = np.nan
-    width_stats2 = width_stats.copy()
-    # do some width smoothing
-    #stretch_stack3 = stretch_stack.copy()
-    width_sm = smooth_widths(stretch_stack2.width)
-    ref_sm = smooth_widths(width_stats.reference)
-    #stretch_stack2.width = width_sm
-    #width_stats2.reference = ref_sm
-    # now get the averages
-    width_stretch_avg2 = rivscale.products.StretchAverageStats.from_StretchStack(
-        stretch_stack2, signal_key='width', reference=width_stats)
-    """
-    # plot
-    stretch_stack.plot(
-        wse_reference=wse_stats,
-        width_reference=width_stats)
-    #stretch_stack2.plot(
-    #    wse_reference=wse_stats,
-    #    width_reference=width_stats2)
-    #stretch_stack2.plot()
-    wse_stretch_avg.plot()
-    width_stretch_avg.plot()
+def process_height_width(
+        wse_stretch_avg,
+        width_stretch_avg,
+        width_stats=None,
+        ):
+    # TODO: implement:
+    #       1) piece-wise fit
+    #       2) percentile function, with piecewise params result?
+    #wse_stretch_avg.plot()
+    #width_stretch_avg.plot()
+    height_width = rivscale.products.HeightWidthModel.from_objects(
+        wse_stretch_avg,
+        width_stretch_avg,
+        width_stats)
+    x = np.linspace(0,np.max(width_stretch_avg.mean),100)
+    y = height_width.sample(x, x_key='width')
+    plt.figure()
+    plt.plot(
+        width_stretch_avg.mean,
+        wse_stretch_avg.mean - wse_stretch_avg.mean_reference,
+        'o')
+    plt.plot(x,y)
+    plt.grid()
+    plt.show()
+    return height_width
     #width_stretch_avg2.plot()
     #breakpoint()
     # play with cdf of 
-    #Pg = np.nanmean(width_stats2.percentiles, axis=0)
     Pg = np.nanmean(width_stats.percentiles, axis=0)
-    #Pm = np.nanmean(width_stretch_avg.percentiles, axis=0)
-    #Ph = np.nanmean(wse_stretch_avg.percentiles, axis=0)
-    #Pm = np.nanpercentile(width_stretch_avg2.mean,[5,25,32,50,68,75,95])
     Pm = np.nanpercentile(width_stretch_avg.mean,[5,25,32,50,68,75,95])
     Ph = np.nanpercentile(wse_stretch_avg.mean,[5,25,32,50,68,75,95])
-    #breakpoint()
     plt.figure()
     plt.plot(width_stretch_avg.mean)
     plt.title('Pm')
@@ -279,6 +162,8 @@ def process_stretch_average(
     plt.legend()
     plt.grid()
     plt.show()
+    #
+    height_width = None
     breakpoint()
     """
     breakpoint()
@@ -314,7 +199,6 @@ def process_stretch_average(
     #       fully observed nodes (no-dark water). (maybe line
     #       to Pekel %, or put smooth function on Pekel %).
     """
-    return wse_stretch_avg, width_stretch_avg
     
 
 def main():
@@ -364,25 +248,37 @@ def main():
         # TODO: prefer to use Pekel for width?
         #infile_width_stats = os.path.join(outdir, '{}_width_stats.nc'.format(key))
         infile_width_stats = os.path.join(outdir, '{}_pekel_stats.nc'.format(key))
-        outfile_wse = os.path.join(outdir, '{}_wse_stretch_average.nc'.format(key))
-        outfile_width = os.path.join(outdir, '{}_width_stretch_average.nc'.format(key))
-        if not(os.path.exists(infile_stretch)):
-            print("  The input stretch has not been created")
+        infile_wse = os.path.join(outdir, '{}_wse_stretch_average.nc'.format(key))
+        infile_width = os.path.join(outdir, '{}_width_stretch_average.nc'.format(key))
+        infile_height_width = os.path.join(outdir, '{}_height_width.nc'.format(key))
+        outfile_bayes = os.path.join(outdir, '{}_bayes.nc'.format(key))
+        if not(os.path.exists(infile_wse)):
+            print("  The input stretch average wse has not been created")
+            continue
+        if not(os.path.exists(infile_width)):
+            print("  The input stretch average width has not been created")
             continue
         # check if output file exists, if it does skip, unless --force set
-        if (os.path.exists(outfile_width) and (not args.force)):
+        if (os.path.exists(outfile_bayes) and (not args.force)):
             print("  This stretch already processed")
             continue
         # read the stretch data
         stretch_stack = rivscale.products.StretchStack.from_ncfile(infile_stretch)
         wse_stats = rivscale.products.AlongStretchStats.from_ncfile(infile_wse_stats)
         width_stats = rivscale.products.AlongStretchStats.from_ncfile(infile_width_stats)
-        #
-        wse_stretch_avg, width_stretch_avg = process_stretch_average(stretch_stack, wse_stats, width_stats)
-        if wse_stretch_avg is not None:
-            wse_stretch_avg.to_ncfile(outfile_wse)
-        if width_stretch_avg is not None:
-            width_stretch_avg.to_ncfile(outfile_width)
+        #wse_stretch_avg = rivscale.products.StretchAverageStats.from_ncfile(
+        #    infile_wse)
+        #width_stretch_avg = rivscale.products.StretchAverageStats.from_ncfile(
+        #    infile_width)
+        height_width = rivscale.products.HeightWidthModel.from_ncfile(
+            infile_height_width)
+        bayes = process_bayes_reconstruction(
+                stretch_stack,
+                wse_stats,
+                width_stats,
+                height_width)
+        if bayes is not None:
+            bayes.to_ncfile(outfile_bayes)
         this_stop = time.time()
         print('  execution time: {:2.2f} seconds'.format(this_stop - this_start))
 

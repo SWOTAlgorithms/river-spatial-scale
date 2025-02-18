@@ -122,7 +122,26 @@ def reach_average(stretch_data_in, keys=['wse', 'width']):
         stretch_data['stretch_{}_count'.format(key)] = cnt
     return stretch_data
 
-def get_dw_dh_from_model(stretch_data, time_index, plot=False):
+def get_dw_dh_from_model(stretch_stack, height_width, time_ind):
+    # just look up the average dw_dh slope for a buffer around
+    # the measured data
+    wse = stretch_stack.wse[:,time_ind]
+    wse_plus = wse + stretch_stack.wse_u[:,time_ind]
+    wse_minus = wse - stretch_stack.wse_u[:,time_ind]
+    if isinstance(wse_plus, np.ma.MaskedArray):
+        wse_plus = wse_plus.filled(np.nan)
+    if isinstance(wse_minus, np.ma.MaskedArray):
+        wse_minus = wse_minus.filled(np.nan)
+    #breakpoint()
+    #width_hat = height_width.sample(wse, x_key='wse')
+    width_hat_plus = height_width.sample(wse_plus, x_key='wse')
+    width_hat_minus = height_width.sample(wse_minus, x_key='wse')
+    dw_dh = (width_hat_plus - width_hat_minus) / (wse_plus - wse_minus)
+    # fill in the mising data with average
+    dw_dh[~np.isfinite(dw_dh)] = np.nanmean(dw_dh)
+    return dw_dh
+
+def get_dw_dh_from_model_defunkt(stretch_data, time_index, plot=False):
     x0, y0, dw_dh1, dw_dh2 = stretch_data.hw_params
     b1 = y0 - dw_dh1 * x0
     b2 = y0 - dw_dh2 * x0
@@ -387,7 +406,10 @@ def exponential_cov(p_dist_out, char_length_tau=20000, prior_unc_alpha=2.0):
         t = p_dist_out - d0
         Ry0[k, :] = np.exp(-np.abs(t) / char_length_tau)
     # scale the covariance to trade-off noise.vs "spectral resolution"
-    Ry = Ry0 / np.max(Ry0) * prior_unc_alpha ** 2
+    if isinstance(prior_unc_alpha, np.ndarray):
+        Ry = Ry0 / np.max(Ry0) * np.diag(prior_unc_alpha ** 2)
+    else:
+        Ry = Ry0 / np.max(Ry0) * prior_unc_alpha ** 2
     return Ry
 
 ######## Old data TODO: delete/revise etc

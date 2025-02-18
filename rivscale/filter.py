@@ -32,23 +32,113 @@ import geopandas as gpd
 
 import rivscale.data
 
+
+def scaled_spread_outlier_rejector(arr_in, mean, spread, scale=5.0):
+    """
+    This method rejects outliers defined as being farther than
+    some multiple of the spread away from the mean.
+    The spread is an estimate of the dispersion of the distribution
+    (e.g., the std or IQR etc).  Scale is how far from the mean.
+    """
+    arr = arr_in.copy()
+    upper = mean + scale * spread
+    lower = mean - scale * spread
+    # handle the cases of 2D arr and 1D mean/dis
+    if np.shape(arr)!=np.shape(np.array(upper)):
+        upper = np.broadcast_to(upper, np.shape(arr.T)).T
+        lower = np.broadcast_to(lower, np.shape(arr.T)).T
+    # set outlier values to nan
+    arr[arr > upper] = np.nan
+    arr[arr < lower] = np.nan
+    return arr
+
+def filter_width_stretch_outliers(
+        width_stretch_avg_in,
+        width_stats,
+        IQR_scale=5.0):
+    # TODO make this a method of StretchAverage
+    width_stretch_avg = width_stretch_avg_in.copy()
+    width = width_stretch_avg.mean
+    ref = np.nanmean(width_stats.reference)
+    p = width_stats.percentile_list
+    p25 = np.nanmean(width_stats.percentiles[:,p==25].squeeze())
+    p75 = np.nanmean(width_stats.percentiles[:,p==75].squeeze())
+    IQR = p75 - p25
+    width = scaled_spread_outlier_rejector(width, ref, IQR, IQR_scale)
+    width_stretch_avg.mean = width
+    return width_stretch_avg
+
+def filter_width_node_outliers(
+        stretch_stack_in,
+        width_stats,
+        IQR_scale=5.0,
+        plot=False):
+    # TODO: make this a method of StretchStack
+    stretch_stack = stretch_stack_in.copy()
+    width = stretch_stack.width
+    ref = width_stats.reference
+    p = width_stats.percentile_list
+    p25 = width_stats.percentiles[:,p==25].squeeze()
+    p75 = width_stats.percentiles[:,p==75].squeeze()
+    IQR = p75 - p25
+    #
+    width = scaled_spread_outlier_rejector(width, ref, IQR, IQR_scale)
+    #IQR2D = np.broadcast_to(IQR, np.shape(width.T)).T
+    #ref2D = np.broadcast_to(ref, np.shape(width.T)).T
+    ## filter out the bad ones
+    #width[width > ref2D + IQR_scale*IQR2D] = np.nan
+    #width[width < ref2D - IQR_scale*IQR2D] = np.nan
+    stretch_stack.width = width
+    if plot:
+        all_widths = stretch_stack_in.width
+        kept_widths = stretch_stack.width
+        outlier_mask = np.logical_and(
+            np.isfinite(all_widths),
+            np.isnan(kept_widths))
+        dist_out = np.broadcast_to(
+            stretch_stack_in.dist_out,
+            np.shape(all_widths.T)).T
+        plt.figure()
+        plt.plot(dist_out, all_widths)
+        plt.plot(
+            dist_out[outlier_mask],
+            all_widths[outlier_mask],'x')
+        plt.plot(
+            stretch_stack_in.dist_out,
+            ref + IQR_scale*IQR,'k', linewidth=2)
+        plt.plot(
+            stretch_stack_in.dist_out,
+            ref - IQR_scale*IQR,'k', linewidth=2)
+    return stretch_stack
+
 ########## Sept 2024 stretch-based processing
-def filter_node_qual(df, height=True, area=False, dark_thresh=0.8):
+def filter_qual(
+        df,
+        height=True,
+        area=False,
+        dark_thresh=0.8):
     """
     filter out swot data based on quality, dark_frac, ice,
     location in swath etc...
     """
+    if 'node_q' in df.keys():
+        qual_key = 'node_q'
+        qual_b_key = 'node_q_b'
+    else:
+        qual_key = 'reach_q'
+        qual_b_key = 'reach_q_b'
     # filter out swath edges
     #df = df[np.abs(df['xtrk_dist']) > 10000]
-    #df = df[np.abs(df['xtrk_dist']) < 60000]
-    df = df[np.bitwise_and(df['node_q_b'], 2**13) == 0]
-    df = df[np.bitwise_and(df['node_q_b'], 2**14) == 0]
+    #df = df[np.abs(df['xtrk_dist']) < 60000] 
+    df = df[np.bitwise_and(df[qual_b_key], 2**13) == 0]
+    df = df[np.bitwise_and(df[qual_b_key], 2**14) == 0]
+    
     # filter out high dark frac
     df = df[df['dark_frac'] < dark_thresh]
     # filter out ice
     df = df[df['ice_clim_f']==0]
     # filter out bad qual
-    df = df[df['node_q'] < 3]
+    df = df[df[qual_key] < 3]
     # drop xovr_cal_q == 2
     df = df[df['xovr_cal_q'] < 2]
     # now drop bitwise qual if commanded
@@ -56,13 +146,13 @@ def filter_node_qual(df, height=True, area=False, dark_thresh=0.8):
         # fill values
         df = df[df['wse'] > -99999999.0]
         # geolocation_qual_degraded
-        df = df[np.bitwise_and(df['node_q_b'], 2**19) == 0]
+        df = df[np.bitwise_and(df[qual_b_key], 2**19) == 0]
         # wse outlier
-        df = df[np.bitwise_and(df['node_q_b'], 2**23) == 0]
+        df = df[np.bitwise_and(df[qual_b_key], 2**23) == 0]
     if area:
         df = df[df['area_total'] > -99999999.0]
         # classification_qual_degraded
-        df = df[np.bitwise_and(df['node_q_b'], 2**18) == 0]
+        df = df[np.bitwise_and(df[qual_b_key], 2**18) == 0]
     return df
 
 def filter_bad_stretch_stack(

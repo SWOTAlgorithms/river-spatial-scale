@@ -346,6 +346,50 @@ class StretchAverageStats(Product):
             plt.show()
 
     @classmethod
+    def from_reach_df(cls, df_in, reach, signal_key):
+        stats = cls()
+        stats.signal_key = signal_key
+        stats.reaches = [reach,]
+        stats.stretch_name = '{}'.format(reach)
+        #
+        df = df_in.copy()
+        df[df[signal_key]<-1e5] = np.nan
+        # crop out all reaches except those in the reach list
+        #df = df[~df['reach_id'].isin(reaches)]
+        df = df[df['reach_id']==int(reach)]
+        #
+        dist_out = []
+        time_id = []
+        mean = []
+        std = []
+        if signal_key=='wse':
+            df[df['slope']<-1e5] = np.nan
+            slope = []
+        time_ids = np.unique(np.array(np.floor(df['time']/60/60))).astype(int)
+        for time_i in time_ids:
+            times_id = np.floor(df['time']/60/60).astype(int)
+            this_df = df[times_id==time_i]
+            # TODO handle window over desired reach
+            dist_out.append(this_df['dist_out'])
+            mean.append(this_df[signal_key])
+            std.append(this_df[signal_key+'_u'])
+            time_id.append(time_i)
+            if signal_key=='wse':
+                slope.append(this_df['slope'])
+        #breakpoint()
+        stats.time_id = np.array(time_id).squeeze()
+        stats.dist_out = np.array(dist_out).squeeze()
+        stats.mean = np.array(mean).squeeze()
+        stats.std = np.array(std).squeeze() 
+        # just use the mean of the data as reference
+        stats.mean_reference = np.nanmean(
+            mean) * np.ones_like(stats.mean)
+        if signal_key=='wse':
+            stats.slope_reference = np.nanmean(
+                slope) * np.ones_like(stats.mean)
+        return stats
+
+    @classmethod
     def from_StretchStack(
             cls,
             stretch_stack,
@@ -493,7 +537,7 @@ class BayesData(Product):
         ['signal', odict([['dimensions', DIMENSIONS_2D]])],
         ['signal_u', odict([['dimensions', DIMENSIONS_2D]])],
         ['signal_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
-        ['bayes_wse_width_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
+        #['bayes_wse_width_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         ['signal_mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
         #['signal_cov', odict([['dimensions', odict([['num_nodes', 0]])]])],
         #['wse_cov', odict([['dimensions', DIMENSIONS_COV]])],
@@ -503,7 +547,17 @@ class BayesData(Product):
         #['width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         #['wse_width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
     ])
-
+    """
+    def plot(self): 
+        # plot the wse and wse_anom together
+        rivscale.plot.plot_stretch_stack(
+            self,
+            x_key=x_key,
+            y_keys=['wse','wse'],
+            y_reference=[wse_reference, wse_reference],
+            y_anom=[False, True],
+            outdir=outdir)
+    """
     @classmethod
     def simple(
             cls,
@@ -512,7 +566,7 @@ class BayesData(Product):
             signal_key,
             char_length_tau=None,
             prior_unc_alpha=None):
-        bayes = cls()#rivscale.products.BayesData()
+        bayes = cls()
         bayes.stretch_name = stretch_stack.stretch_name
         bayes.signal_key = signal_key
         bayes.signal_mean = stats.reference.copy()
@@ -536,6 +590,117 @@ class BayesData(Product):
             uncert_key=signal_key+'_u')
         return bayes
 
+    @classmethod
+    def joint(
+            cls,
+            stretch_stack,
+            wse_along_stats,
+            width_along_stats,
+            height_width,
+            rho_wse_width=0.7
+            ):
+        bayes = cls()
+        bayes.signal_key = 'joint_wse_width'
+        bayes.stretch_name = stretch_stack.stretch_name
+        # get the mean and cov of the stacked wse and width
+        N = len(wse_along_stats.reference)
+        # create the stacked mean
+        mn = np.concatenate([
+            wse_along_stats.reference, width_along_stats.reference
+            ])
+        nodes = np.arange(2*len(stretch_stack['node_id']), dtype=int)
+        Signal_hat = []
+        Signal_hat_u = []
+        Post_cov = []
+        time_key = 'time_id'
+        #
+        # go through each time/cycle observation in the stack 
+        for j,cycl in enumerate(stretch_stack[time_key]):
+            meas = np.concatenate([
+                stretch_stack['wse'][:,j], stretch_stack['width'][:,j]
+                ])
+            meas_u = np.concatenate([
+                stretch_stack['wse_u'][:,j], stretch_stack['width_u'][:,j]
+                ])
+            wse_cov = rivscale.reconstruct.exponential_cov(
+                stretch_stack['dist_out'],
+                char_length_tau=wse_along_stats.char_length_tau,
+                prior_unc_alpha=wse_along_stats.prior_unc_alpha)
+            # constrain the height and width std magnitudes using the h/w-model
+            dw_dh = rivscale.reconstruct.get_dw_dh_from_model(
+                stretch_stack, height_width, j)
+            this_prior_unc_alpha_width = dw_dh * wse_along_stats.prior_unc_alpha
+            #breakpoint()
+            width_cov = rivscale.reconstruct.exponential_cov(
+                stretch_stack['dist_out'],
+                char_length_tau=width_along_stats.char_length_tau,
+                prior_unc_alpha=this_prior_unc_alpha_width)
+            #rivscale.reconstruct.generate_cov_matrix(
+            #    stretch_stack,
+            #    width_along_stats.char_length_tau,
+            #    this_prior_unc_alpha_width)
+            wse_width_cov = (
+                rho_wse_width * np.real(scipy.linalg.sqrtm(wse_cov)) @ (
+                    np.real(scipy.linalg.sqrtm(width_cov.T))))
+            Ry = np.block([
+                [wse_cov, wse_width_cov.T],
+                [wse_width_cov, width_cov],
+                #[wse_along_stats.cov[:,:,j], wse_width_cov[:,:,j].T],
+                #[wse_width_cov[:,:,j], width_along_stats.cov[:,:,j]]
+                ])
+            #print(np.linalg.cond(Ry))
+            #if np.linalg.cond(Ry) > 1e
+            # call the estimator
+            signal_hat, post_cov = rivscale.reconstruct.reconstruct_one_time_obs(
+                meas, meas_u, Ry, mn, nodes)
+            Signal_hat.append(signal_hat)
+            Signal_hat_u.append(np.diag(post_cov))
+            Post_cov.append(post_cov)
+        bayes.signal = np.array(Signal_hat).T
+        bayes.signal_u = np.array(Signal_hat_u).T
+        bayes.signal_post_cov = np.moveaxis(
+            np.array(Post_cov), 0, -1)
+        return bayes
+
+    def unpack_joint(self):
+        bayes_wse = BayesData()
+        bayes_wse.signal_key = 'wse'
+        bayes_wse.stretch_name = self.stretch_name
+        bayes_width = BayesData()
+        bayes_width.signal_key = 'width'
+        bayes_width.stretch_name = self.stretch_name
+        N = int(len(self.signal[:,0])/2)
+        wse_hats = []
+        wse_hats_u = []
+        width_hats = []
+        width_hats_u = []
+        wse_post_covs = []
+        width_post_covs = []
+        wse_width_post_covs = []
+        # go through each time/cycle observation in the stack
+        for j, jnk in enumerate(self.signal[-1]):
+            signal_hat = self.signal[:,j]
+            post_cov = self.signal_post_cov[:,:,j]
+            # populate the output arrays
+            wse_hats.append(signal_hat[0:N])
+            wse_post_covs.append(post_cov[0:N,0:N])
+            wse_hats_u.append(np.diag(post_cov[0:N,0:N]))
+            width_hats.append(signal_hat[N:])
+            width_post_covs.append(post_cov[N:,N:])
+            width_hats_u.append(np.diag(post_cov[N:,N:]))
+            wse_width_post_covs.append(post_cov[0:N,N:])
+        bayes_wse.signal = np.array(wse_hats).T
+        bayes_width.signal = np.array(width_hats).T
+        bayes_wse.signal_u = np.array(wse_hats_u).T
+        bayes_width.signal_u = np.array(width_hats_u).T
+        bayes_wse.post_cov = np.moveaxis(
+            np.array(wse_post_covs), 0, -1)
+        bayes_width.post_cov = np.moveaxis(
+            np.array(width_post_covs), 0, -1)
+        bayes_wse_width_post_cov = np.moveaxis(
+            np.array(wse_width_post_covs), 0, -1)
+        return bayes_wse, bayes_width, bayes_wse_width_post_cov
+
 class HeightWidthModel(Product):
     ATTRIBUTES = odict([
         ['description',{'dtype':'str', 'value': textjoin("""
@@ -558,41 +723,57 @@ class HeightWidthModel(Product):
             cls,
             wse_stretch_avg,
             width_stretch_avg,
-            width_along_stats,
-            sigma_n=30):
+            width_along_stats=None,
+            wse_anom=True,
+            sigma_n=50):
         height_width = cls()
-        ptile_list = width_along_stats.percentile_list
-        # percentile method
-        Pg = np.nanmean(width_along_stats.percentiles, axis=0)
+        if width_along_stats is None:
+            ptile_list = [5, 25, 32, 50, 68, 75, 95]
+        else:
+            ptile_list = width_along_stats.percentile_list
+        # get percntiles of measured reach data
         Pm = np.nanpercentile(width_stretch_avg.mean, ptile_list)
-        Ph = np.nanpercentile(wse_stretch_avg.mean,ptile_list)
-        # now find Pl the no-noise width measurement distribution
-        # assuming zeros mean noise with known sqrt(variances) (sigma_n).
-        if (50 in ptile_list):
-            # get the mean of the prior and measured width distribution
-            ind = np.where(ptile_list==50)
-            mu_g = Pg[ind]
-            mu_m = Pm[ind]
+        wse = wse_stretch_avg.mean
+        if wse_anom:
+            wse = wse - wse_stretch_avg.mean_reference
+        Ph = np.nanpercentile(wse, ptile_list)
+
+        if width_along_stats is None:
+            # just use the measuered stats for width
+            Pl_hat = Pm
         else:
-            print('50th ptile not in prior percentile list')
-            return None
-        #sigma_g = 1/2*(Pg[4]-Pg[2])
-        #sigma_m = 1/2*(Pm[4]-Pm[2])
-        if (25 in ptile_list) and (75 in ptile_list):
-            # Use IQR to adjust the prior width distribution
-            # to the measured distribution (using Gaussian assumptions)
-            ind75 = np.where(ptile_list==75)
-            ind25 = np.where(ptile_list==25)
-            sigma_g = 1/1.349*(Pg[ind75]-Pg[ind25])
-            sigma_m = 1/1.349*(Pm[ind75]-Pm[ind25])
-        else:
-            print('25th or 75th ptile not in prior percentile list')
-            return None
-        if sigma_n>sigma_m:
-            print('replacing noise std')
-            sigma_n = sigma_m/2
-        a = np.sqrt(sigma_m**2-sigma_n**2) / sigma_g
-        Pl_hat = a*(Pg - mu_g) + mu_m
+            # percentile method using input along-stats for width
+            # adjusting the distribution mean and std baesed on the
+            # measured distribution (using simple Gaussian assumption)
+            Pg = np.nanmean(width_along_stats.percentiles, axis=0)
+            # now find Pl the no-noise width measurement distribution
+            # assuming zeros mean noise with known sqrt(variances) (sigma_n).
+            if (50 in ptile_list):
+                # get the mean of the prior and measured width distribution
+                ind = np.where(ptile_list==50)
+                mu_g = Pg[ind]
+                mu_m = Pm[ind]
+            else:
+                print('50th ptile not in prior percentile list')
+                return None
+            #sigma_g = 1/2*(Pg[4]-Pg[2])
+            #sigma_m = 1/2*(Pm[4]-Pm[2])
+            if (25 in ptile_list) and (75 in ptile_list):
+                # Use IQR to adjust the prior width distribution
+                # to the measured distribution (using Gaussian assumptions)
+                ind75 = np.where(ptile_list==75)
+                ind25 = np.where(ptile_list==25)
+                sigma_g = 1/1.349*(Pg[ind75]-Pg[ind25])
+                sigma_m = 1/1.349*(Pm[ind75]-Pm[ind25])
+            else:
+                print('25th or 75th ptile not in prior percentile list')
+                return None
+            if sigma_n>sigma_m:
+                #print('replacing noise std')
+                sigma_n = sigma_m * 0.7
+            a = np.sqrt(sigma_m**2-sigma_n**2) / sigma_g
+            Pl_hat = a*(Pg - mu_g) + mu_m
+            
         # now match-up the height and width percentiles
         # and make a wse a piecewise-linear function of width
         # ignore nosie on height for now (TODO: handle it)
@@ -608,8 +789,8 @@ class HeightWidthModel(Product):
         by interpolating in between the width samples and 
         """
         y_key = 'wse'
-        if y_key=='wse':
-            x_key='width'
+        if x_key=='wse':
+            y_key='width'
         intrp = scipy.interpolate.interp1d(
             self[x_key+'_coords'],
             self[y_key+'_coords'],
