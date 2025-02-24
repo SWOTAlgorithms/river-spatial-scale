@@ -51,14 +51,14 @@ def process_bayes_reconstruction(
         wse_dark_thresh=0.8,
         width_dark_thresh=0.2,
         width_outlier_scale=10,
-        rho_wse_width=0.999
+        rho_wse_width=0.7
         ):
     #
     # populate witdh_u
     node_len = stretch_stack['area_total'] / stretch_stack['width']
     stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
     # make measurement uncert at least as much as signal uncert we assume
-    #stretch_stack['width_u'] = stretch_stack['width_u'] + 500#2*prior_unc_alpha_width
+    stretch_stack['width_u'] = stretch_stack['width_u'] + 10 # + 500#2*prior_unc_alpha_width
     # filter out bad data
     stretch_stack = rivscale.filter.filter_width_node_outliers(
         stretch_stack, width_stats, width_outlier_scale, plot=True)
@@ -80,15 +80,59 @@ def process_bayes_reconstruction(
         height_width,
         rho_wse_width=rho_wse_width)
     bayes_wse, bayes_width, bayes_wse_width_post_cov = joint_bayes.unpack_joint()
-    stretch_stack.plot()
-    plt.figure()
-    plt.plot(stretch_stack.dist_out, bayes_wse.signal)
-    plt.figure()
-    plt.plot(stretch_stack.dist_out, bayes_width.signal)
+    #stretch_stack.plot()
+    wse0 = stretch_stack['wse']
+    width0 = stretch_stack['width']
+    #bayes_wse.plot()
+    #bayes_width.plot()
+    dist_out = stretch_stack.dist_out.copy()
+    wse = bayes_wse.signal.copy()
+    wse_u = bayes_wse.signal_u.copy()
+    width = bayes_width.signal.copy()
+    width_u = bayes_width.signal_u.copy()
+    wse_u[wse_u > 10] = np.nan
+    width[width_u > 200] = np.nan
+    #
     ref2 = np.broadcast_to(wse_stats.reference, np.shape(bayes_width.signal.T)).T
     ref2_w = np.broadcast_to(width_stats.reference, np.shape(bayes_width.signal.T)).T
+    # input
     plt.figure()
-    plt.plot(bayes_width.signal - ref2_w, bayes_wse.signal - ref2,'o')
+    plt.subplot(2,1,1)
+    plt.plot(dist_out, wse0)
+    plt.subplot(2,1,2)
+    plt.plot(dist_out, wse0-ref2)
+    plt.grid()
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.plot(dist_out, width0)
+    plt.subplot(2,1,2)
+    plt.plot(dist_out, width0-ref2_w)
+    # bayes
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.plot(dist_out, wse)
+    plt.subplot(2,1,2)
+    plt.plot(dist_out, wse-ref2)
+    plt.grid()
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.plot(dist_out, width)
+    plt.subplot(2,1,2)
+    plt.plot(dist_out, width-ref2_w)
+    plt.grid()
+    #plt.figure()
+    #plt.plot(dist_out, wse)
+    #plt.plot(dist_out, width)
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.plot(dist_out, wse_u)
+    plt.subplot(2,1,2)
+    plt.plot(dist_out, width_u)
+    plt.grid()
+    #
+    plt.figure()
+    plt.plot(width - ref2_w, wse - ref2,'o')
+    #plt.plot(bayes_width.signal, bayes_wse.signal - ref2,'o')
     plt.show()
     breakpoint()
 

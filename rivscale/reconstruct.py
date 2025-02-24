@@ -122,12 +122,11 @@ def reach_average(stretch_data_in, keys=['wse', 'width']):
         stretch_data['stretch_{}_count'.format(key)] = cnt
     return stretch_data
 
-def get_dw_dh_from_model(stretch_stack, height_width, time_ind):
+def get_dw_dh_from_model(wse_anom, wse_u, height_width):
     # just look up the average dw_dh slope for a buffer around
     # the measured data
-    wse = stretch_stack.wse[:,time_ind]
-    wse_plus = wse + stretch_stack.wse_u[:,time_ind]
-    wse_minus = wse - stretch_stack.wse_u[:,time_ind]
+    wse_plus = wse_anom + wse_u
+    wse_minus = wse_anom - wse_u
     if isinstance(wse_plus, np.ma.MaskedArray):
         wse_plus = wse_plus.filled(np.nan)
     if isinstance(wse_minus, np.ma.MaskedArray):
@@ -316,6 +315,24 @@ def reconstruct_one_time_obs(meas, meas_u_in, Ry, mn, nodes):
         #bayes_u = np.diag(A_inv).copy()
     return signal_hat, post_cov#, bayes_u
 
+#
+def MAP_gradient_one_time_obs(
+        meas, meas_u_in, Ry, mn, nodes, signal_hat):
+    meas_u = meas_u_in.copy()
+    meas_u[~np.isfinite(meas_u)] = 10**5#10^5
+    msk = np.isfinite(meas)
+        #breakpoint()
+    # check for not enough data
+    if np.sum(msk) < 2:
+        # dont call bayes, just append nans
+        grad = np.zeros_like(meas)
+        post_cov = np.diag(np.ones_like(meas_u)*10**5)
+    else:
+        grad, post_cov = MAP_gradient(
+            meas[msk], nodes[msk], mn, Ry,
+            np.sqrt(meas_u[msk]), signal_hat)
+    return grad, post_cov
+
 def reconstruct_stretch(stretch_data, bayes_data_in,
         signal_key='wse', uncert_key='wse_u'):
     # copy the input data to output data
@@ -374,25 +391,51 @@ def reconstruct_stretch_defunkt(stretch_data_in,
     stretch_data['bayes_{}_u'.format(signal_key)] = np.array(bayes_us).T
     return stretch_data
 
-def bayes_estimator(meas_wse, node_index, mn, Ry0, meas_noise):
+def noise_and_prior_terms(
+        node_index, mn, Ry0, meas_noise):
     N = len(mn)
     H = np.zeros((len(node_index), N))
     for i,ni in enumerate(node_index):
         if ni == -30:
             breakpoint()
         H[i,ni] = 1
-    X = meas_wse - mn[node_index]
+    #X = meas_wse - mn[node_index]
     Rv = np.diag(meas_noise**2)
     Ry_inv = pinv(Ry0)
     Rv_inv = pinv(Rv)
     A = Ry_inv + H.T @ Rv_inv @ H
     A_inv = np.linalg.inv(A)
+    return H, Rv, Rv_inv, Ry_inv, A, A_inv
+
+def bayes_estimator(meas, node_index, mn, Ry0, meas_noise):
+    """
+    N = len(mn)
+    H = np.zeros((len(node_index), N))
+    for i,ni in enumerate(node_index):
+        if ni == -30:
+            breakpoint()
+        H[i,ni] = 1
+    #X = meas_wse - mn[node_index]
+    Rv = np.diag(meas_noise**2)
+    Ry_inv = pinv(Ry0)
+    Rv_inv = pinv(Rv)
+    A = Ry_inv + H.T @ Rv_inv @ H
+    A_inv = np.linalg.inv(A)
+    """
+    H, Rv, Rv_inv, Ry_inv, A, A_inv = noise_and_prior_terms(
+        node_index, mn, Ry0, meas_noise)
     K = A_inv @ H.T @ Rv_inv
     K_bar = A_inv @ Ry_inv
-    yp = K @ meas_wse
+    yp = K @ meas
     y_bar =  K_bar @ mn
     signal_hat = yp + y_bar
     return signal_hat, A_inv
+
+def MAP_gradient(meas, node_index, mn, Ry0, meas_noise, meas_hat):
+    H, Rv, Rv_inv, Ry_inv, A, A_inv = noise_and_prior_terms(
+        node_index, mn, Ry0, meas_noise)
+    grad = A @ meas_hat - Ry_inv @ mn - H.T @ Rv_inv @ meas
+    return grad, A_inv
 
 def exponential_cov(p_dist_out, char_length_tau=20000, prior_unc_alpha=2.0):
     """
@@ -407,7 +450,8 @@ def exponential_cov(p_dist_out, char_length_tau=20000, prior_unc_alpha=2.0):
         Ry0[k, :] = np.exp(-np.abs(t) / char_length_tau)
     # scale the covariance to trade-off noise.vs "spectral resolution"
     if isinstance(prior_unc_alpha, np.ndarray):
-        Ry = Ry0 / np.max(Ry0) * np.diag(prior_unc_alpha ** 2)
+        #breakpoint()
+        Ry = np.outer(prior_unc_alpha,prior_unc_alpha) * (Ry0 / np.max(Ry0))
     else:
         Ry = Ry0 / np.max(Ry0) * prior_unc_alpha ** 2
     return Ry

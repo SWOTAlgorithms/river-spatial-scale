@@ -547,17 +547,12 @@ class BayesData(Product):
         #['width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         #['wse_width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
     ])
+
     """
-    def plot(self): 
+    def plot(self,): 
         # plot the wse and wse_anom together
-        rivscale.plot.plot_stretch_stack(
-            self,
-            x_key=x_key,
-            y_keys=['wse','wse'],
-            y_reference=[wse_reference, wse_reference],
-            y_anom=[False, True],
-            outdir=outdir)
     """
+
     @classmethod
     def simple(
             cls,
@@ -597,7 +592,8 @@ class BayesData(Product):
             wse_along_stats,
             width_along_stats,
             height_width,
-            rho_wse_width=0.7
+            rho_wse_width=0.7,
+            maxiter=5
             ):
         bayes = cls()
         bayes.signal_key = 'joint_wse_width'
@@ -626,33 +622,335 @@ class BayesData(Product):
                 stretch_stack['dist_out'],
                 char_length_tau=wse_along_stats.char_length_tau,
                 prior_unc_alpha=wse_along_stats.prior_unc_alpha)
-            # constrain the height and width std magnitudes using the h/w-model
-            dw_dh = rivscale.reconstruct.get_dw_dh_from_model(
-                stretch_stack, height_width, j)
-            this_prior_unc_alpha_width = dw_dh * wse_along_stats.prior_unc_alpha
-            #breakpoint()
             width_cov = rivscale.reconstruct.exponential_cov(
                 stretch_stack['dist_out'],
                 char_length_tau=width_along_stats.char_length_tau,
-                prior_unc_alpha=this_prior_unc_alpha_width)
-            #rivscale.reconstruct.generate_cov_matrix(
-            #    stretch_stack,
-            #    width_along_stats.char_length_tau,
-            #    this_prior_unc_alpha_width)
-            wse_width_cov = (
-                rho_wse_width * np.real(scipy.linalg.sqrtm(wse_cov)) @ (
-                    np.real(scipy.linalg.sqrtm(width_cov.T))))
+                prior_unc_alpha=width_along_stats.prior_unc_alpha)
+            # constrain the height and width std magnitudes using the h/w-model
+            # init with prior mean
+            signal_hat = np.concatenate([
+                    wse_along_stats.reference,
+                    width_along_stats.reference])
+            # compute the hw-independent bayes estimate
+            R1 = wse_cov.copy()
+            R2 = width_cov.copy()
+            R12 = np.zeros_like(R1)
             Ry = np.block([
-                [wse_cov, wse_width_cov.T],
-                [wse_width_cov, width_cov],
-                #[wse_along_stats.cov[:,:,j], wse_width_cov[:,:,j].T],
-                #[wse_width_cov[:,:,j], width_along_stats.cov[:,:,j]]
+                [R1, R12],
+                [R12.T, R2],
                 ])
-            #print(np.linalg.cond(Ry))
-            #if np.linalg.cond(Ry) > 1e
-            # call the estimator
-            signal_hat, post_cov = rivscale.reconstruct.reconstruct_one_time_obs(
+            signal_b, post_cov = rivscale.reconstruct.reconstruct_one_time_obs(
                 meas, meas_u, Ry, mn, nodes)
+            #grad, post_cov = rivscale.reconstruct.MAP_gradient_one_time_obs(
+            #    meas, meas_u, Ry, mn, nodes, signal_hat)
+            #
+            # init the nonlinear search with the bayes estimate
+            # that does not impose the hw relation?
+            signal_hat = signal_b.copy()
+            # replace estimate with measurement when available
+            #signal_hat[np.isfinite(meas)] = meas[np.isfinite(meas)]
+            #this_wse_anom = np.array(
+            #    stretch_stack['wse'][:,j] - wse_along_stats.reference).copy()
+            ## init the wse_anom to the measurement or prior
+            ## where there is no measurement
+            #this_wse_anom[~np.isfinite(this_wse_anom)] = 0
+            this_wse_u = np.array(stretch_stack['wse_u'][:,j]).copy()
+            for k in range(maxiter+1):
+                # loop moving toward the bayes estimate while updating the
+                # dw_dh along the way to handle nonlinear height/width models
+                #dw_dh = rivscale.reconstruct.get_dw_dh_from_model(
+                #    stretch_stack, height_width, j)
+                this_wse_anom = (
+                    signal_hat[0:N] - wse_along_stats.reference).copy()
+                this_width_anom = (
+                    signal_hat[N] - width_along_stats.reference).copy()
+                #dw_dh = rivscale.reconstruct.get_dw_dh_from_model(
+                #    this_wse_anom, this_wse_u, height_width)
+                dw_dh = height_width.sample_deriv(this_wse_anom, x_key='wse')
+                dh_dw = height_width.sample_deriv(this_width_anom, x_key='width')
+                # experiment with constant dw_dh and dh_dw
+                dw_dh[:] = np.median(dw_dh)
+                #dh_dw[:] = np.median(dh_dw)
+                dw_dh = 1/dh_dw
+                #
+                f_of_h = height_width.sample(this_wse_anom, x_key='wse')
+                g_of_w = height_width.sample(this_width_anom, x_key='width')
+                K_of_y = np.concatenate([g_of_w, f_of_h])
+                signal_anom = np.concatenate([this_wse_anom, this_width_anom])
+                hw_model_diff = np.concatenate([
+                    this_wse_anom - g_of_w,
+                    this_width_anom - f_of_h])
+                # TODO: for some reason allowing each node to vary in dw_dh
+                #       doesnt seem to work...need to investigate
+                #dw_dh = np.median(dw_dh)
+                this_prior_unc_alpha_width = dw_dh * wse_along_stats.prior_unc_alpha
+                #breakpoint()
+                """
+                width_cov = rivscale.reconstruct.exponential_cov(
+                    stretch_stack['dist_out'],
+                    char_length_tau=width_along_stats.char_length_tau,
+                    prior_unc_alpha=this_prior_unc_alpha_width)
+                
+                wse_width_cov = (
+                    rho_wse_width * np.real(scipy.linalg.sqrtm(wse_cov) @ (
+                        scipy.linalg.sqrtm(width_cov.T))))
+                
+                Ry = np.block([
+                    [wse_cov, wse_width_cov.T],
+                    [wse_width_cov, width_cov],
+                    ])
+                """
+                """
+                #width_cov = wse_cov.copy()
+                #wse_width_cov = wse_cov.copy()
+                Rg = wse_cov.copy() #/ np.max(wse_cov)
+                Rf = width_cov.copy() #/ np.max(width_cov)
+                #Rf = wse_cov.copy()
+                #Rg = width_cov.copy()
+                A = np.diag(dw_dh)
+                C = np.diag(1/dw_dh)
+                a = rho_wse_width
+                b = rho_wse_width
+                R1 = (1-a)**2 * b**2 * A @ Rg @ A.T + (1-b)**2 * Rf
+                R2 = (1-b)**2 * a**2 * C @ Rf @ C.T + (1-a)**2 * Rg
+                R12 = (1-a)**2 * b * A @ Rg + (1-b)**2 * a * Rf @ C.T
+                Ry = 1/(1-a*b)**2 * np.block([
+                    [R1, R12],
+                    [R12.T, R2],
+                    ])
+                """
+                """
+                A = np.diag(dw_dh)
+                #sig = rho_wse_width
+                sig = 5000
+                R1 = wse_cov.copy()
+                R2 = A @ R1 @ A.T + sig * np.eye(N)
+                R12 = A @ R1
+                Ry = np.block([
+                    [R1, R12],
+                    [R12.T, R2],
+                    ])
+                """
+                """
+                R1 = wse_cov.copy()
+                R2 = width_cov.copy()
+                R12 = np.zeros_like(R1)
+                Ry = np.block([
+                    [R1, R12],
+                    [R12.T, R2],
+                    ])
+                #breakpoint()
+                # call the estimator
+                #signal_hat, post_cov = rivscale.reconstruct.reconstruct_one_time_obs(
+                #    meas, meas_u, Ry, mn, nodes)
+                signal_b, post_cov = rivscale.reconstruct.reconstruct_one_time_obs(
+                    meas, meas_u, Ry, mn, nodes)
+                signal_b2, post_cov2 = rivscale.reconstruct.reconstruct_one_time_obs(
+                    meas - mn, meas_u, Ry, np.zeros_like(mn), nodes)
+                """
+                grad, post_cov = rivscale.reconstruct.MAP_gradient_one_time_obs(
+                        meas, meas_u, Ry, mn, nodes, signal_hat)
+                #grad_norm = grad / np.linalg.norm(grad)
+                wgt = 1
+                Lamda  = wgt * np.block([
+                    [np.eye(N) * (1/5), np.zeros((N,N))],
+                    [np.zeros((N,N)), np.eye(N) * (1/500)],
+                    ])
+                Ry_inv = np.linalg.inv(Ry)
+                #Lamda  = Ry_inv 
+                D = np.block([
+                    [np.zeros((N,N)), np.diag(dh_dw)],
+                    [np.diag(dw_dh), np.zeros((N,N))],
+                    ])
+                G = np.eye(2*N) - D
+                #G = np.block([
+                #    [np.eye(N), -np.diag(dw_dh)],
+                #    [-np.diag(dh_dw), np.eye(N)],
+                #    ])
+                grad_hw = G.T @ Lamda @ hw_model_diff
+                #grad_hw = G @ Lamda @ hw_model_diff
+                grad_hw_norm = post_cov @ grad_hw
+                grad_norm = post_cov @ grad
+                grad_tot = grad_norm + grad_hw_norm
+                #
+                
+                A_b = np.linalg.inv(post_cov)
+                A_inv = np.linalg.inv(A_b + G.T @ Lamda @ G)
+                signal_hat2 = A_inv @ (A_b @ signal_b - \
+                    G.T @ Lamda @ (
+                        -G @ signal_hat - K_of_y  + signal_hat- mn))
+                """
+                ### linear, fully constraind in deltah, deltaw
+                good_inds = np.where(np.isfinite(meas))
+                H0 = np.eye(2*N)
+                H = H0[good_inds,:].squeeze()
+                Rv_inv  = np.diag(1/meas_u[good_inds]**2)
+                Ry_inv = np.linalg.inv(Ry)
+                #Rh_inv = np.linalg.inv(wse_cov)
+                #Rw_inv = np.linalg.inv(width_cov)
+                x = (meas - mn)[good_inds].squeeze()
+                y0 = signal_hat - mn
+                b0 = K_of_y
+                A = H.T @ Rv_inv @ H + Ry_inv + G.T @ Lamda @ G
+                A_inv = np.linalg.inv(A)
+                y_hat = A_inv @ (H.T @ Rv_inv @ x - G.T @ Lamda @ (D @ y0 - b0))
+                signal_hat2 = y_hat + mn
+                ###
+                """
+                """
+                signal_hat2 = signal_b - post_cov @ G.T @ Lamda @ (
+                    signal_anom - K_of_y)
+                """
+                """
+                ###
+                # do fully contrained linear Bayes/MAP
+                ###
+                good_inds = np.where(np.isfinite(meas))
+                D = np.diag(dh_dw)
+                H0 = np.block([
+                    [np.eye(N)],
+                    [D],
+                    ])
+                Ht = H0[good_inds,:].squeeze()
+                Rv_inv  = np.diag(1/meas_u[good_inds]**2)
+                Rh_inv = np.linalg.inv(wse_cov)
+                Rw_inv = np.linalg.inv(width_cov)
+                A = Ht.T @ Rv_inv @ Ht + Rh_inv + D.T @ Rw_inv @ D
+                A_inv = np.linalg.inv(A)
+                b = f_of_h - D @ signal_hat[0:N]
+                x0 = np.concatenate([
+                    meas[0:N], 
+                    meas[N:] - mn[N:] - b])
+                xt = x0[good_inds].squeeze()
+                wse_hat = A_inv @ (
+                    Ht.T @ Rv_inv @ xt + Rh_inv @ mn[0:N] - D.T @ Rw_inv @ b)
+                #width_hat = D @ wse_hat + b + mn[N:]
+                width_hat = height_width.sample(
+                    wse_hat - mn[0:N], x_key='wse') + mn[N:]
+                signal_hat2 = np.concatenate([wse_hat, width_hat])
+                """
+                ###
+                ###
+                #breakpoint()
+                mu = 0.9
+                #signal_hat1 = signal_hat - mu * grad_tot
+                signal_hat1 = signal_hat
+                plt.figure()
+                plt.subplot(2,1,1)
+                plt.plot(signal_b[0:N] - wse_along_stats.reference,
+                        label='bayes')
+                plt.plot(signal_hat[0:N] - wse_along_stats.reference,
+                        label='current est')
+                plt.plot(signal_hat1[0:N] - wse_along_stats.reference,
+                        label='next est')
+                plt.plot(signal_hat2[0:N] - wse_along_stats.reference,
+                        label='linear')
+                plt.plot(meas[0:N] - wse_along_stats.reference,
+                        label='meas')
+                plt.legend()
+                plt.ylabel('wse')
+                plt.subplot(2,1,2)
+                plt.plot(grad_norm[0:N], label='MAP term')
+                plt.plot(grad_hw_norm[0:N], label='HW term')
+                plt.plot(grad_tot[0:N], '--', label='total')
+                plt.legend()
+                plt.ylabel('wse_gradient')
+                #
+                plt.figure()
+                plt.subplot(2,1,1)
+                plt.plot(signal_b[N:] - width_along_stats.reference,
+                        label='bayes')
+                plt.plot(signal_hat[N:] - width_along_stats.reference,
+                        label='current est')
+                plt.plot(signal_hat1[N:] - width_along_stats.reference,
+                        label='next est')
+                plt.plot(signal_hat2[N:] - width_along_stats.reference,
+                        label='linear')
+                plt.plot(meas[N:] - width_along_stats.reference,
+                        label='meas')
+                plt.legend()
+                plt.ylabel('width')
+                plt.subplot(2,1,2)
+                plt.plot(grad_norm[N:], label='MAP term')
+                plt.plot(grad_hw_norm[N:], label='HW term')
+                plt.plot(grad_tot[N:], '--', label='total')
+                plt.ylabel('width_gradient')
+                plt.legend()
+                #
+                plt.figure()
+                plt.plot(
+                    signal_b[N:] - width_along_stats.reference,
+                    signal_b[0:N] - wse_along_stats.reference,
+                    'o', label='bayes')
+                plt.plot(
+                    signal_hat2[N:] - width_along_stats.reference,
+                    signal_hat2[0:N] - wse_along_stats.reference,
+                    'x', label='linear')
+                plt.plot(
+                    signal_hat[N:] - width_along_stats.reference,
+                    signal_hat[0:N] - wse_along_stats.reference,
+                    'x', label='current est')
+                plt.plot(
+                    signal_hat1[N:] - width_along_stats.reference,
+                    signal_hat1[0:N] - wse_along_stats.reference,
+                    'x', label='next est')
+                plt.plot(
+                    meas[N:] - width_along_stats.reference,
+                    meas[0:N] - wse_along_stats.reference,
+                    'o', label='meas')
+                dw_x = np.linspace(-200,200)
+                dh_y = height_width.sample(dw_x, x_key='width')
+                plt.plot(dw_x, dh_y)
+                plt.legend()
+                plt.show()
+                breakpoint()
+                # do the update
+                signal_hat = signal_hat2
+                """
+                #breakpoint()
+                #if k < maxiter:
+                    # dont let move more than a reasonable amount each iteration
+                    '''
+                    wse_diff = meas[0:N] - (
+                        signal_hat[0:N] - wse_along_stats.reference)
+                    nanmask = np.isnan(wse_diff)
+                    wse_diff[nanmask] = 0
+                    #wse_diff = diff[0:N].copy()
+                    msk_clip = np.where(np.abs(wse_diff) / this_wse_u > 2)
+                    wse_diff[msk_clip] = \
+                        wse_diff[msk_clip] / np.abs(wse_diff[msk_clip]) * \
+                            this_wse_u[msk_clip]
+                    this_wse_anom = this_wse_anom - wse_diff
+                    '''
+                    #wse_hat_anom = signal_hat[0:N] - wse_along_stats.reference
+                    #wse_diff = this_wse_anom - wse_hat_anom
+                    # move toward Bayes solution but not all the way
+                    # so it is like a gradient search for the best h/w slope
+                    #this_wse_anom = this_wse_anom - 0.2 * wse_diff
+                    #breakpoint()
+                """
+            #breakpoint()
+            plotem = True
+            if plotem:
+                plt.figure()
+                plt.plot(
+                    signal_b[N:] - width_along_stats.reference,
+                    signal_b[0:N] - wse_along_stats.reference,
+                    'o', label='bayes')
+                plt.plot(
+                    signal_hat[N:] - width_along_stats.reference,
+                    signal_hat[0:N] - wse_along_stats.reference,
+                    'x', label='current est')
+                plt.plot(
+                    signal_hat1[N:] - width_along_stats.reference,
+                    signal_hat1[0:N] - wse_along_stats.reference,
+                    'x', label='next est')
+                plt.plot(
+                    meas[N:] - width_along_stats.reference,
+                    meas[0:N] - wse_along_stats.reference,
+                    'o', label='meas')
+                plt.legend()
+                plt.show()
             Signal_hat.append(signal_hat)
             Signal_hat_u.append(np.diag(post_cov))
             Post_cov.append(post_cov)
@@ -708,6 +1006,10 @@ class HeightWidthModel(Product):
             holding stretch_average estimates (over all nodes) of wse
             and width derived from 2D multitemporal data
             """)}],
+        ['width_err',{'dtype':'float', 'value':-1}],
+        ['wse_err',{'dtype':'float', 'value':-1}],
+        ['count',{'dtype':'int', 'value':0}],
+
         ])
     DIMENSIONS = odict([['num_hw_params',0],])
     VARIABLES = odict([
@@ -725,6 +1027,7 @@ class HeightWidthModel(Product):
             width_stretch_avg,
             width_along_stats=None,
             wse_anom=True,
+            width_anom=True,
             sigma_n=50):
         height_width = cls()
         if width_along_stats is None:
@@ -732,12 +1035,19 @@ class HeightWidthModel(Product):
         else:
             ptile_list = width_along_stats.percentile_list
         # get percntiles of measured reach data
-        Pm = np.nanpercentile(width_stretch_avg.mean, ptile_list)
+        #Pm = np.nanpercentile(width_stretch_avg.mean, ptile_list)
         wse = wse_stretch_avg.mean
+        width = width_stretch_avg.mean
         if wse_anom:
-            wse = wse - wse_stretch_avg.mean_reference
+            wse = wse - wse_stretch_avg.mean_reference 
+        if width_anom:
+            width = width - width_stretch_avg.mean_reference
+        # check that wse and width are all valid over the same places
+        good_msk = np.logical_and(np.isfinite(wse), np.isfinite(width))
+        wse = wse[good_msk]
+        width = width[good_msk]
         Ph = np.nanpercentile(wse, ptile_list)
-
+        Pm = np.nanpercentile(width, ptile_list)
         if width_along_stats is None:
             # just use the measuered stats for width
             Pl_hat = Pm
@@ -779,9 +1089,20 @@ class HeightWidthModel(Product):
         # ignore nosie on height for now (TODO: handle it)
         height_width.width_coords = Pl_hat
         height_width.wse_coords = Ph
+        # compute the residual error from model fit
+        w_hat = height_width.sample(wse, x_key='wse')
+        h_hat = height_width.sample(width, x_key='width')
+        dw = w_hat - width
+        dh = h_hat - wse
+        # use RMSE from fit curve for errors
+        height_width.width_err = np.sqrt(np.nanmean(dw**2))
+        height_width.wse_err = np.sqrt(np.nanmean(dh**2))
+        height_width.count = np.sum(good_msk)
+        # TODO: bias adjust so mean(dw)=0, mean(dh)=0, and RMSE=STD etc
+        #breakpoint()
         return height_width
 
-    def sample(self, x, x_key='width',kind='linear'):
+    def sample(self, x_in, x_key='width',kind='linear'):
         """
         x: sample location(s) of the 'signal_key' dimension
         returns: the sampled value(s) of other dimension
@@ -791,6 +1112,9 @@ class HeightWidthModel(Product):
         y_key = 'wse'
         if x_key=='wse':
             y_key='width'
+        x = x_in.copy()
+        if isinstance(x_in, np.ma.MaskedArray):
+            x = x.filled(np.nan)
         intrp = scipy.interpolate.interp1d(
             self[x_key+'_coords'],
             self[y_key+'_coords'],
@@ -798,5 +1122,19 @@ class HeightWidthModel(Product):
             bounds_error=False,
             fill_value="extrapolate"
             )
+        y = intrp(x)
+        if isinstance(x_in, np.ma.MaskedArray):
+            mask = ~np.isfinite(y)
+            y = np.ma.masked_array(y, mask=mask)
         return intrp(x)
+
+    def sample_deriv(self, x, x_key='width', kind='linear', delta=0.1):
+        """
+        estimate the derivative with finite differences
+        """
+        y_plus = self.sample(x + delta, x_key, kind)
+        y_minus = self.sample(x - delta, x_key, kind)
+        return (y_plus -y_minus) / (2 * delta)
+
+
 
