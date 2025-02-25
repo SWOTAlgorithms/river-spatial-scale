@@ -104,7 +104,10 @@ class StretchStack(Product):
             width_reference=None,
             x_key='dist_out', # or 'time_id'
             outdir=None,
-            show=False):
+            show=False,
+            title_tag=None):
+        if title_tag is None:
+            title_tag = 'stretch stack data'
         if wse_reference is not None:
             # plot the wse and wse_anom together
             rivscale.plot.plot_stretch_stack(
@@ -113,7 +116,8 @@ class StretchStack(Product):
                 y_keys=['wse','wse'],
                 y_reference=[wse_reference, wse_reference],
                 y_anom=[False, True],
-                outdir=outdir)
+                outdir=outdir,
+                title_tag=title_tag)
         if width_reference is not None:
             # plot the width and width_anom together
             rivscale.plot.plot_stretch_stack(
@@ -122,7 +126,8 @@ class StretchStack(Product):
                 y_keys=['width','width'],
                 y_reference=[width_reference, width_reference],
                 y_anom=[False, True],
-                outdir=outdir)
+                outdir=outdir,
+                title_tag=title_tag)
         if (wse_reference is None) and (width_reference is None):
             # plot the height and width together
             rivscale.plot.plot_stretch_stack(
@@ -131,7 +136,8 @@ class StretchStack(Product):
                 y_keys=['wse','width'],
                 y_reference=[None, None],
                 y_anom=[False, False],
-                outdir=outdir) 
+                outdir=outdir,
+                title_tag=title_tag)
         """
         rivscale.plot.plot_stretch_stack(
             self,
@@ -535,6 +541,9 @@ class BayesData(Product):
         ])
     DIMENSIONS = DIMENSIONS_ALL
     VARIABLES = odict([
+        ['reaches', odict([['dimensions', odict([['num_reaches', 0]])]])],
+        ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['signal', odict([['dimensions', DIMENSIONS_2D]])],
         ['signal_u', odict([['dimensions', DIMENSIONS_2D]])],
         ['signal_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
@@ -549,10 +558,48 @@ class BayesData(Product):
         #['wse_width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
     ])
 
-    """
-    def plot(self,): 
-        # plot the wse and wse_anom together
-    """
+    def plot(
+            self,
+            x_key='dist_out', # or 'time_id'
+            outdir=None,
+            show=False):
+        title_tag = 'Bayes'
+        # create reference object
+        wse_reference = AlongStretchStats()
+        width_reference = AlongStretchStats()
+        # cast to a stretch_stack object and use its plotter
+        stretch_stack = StretchStack()
+        stretch_stack.stretch_name = self.stretch_name
+        if 'joint' not in self.signal_key:
+            stretch_stack.dist_out = self.dist_out
+        stretch_stack.time_id = self.time_id
+        if self.signal_key == 'wse':
+            title_tag = title_tag + ' wse'
+            stretch_stack.wse = self.signal
+            stretch_stack.wse_u = self.signal_u
+            wse_reference.reference = self.signal_mean
+        if self.signal_key == 'width':
+            title_tag = title_tag + ' width'
+            stretch_stack.width = self.signal
+            stretch_stack.width_u = self.signal_u
+            width_reference.reference = self.signal_mean
+        if self.signal_key == 'joint_wse_width':
+            title_tag = title_tag + ' joint wse width'
+            wse_b, width_b, post_cov_b = self.unpack_joint()
+            N = len(wse_b.signal_mean)
+            stretch_stack.dist_out = self.dist_out[0:N]
+            stretch_stack.wse = wse_b.signal
+            stretch_stack.wse_u = wse_b.signal_u
+            stretch_stack.width = width_b.signal
+            stretch_stack.width_u = width_b.signal_u
+            # unpack reference
+            wse_reference.reference = wse_b.signal_mean
+            width_reference.reference = width_b.signal_mean
+        #breakpoint()
+        stretch_stack.plot(
+            wse_reference,
+            width_reference,
+            title_tag=title_tag)
 
     @classmethod
     def simple(
@@ -564,6 +611,9 @@ class BayesData(Product):
             prior_unc_alpha=None):
         bayes = cls()
         bayes.stretch_name = stretch_stack.stretch_name
+        bayes.reaches = stretch_stack.reaches
+        bayes.dist_out = stretch_stack.dist_out
+        bayes.time_id = stretch_stack.time_id
         bayes.signal_key = signal_key
         bayes.signal_mean = stats.reference.copy()
         time_key = 'time_id'
@@ -599,12 +649,27 @@ class BayesData(Product):
         bayes = cls()
         bayes.signal_key = 'joint_wse_width'
         bayes.stretch_name = stretch_stack.stretch_name
-        # get the mean and cov of the stacked wse and width
         N = len(wse_along_stats.reference)
+        bayes.reaches = stretch_stack.reaches
+        bayes.dist_out = np.concatenate([
+            stretch_stack.dist_out,
+            stretch_stack.dist_out])
+        bayes.time_id = stretch_stack.time_id
+        # get the mean and cov of the stacked wse and width
+        #N = len(wse_along_stats.reference)
         # create the stacked mean
         mn = np.concatenate([
             wse_along_stats.reference, width_along_stats.reference
             ])
+        wse_cov = rivscale.reconstruct.exponential_cov(
+            stretch_stack['dist_out'],
+            char_length_tau=wse_along_stats.char_length_tau,
+            prior_unc_alpha=wse_along_stats.prior_unc_alpha)
+        width_cov = rivscale.reconstruct.exponential_cov(
+            stretch_stack['dist_out'],
+            char_length_tau=width_along_stats.char_length_tau,
+            prior_unc_alpha=width_along_stats.prior_unc_alpha)
+        bayes.signal_mean = mn
         nodes = np.arange(2*len(stretch_stack['node_id']), dtype=int)
         Signal_hat = []
         Signal_hat_u = []
@@ -619,6 +684,7 @@ class BayesData(Product):
             meas_u = np.concatenate([
                 stretch_stack['wse_u'][:,j], stretch_stack['width_u'][:,j]
                 ])
+            """
             wse_cov = rivscale.reconstruct.exponential_cov(
                 stretch_stack['dist_out'],
                 char_length_tau=wse_along_stats.char_length_tau,
@@ -627,6 +693,7 @@ class BayesData(Product):
                 stretch_stack['dist_out'],
                 char_length_tau=width_along_stats.char_length_tau,
                 prior_unc_alpha=width_along_stats.prior_unc_alpha)
+            """
             # constrain the height and width std magnitudes using the h/w-model
             # init with prior mean
             signal_hat = np.concatenate([
@@ -642,12 +709,14 @@ class BayesData(Product):
                 ])
             signal_b, post_cov = rivscale.reconstruct.reconstruct_one_time_obs(
                 meas, meas_u, Ry, mn, nodes)
+            
             #grad, post_cov = rivscale.reconstruct.MAP_gradient_one_time_obs(
             #    meas, meas_u, Ry, mn, nodes, signal_hat)
             #
             # init the nonlinear search with the bayes estimate
             # that does not impose the hw relation?
             signal_hat = signal_b.copy()
+            '''
             # replace estimate with measurement when available
             #signal_hat[np.isfinite(meas)] = meas[np.isfinite(meas)]
             #this_wse_anom = np.array(
@@ -907,30 +976,7 @@ class BayesData(Product):
                 breakpoint()
                 # do the update
                 signal_hat = signal_hat2
-                """
-                #breakpoint()
-                #if k < maxiter:
-                    # dont let move more than a reasonable amount each iteration
-                    '''
-                    wse_diff = meas[0:N] - (
-                        signal_hat[0:N] - wse_along_stats.reference)
-                    nanmask = np.isnan(wse_diff)
-                    wse_diff[nanmask] = 0
-                    #wse_diff = diff[0:N].copy()
-                    msk_clip = np.where(np.abs(wse_diff) / this_wse_u > 2)
-                    wse_diff[msk_clip] = \
-                        wse_diff[msk_clip] / np.abs(wse_diff[msk_clip]) * \
-                            this_wse_u[msk_clip]
-                    this_wse_anom = this_wse_anom - wse_diff
-                    '''
-                    #wse_hat_anom = signal_hat[0:N] - wse_along_stats.reference
-                    #wse_diff = this_wse_anom - wse_hat_anom
-                    # move toward Bayes solution but not all the way
-                    # so it is like a gradient search for the best h/w slope
-                    #this_wse_anom = this_wse_anom - 0.2 * wse_diff
-                    #breakpoint()
-                """
-            #breakpoint()
+            
             plotem = True
             if plotem:
                 plt.figure()
@@ -952,9 +998,11 @@ class BayesData(Product):
                     'o', label='meas')
                 plt.legend()
                 plt.show()
+            '''
             Signal_hat.append(signal_hat)
             Signal_hat_u.append(np.diag(post_cov))
             Post_cov.append(post_cov)
+        #breakpoint()
         bayes.signal = np.array(Signal_hat).T
         bayes.signal_u = np.array(Signal_hat_u).T
         bayes.signal_post_cov = np.moveaxis(
@@ -969,6 +1017,8 @@ class BayesData(Product):
         bayes_width.signal_key = 'width'
         bayes_width.stretch_name = self.stretch_name
         N = int(len(self.signal[:,0])/2)
+        bayes_wse.signal_mean = self.signal_mean[0:N]
+        bayes_width.signal_mean = self.signal_mean[N:]
         wse_hats = []
         wse_hats_u = []
         width_hats = []
@@ -1139,21 +1189,31 @@ class HeightWidthModel(Product):
 
     def plot(
             self,
-            wse_stretch_avg=None,
-            width_stretch_avg=None,
+            wse_data=None,
+            width_data=None,
             outdir=None,
-            show=False):
+            show=False,
+            title_tag=None):
         plt.figure()
-        if (wse_stretch_avg is not None) and (
-                width_stretch_avg is not None):
-            d_width = width_stretch_avg.mean - width_stretch_avg.mean_reference
-            d_wse = wse_stretch_avg.mean - wse_stretch_avg.mean_reference
-            plt.plot(d_width, d_wse, 'o', label='stretch average')
-        plt.plot(self.width_coords, self.wse_coords, label='model fit')
+        if (wse_data is not None) and (
+                width_data is not None):
+            if isinstance(wse_data, np.ndarray):
+                d_width = width_data.copy()
+                d_wse = wse_data.copy()
+                label=None
+            else:
+                # assume it is a stretch average
+                label='stretch average'
+                d_width = width_data.mean - width_data.mean_reference
+                d_wse = wse_data.mean - wse_data.mean_reference
+            plt.plot(d_width, d_wse, 'o', label=label)
+        plt.plot(self.width_coords, self.wse_coords,'-k', linewidth=2, label='model fit')
         plt.xlabel('$\Delta$ width')
         plt.ylabel('$\Delta$ wse')
         plt.legend()
         plt.grid()
+        if title_tag is not None:
+            plt.title(title_tag)
         # TODO: write to file if commanded
         #if outdir is not None:
         if show:

@@ -79,8 +79,11 @@ def process_bayes_reconstruction(
         width_stats,
         height_width,
         rho_wse_width=rho_wse_width)
+    return joint_bayes
+
     bayes_wse, bayes_width, bayes_wse_width_post_cov = joint_bayes.unpack_joint()
-    #stretch_stack.plot()
+    joint_bayes.plot()
+    stretch_stack.plot(wse_stats, width_stats)
     wse0 = stretch_stack['wse']
     width0 = stretch_stack['width']
     #bayes_wse.plot()
@@ -95,6 +98,7 @@ def process_bayes_reconstruction(
     #
     ref2 = np.broadcast_to(wse_stats.reference, np.shape(bayes_width.signal.T)).T
     ref2_w = np.broadcast_to(width_stats.reference, np.shape(bayes_width.signal.T)).T
+    """
     # input
     plt.figure()
     plt.subplot(2,1,1)
@@ -123,16 +127,25 @@ def process_bayes_reconstruction(
     #plt.figure()
     #plt.plot(dist_out, wse)
     #plt.plot(dist_out, width)
+    
     plt.figure()
     plt.subplot(2,1,1)
     plt.plot(dist_out, wse_u)
     plt.subplot(2,1,2)
     plt.plot(dist_out, width_u)
     plt.grid()
-    #
+    
     plt.figure()
+    plt.plot(width0 - ref2_w, wse0 - ref2,'o')
+    #
+    #plt.figure()
     plt.plot(width - ref2_w, wse - ref2,'o')
     #plt.plot(bayes_width.signal, bayes_wse.signal - ref2,'o')
+    """
+    height_width.plot(wse0 - ref2, width0 - ref2_w)
+    plt.title('nodes')
+    height_width.plot(wse - ref2, width - ref2_w)
+    plt.title('Bayes nodes')
     plt.show()
     breakpoint()
 

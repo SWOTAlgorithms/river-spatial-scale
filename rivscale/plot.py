@@ -256,8 +256,11 @@ def plot_stretch_stack(
         outdir=None,
         figsize=(10,5),
         show = False,
-        marker='-'):
+        marker='-',
+        title_tag=None):
     ttl = stretch_stack.stretch_name
+    if title_tag is not None:
+        ttl =ttl + ' ' + title_tag
     ylabel = ''
     x = stretch_stack[x_key]
     y = stretch_stack[y_keys[0]]
@@ -273,13 +276,13 @@ def plot_stretch_stack(
         ref = y_reference[0].reference
         ref_2D = np.broadcast_to(ref, np.shape(y.T)).T
         if y_anom[0]:
-            y_labels[0] = y_keys[0]+'_anom'
+            y_labels[0] = '$\Delta $'+ y_keys[0]
     if len(y_reference)==2:
         if y_reference[1] is not None:
             ref2 = y_reference[1].reference
             ref2_2D = np.broadcast_to(ref2, np.shape(y.T)).T
         if y_anom[1]:
-            y_labels[1] = y_keys[1]+'_anom'
+            y_labels[1] = '$\Delta $'+y_keys[1]
     if y_anom[0]:
         y = y - ref_2D
     if len(y_anom)==2:
@@ -367,7 +370,7 @@ def plot_stretch_profiles(
         #ref2 = np.broadcast_to(ref, np.shape(y.T)).T
         y = y - ref2
         y2 = y2 - ref2
-        anom_str = ' anomaly'
+        anom_str = '$\Delta'#' anomaly'
     if x_key=='time_id':
         # convert to datetime
         x = swot_time_to_field_time(x*60*60)
@@ -386,7 +389,7 @@ def plot_stretch_profiles(
     plt.plot(x, y, 'o', markersize=1)
     if x_key !='time_id':
         plt.plot(x, ref, '-k',linewidth=2)
-    ylabel = '{}{}'.format(bayes_tag+y_key, anom_str)
+    ylabel = '{} {}'.format(anom_str, bayes_tag+y_key)
     plt.ylabel(ylabel)
     plt.grid()
     plt.xlim(xlim)
@@ -405,7 +408,7 @@ def plot_stretch_profiles(
     elif withBayes:
         plt.subplot(2,1,2)
         plt.plot(x, y2,'o')
-        plt.ylabel('{}{}'.format('bayes_'+y_key, anom_str))
+        plt.ylabel('{} {}'.format(anom_str, 'bayes_'+y_key))
         plt.xlabel(x_key)
         plt.suptitle(title)
         plt.grid()

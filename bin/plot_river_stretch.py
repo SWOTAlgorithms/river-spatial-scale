@@ -73,21 +73,67 @@ def main():
         if 'height_width' in fle:
             dic['height_width'] = \
                     rivscale.products.HeightWidthModel.from_ncfile(f)
+        if 'bayes' in fle:
+            dic['bayes'] = \
+                    rivscale.products.BayesData.from_ncfile(f)
     for key in dic.keys():
         # plot each individual plot
         if key=='height_width':
-            wse_stretch_avg = None
-            width_stretch_avg = None
-            # plot also the strectch averages if they exist
+            something_plotted=False
+            # plot the stretch averages if they exist
             if ('wse_stretch_average' in dic.keys()) and (
                     'width_stretch_average' in dic.keys()):
-                wse_stretch_avg = dic['wse_stretch_average']
-                width_stretch_avg = dic['width_stretch_average']
-            dic[key].plot(
-                wse_stretch_avg=wse_stretch_avg,
-                width_stretch_avg=width_stretch_avg,
-                outdir=args.outdir,
-                show=False)
+                wse_data = dic['wse_stretch_average']
+                width_data = dic['width_stretch_average']
+                dic[key].plot(
+                    wse_data=wse_data,
+                    width_data=width_data,
+                    outdir=args.outdir,
+                    show=False,
+                    title_tag='stretch average data')
+                something_plotted=True
+            if (('stretch_stack' in dic.keys()) and (
+                    'wse_stats' in dic.keys()) and (
+                        'width_stats')):
+                # plot the noisy node data
+                stretch_stack = dic['stretch_stack']
+                wse_stats = dic['wse_stats']
+                width_stats = dic['width_stats']
+                wse = stretch_stack['wse']
+                width = stretch_stack['width']
+                ref2 = np.broadcast_to(
+                    wse_stats.reference, np.shape(wse.T)).T
+                ref2_w = np.broadcast_to(
+                    width_stats.reference, np.shape(width.T)).T
+                dic[key].plot(
+                    wse_data=wse - ref2,
+                    width_data=width - ref2_w,
+                    outdir=args.outdir,
+                    show=False, 
+                    title_tag='node measurements')
+                something_plotted=True
+            if 'bayes' in dic.keys():
+                # plot bayes node data
+                bayes = dic['bayes']
+                wse_bayes, width_bayes, postcov = bayes.unpack_joint()
+                wse = wse_bayes['signal']
+                width = width_bayes['signal']
+                ref2 = np.broadcast_to(
+                    wse_bayes.signal_mean, np.shape(wse.T)).T
+                ref2_w = np.broadcast_to(
+                    width_bayes.signal_mean, np.shape(width.T)).T
+                dic[key].plot(
+                    wse_data=wse - ref2,
+                    width_data=width - ref2_w,
+                    outdir=args.outdir,
+                    show=False,
+                    title_tag='Bayes node estimates')
+                something_plotted=True
+            if not something_plotted:
+                # plot just the h/w fit
+                dic[key].plot(
+                    outdir=args.outdir,
+                    show=False)
         else:
             # single object plot
             dic[key].plot(outdir=args.outdir, show=False)
