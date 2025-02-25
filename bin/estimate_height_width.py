@@ -234,6 +234,10 @@ def main():
             wse_stretch_avg,
             width_stretch_avg,
             width_stats)
+        #breakpoint()
+        #height_width.plot(wse_stretch_avg, width_stretch_avg)
+        #plt.show()
+
         if height_width is not None:
             height_width.to_ncfile(outfile_height_width)
         this_stop = time.time()

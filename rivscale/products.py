@@ -174,11 +174,12 @@ class AlongStretchStats(Product):
     ])
 
 
-    def plot(self, outdir=None):
+    def plot(self, outdir=None, show=False):
         rivscale.plot.plot_stretch_stats(
             self,
             x_key='dist_out',
-            outdir=outdir)
+            outdir=outdir,
+            show=show)
 
     @classmethod
     def from_StretchStack(
@@ -1136,5 +1137,25 @@ class HeightWidthModel(Product):
         y_minus = self.sample(x - delta, x_key, kind)
         return (y_plus -y_minus) / (2 * delta)
 
-
+    def plot(
+            self,
+            wse_stretch_avg=None,
+            width_stretch_avg=None,
+            outdir=None,
+            show=False):
+        plt.figure()
+        if (wse_stretch_avg is not None) and (
+                width_stretch_avg is not None):
+            d_width = width_stretch_avg.mean - width_stretch_avg.mean_reference
+            d_wse = wse_stretch_avg.mean - wse_stretch_avg.mean_reference
+            plt.plot(d_width, d_wse, 'o', label='stretch average')
+        plt.plot(self.width_coords, self.wse_coords, label='model fit')
+        plt.xlabel('$\Delta$ width')
+        plt.ylabel('$\Delta$ wse')
+        plt.legend()
+        plt.grid()
+        # TODO: write to file if commanded
+        #if outdir is not None:
+        if show:
+            plt.show()
 
