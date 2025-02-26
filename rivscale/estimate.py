@@ -46,6 +46,41 @@ def smooth_widths(widths_in, size=11):
     width_filt[w_mask==0] = np.nan
     return width_filt
 
+def process_along_stats(stretch_stack_in, crop=True):
+    """
+    This function processes the original stack of multitemporal 
+    SWOT data node-level measurements over a multi-reach streach
+    to estimate the along-river statistics for WSE and width
+    """
+    stretch_stack = stretch_stack_in.copy()
+    # populate witdh_u
+    node_len = stretch_stack['area_total'] / stretch_stack['width']
+    stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
+    # make measurement uncert at least as much as signal uncert we assume
+    stretch_stack['width_u'] = stretch_stack['width_u'] + 100#2*prior_unc_alpha_width
+    # first smooth widths to mitigate wedging artifacts
+    #stretch_data['width'] = smooth_widths(stretch_data, size=5)
+    # TODO: quantify amount of flagged out data?
+    # TODO: filter on dark frac here too?
+    # filter out bad data (call it twice to get them all)
+    stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
+    stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
+    # drop times/cycles with too little good quality data
+    stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack)
+    if np.shape(stretch_stack.width)[1]==0:
+        print('  No SWOT data left after multitemporal filtering')
+        return None
+    # compute multitemporal statistics
+    wse_stats = rivscale.products.AlongStretchStats.from_StretchStack(
+        stretch_stack, signal_key='wse')
+    width_stats = rivscale.products.AlongStretchStats.from_StretchStack(
+        stretch_stack, signal_key='width', kernel_size=11)
+    if crop:
+        # crop to reach
+        wse_stats = wse_stats.crop_to_reach()
+        width_stats = width_stats.crop_to_reach()
+    return wse_stats, width_stats
+
 def process_stretch_average(
         stretch_stack,
         wse_stats,
