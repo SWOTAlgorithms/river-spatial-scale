@@ -131,6 +131,10 @@ def main():
                 wse_stats.to_ncfile(outfile_wse_stats)
             if width_stats is not None:
                 width_stats.to_ncfile(outfile_width_stats)
+            if (wse_stats is None):
+                print(" wse_stats not generated, skipping rest of processing")
+                # TODO: should we check width too? but only of not using Pekel?
+                continue
         ####
         # now process stretch_average
         ####

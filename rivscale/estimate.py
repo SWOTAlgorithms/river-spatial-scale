@@ -69,7 +69,7 @@ def process_along_stats(stretch_stack_in, crop=True):
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack)
     if np.shape(stretch_stack.width)[1]==0:
         print('  No SWOT data left after multitemporal filtering')
-        return None
+        return None, None
     # compute multitemporal statistics
     wse_stats = rivscale.products.AlongStretchStats.from_StretchStack(
         stretch_stack, signal_key='wse')

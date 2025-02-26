@@ -21,6 +21,7 @@ import rivscale.estimate
 import rivscale.plot
 import matplotlib.pyplot as plt
 import scipy.interpolate
+import pandas as pd
 
 def textjoin(text):
     """Dedent join and strip text"""
@@ -184,7 +185,7 @@ class StretchStack(Product):
             dist_out = np.broadcast_to(
                 self.dist_out,
                 np.shape(arr0.T)).T
-            plt.figure()
+            plt.figure(figsize=(10,5))
             plt.plot(dist_out, arr0)
             plt.plot(
                 dist_out[outlier_mask],
@@ -201,6 +202,9 @@ class StretchStack(Product):
             plt.plot(
                 self.dist_out,
                 ref - IQR_scale*IQR_g,'g', linewidth=2)
+            plt.grid()
+            plt.xlabel('dist_out')
+            plt.ylabel(key)
 
 class AlongStretchStats(Product):
     ATTRIBUTES = odict([
@@ -322,6 +326,8 @@ class AlongStretchStats(Product):
         in_nodes = in_stats.node_id
         in_reaches = np.array([int(str(n)[0:10]+str(n)[-1]) for n in in_nodes])
         in_dist_out = in_stats.dist_out
+        df_tot = pd.concat(df_list)
+        ptile_list= np.sort(100-np.unique(df_tot.cycle))
         for k,reach in enumerate(reaches):
             this_df = df_list[k]
             #this_d = df_to_dict(this_df)
@@ -329,6 +335,21 @@ class AlongStretchStats(Product):
             this_node_id = in_nodes[this_msk]
             this_dist_out = in_dist_out[this_msk]
             this_d = df_to_dict(this_df, this_node_id, this_dist_out)
+            # handle missing percentiles (because no water mask?)
+            #if len(this_d['percentile_list']) < len(ptile_list):
+            # zero fill the missing one(s)?
+            ptiles = []
+            for ptile in ptile_list:
+                if ptile in this_d['percentile_list']:
+                    #breakpoint()
+                    ind = np.where(this_d['percentile_list']==ptile)[0][0]
+                    ptiles.append(this_d['percentiles'][ind])
+                else:
+                    #breakpoint()
+                    ptiles.append(np.zeros_like(this_dist_out))
+            #breakpoint()
+            this_d['percentiles'] = np.array(ptiles)
+            this_d['percentile_list'] = np.array(ptile_list)
             if k ==0:
                 d['node_id'] = this_node_id
                 d['dist_out'] = this_dist_out
@@ -338,6 +359,7 @@ class AlongStretchStats(Product):
             else:
                 d['node_id'] = np.append(d['node_id'], this_node_id)
                 d['dist_out'] = np.append(d['dist_out'], this_dist_out)
+                #breakpoint()
                 d['percentiles'] = np.append(
                     d['percentiles'],
                     np.array(this_d['percentiles']), axis=1)
