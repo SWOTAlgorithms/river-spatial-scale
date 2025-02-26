@@ -47,8 +47,10 @@ def get_pekel_dfs(reaches, pekel_dir):
     df_list = []
     for r in reaches:
         glob_str = os.path.join(pekel_dir,'*','Multitemporal_Node','{}_*.csv'.format(r))
-        this_fle = glob.glob(glob_str)[0]
-        df_list.append(pd.read_csv(this_fle))
+        
+        this_fle = glob.glob(glob_str)
+        if len(this_fle)>0:
+            df_list.append(pd.read_csv(this_fle[0]))
     return df_list
     
 
@@ -87,7 +89,7 @@ def main():
         os.makedirs(outdir)
     # go through each stretch and process it
     N = len(df_stretches.keys())
-    stretch_list = []
+    #stretch_list = []
     for i,key in enumerate(df_stretches.keys()):
         this_start = time.time()
         stretch_reaches = np.array(
@@ -95,7 +97,9 @@ def main():
         print("processing {} of {}, stretch: {}".format(
             i, N, key), ", Reaches:", stretch_reaches)
         # check if already run
-        infile_width_stats = os.path.join(outdir, '{}_width_stats.nc'.format(key))
+        #infile_width_stats = os.path.join(outdir, '{}_width_stats.nc'.format(key))
+        infile_width_stats = os.path.join(
+                outdir, '{}_stretch_stack.nc'.format(key))
         outfile_width_stats = os.path.join(outdir, '{}_pekel_stats.nc'.format(key))
         if not(os.path.exists(infile_width_stats)):
             print("  The input widh_stats file has not been created")
@@ -106,7 +110,11 @@ def main():
             continue
         # read the stretch data
         df_list = get_pekel_dfs(stretch_reaches, pekeldir)
-        input_width_stats = rivscale.products.AlongStretchStats.from_ncfile(infile_width_stats)
+        if len(df_list)!=len(stretch_reaches):
+            print( "cannot create this stretch {}, no Pekel data".format(key))
+            continue
+        input_width_stats = rivscale.products.AlongStretchStats.from_ncfile(
+            infile_width_stats)
         width_stats = rivscale.products.AlongStretchStats.from_pekel_df(
             df_list, stretch_reaches, key, input_width_stats)
 

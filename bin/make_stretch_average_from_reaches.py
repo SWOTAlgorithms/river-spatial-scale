@@ -187,8 +187,11 @@ def main():
         width_reach_avg = rivscale.products.StretchAverageStats.from_reach_df(
             swot_reach_df, key, 'width')
         # also create the height_width object from the reaches
-        height_width = rivscale.products.HeightWidthModel.from_objects(
-            wse_reach_avg, width_reach_avg)
+        height_width = None
+        if (len(wse_reach_avg.percentiles)>0) and \
+                (len(width_reach_avg.percentiles)>0):
+            height_width = rivscale.products.HeightWidthModel.from_objects(
+                wse_reach_avg, width_reach_avg)
         #
         """
         plt.figure()

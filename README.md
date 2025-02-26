@@ -21,17 +21,17 @@ Repo for code to estimate river spatial scale parameters (e.g., along-river wse 
 # how to run
 The process runs in a few steps based on a config file (an example is in te config subdir).  The first script that generates the StretchStack object of the SWOT SP node data is (you can stage the RiverSP data locally or have it be ingested using hte hydrochron script):
 
-`$ make\_stretch\_stack.py <config.cfg>'
+`$ make\_stretch\_stack.py <config.cfg>`
 
 This creates  files called
 
-`<reach\_id>\_stretch\_stack.nc'
+`<reach\_id>\_stretch\_stack.nc`
 
 and the stretch is defined as the reach with the up and downstream reaches attached.
 
 The stack of reach data can be optioanlly created as well by calling:
 
-`$ make\_stretch\_average\_from\_reaches.py <config.cfg>'
+`$ make\_stretch\_average\_from\_reaches.py <config.cfg>`
 
 
 The pekel-derived along-river width statistics can also be created from special 'truth' river processing outputs of the Pekel occurrence maps thresholded at different water occurrence rates.
@@ -40,7 +40,7 @@ The pekel-derived along-river width statistics can also be created from special 
 
 Now all the other steps can be run from the stretch stack (and optionally the pekel widht stats):
 
-`$ process\_stretch\_stack.py <config.cfg>'
+`$ process\_stretch\_stack.py <config.cfg>`
 
 This outputs several files in the output directory.
 
