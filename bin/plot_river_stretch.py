@@ -70,8 +70,18 @@ def main():
         if 'width_stretch_average' in fle:
             dic['width_stretch_average'] = \
                     rivscale.products.StretchAverageStats.from_ncfile(f)
+        if 'wse_reach_average' in fle:
+            dic['wse_reach_average'] = \
+                    rivscale.products.StretchAverageStats.from_ncfile(f)
+        if 'width_reach_average' in fle:
+            dic['width_reach_average'] = \
+                    rivscale.products.StretchAverageStats.from_ncfile(f)
         if 'height_width' in fle:
-            dic['height_width'] = \
+            if 'reach_average' in fle:
+                dic['height_width_reach_average'] = \
+                    rivscale.products.HeightWidthModel.from_ncfile(f)
+            else:
+                dic['height_width'] = \
                     rivscale.products.HeightWidthModel.from_ncfile(f)
         if 'bayes' in fle:
             dic['bayes'] = \
@@ -122,9 +132,11 @@ def main():
                     wse_bayes.signal_mean, np.shape(wse.T)).T
                 ref2_w = np.broadcast_to(
                     width_bayes.signal_mean, np.shape(width.T)).T
+                d_wse = wse - ref2
+                d_width = width - ref2_w
                 dic[key].plot(
-                    wse_data=wse - ref2,
-                    width_data=width - ref2_w,
+                    wse_data=d_wse,
+                    width_data=d_width,
                     outdir=args.outdir,
                     show=False,
                     title_tag='Bayes node estimates')
@@ -134,9 +146,27 @@ def main():
                 dic[key].plot(
                     outdir=args.outdir,
                     show=False)
+        elif key=='height_width_reach_average':
+            wse_data = None
+            width_data = None
+            title_tag = None
+            if ('wse_reach_average' in dic.keys()) and (
+                    'width_reach_average' in dic.keys()):
+                wse_data = dic['wse_reach_average']
+                width_data = dic['width_reach_average']
+                title_tag='reach average data'
+            dic[key].plot(
+                wse_data=wse_data,
+                width_data=width_data,
+                outdir=args.outdir,
+                show=False,
+                title_tag=title_tag)
+
         else:
             # single object plot
-            dic[key].plot(outdir=args.outdir, show=False)
+            if 'reach' not in key:
+                # dont plot the time series of reach data
+                dic[key].plot(outdir=args.outdir, show=False)
     
     if args.outdir is None:
         plt.show()

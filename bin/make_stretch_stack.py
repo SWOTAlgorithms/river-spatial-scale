@@ -78,10 +78,18 @@ def get_swot_node_data(cfg, stretch_reaches, sword_node_df, dark_thresh=1.0):
         pass_cont = cfg['data']['granule']
         df = None
         for reach in stretch_reaches:#df_stretches.keys():
-            fle_str = os.path.join(cfg['data']['data_path'],
-                '{}/{}/Multitemporal_Node/{}_Node_{}_{}.csv'.format(
-                    orbit, pass_cont, reach, pass_cont, orbit))
-            fles = glob.glob(fle_str)
+            if 'both' in orbit:
+                orbits = ['cal_orbit', 'science_orbit']
+            else:
+                orbits = [orbit,]
+            fles = []
+            for this_orbit in orbits:
+                fle_str = os.path.join(cfg['data']['data_path'],
+                    '{}/{}/Multitemporal_Node/{}_Node_{}_{}.csv'.format(
+                        this_orbit, pass_cont, reach, pass_cont, this_orbit))
+                this_fles = glob.glob(fle_str)
+                fles = fles + this_fles
+
             for fle in fles:
                 print('  ',fle)
                 # TODO: should catch if file doesnt exist or cant read it?

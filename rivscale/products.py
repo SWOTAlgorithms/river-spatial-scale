@@ -232,7 +232,13 @@ class AlongStretchStats(Product):
         return stats
 
     @classmethod
-    def from_pekel_df(cls, df_list, reaches, name, in_stats):
+    def from_pekel_df(
+            cls,
+            df_list,
+            reaches,
+            name,
+            in_stats,
+            kernel_size=11):
         stats = cls()
         stats.stretch_name = name
         stats.reaches = np.array(reaches)
@@ -289,8 +295,13 @@ class AlongStretchStats(Product):
                 stats[key] = d[key]
         # put the 50%ile in as the reference
         msk = stats.percentile_list==50
+        ref = stats.percentiles[:,msk].squeeze()
+        ref_med = scipy.ndimage.median_filter(
+            ref, size=kernel_size, mode='nearest')
+        # median filter the ref profile
+        # TODO: maybe should do mean filter?
         if np.sum(msk)>0:
-            stats.reference = stats.percentiles[:,msk].squeeze()
+            stats.reference = ref_med
         return stats
 
     def crop_to_reach(
@@ -369,8 +380,11 @@ class StretchAverageStats(Product):
         time_id = []
         mean = []
         std = []
+        other = []
+        other_key = 'wse'
         if signal_key=='wse':
             df[df['slope']<-1e5] = np.nan
+            other_key = 'width'
             slope = []
         time_ids = np.unique(np.array(np.floor(df['time']/60/60))).astype(int)
         for time_i in time_ids:
@@ -379,19 +393,25 @@ class StretchAverageStats(Product):
             # TODO handle window over desired reach
             dist_out.append(this_df['dist_out'])
             mean.append(this_df[signal_key])
+            other.append(this_df[other_key])
             std.append(this_df[signal_key+'_u'])
             time_id.append(time_i)
             if signal_key=='wse':
                 slope.append(this_df['slope'])
         #breakpoint()
+        Other = np.array(other).squeeze()
         stats.time_id = np.array(time_id).squeeze()
         stats.dist_out = np.array(dist_out).squeeze()
         stats.mean = np.array(mean).squeeze()
-        stats.std = np.array(std).squeeze() 
+        stats.std = np.array(std).squeeze()
+        # need to make reference use the same samples for  wse and width
+        nan_msk = np.zeros_like(Other) + np.nan
+        nan_msk[np.logical_and(np.isfinite(stats.mean), np.isfinite(Other))] = 1
         # just use the mean of the data as reference
         stats.mean_reference = np.nanmean(
-            mean) * np.ones_like(stats.mean)
+            mean * nan_msk) * np.ones_like(stats.mean)
         if signal_key=='wse':
+            # TODO: should we also use the nanmask for slope reference?
             stats.slope_reference = np.nanmean(
                 slope) * np.ones_like(stats.mean)
         return stats
@@ -1197,13 +1217,14 @@ class HeightWidthModel(Product):
         plt.figure()
         if (wse_data is not None) and (
                 width_data is not None):
+            label = None
             if isinstance(wse_data, np.ndarray):
                 d_width = width_data.copy()
                 d_wse = wse_data.copy()
-                label=None
             else:
                 # assume it is a stretch average
-                label='stretch average'
+                if title_tag is None:
+                    label='stretch average'
                 d_width = width_data.mean - width_data.mean_reference
                 d_wse = wse_data.mean - wse_data.mean_reference
             plt.plot(d_width, d_wse, 'o', label=label)

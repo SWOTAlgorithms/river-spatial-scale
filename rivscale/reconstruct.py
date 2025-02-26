@@ -304,7 +304,7 @@ def reconstruct_one_time_obs(meas, meas_u_in, Ry, mn, nodes):
         # dont call bayes, just append nans
         nan_array = np.ones_like(meas) + np.nan
         unc_array = np.zeros_like(meas_u) + 10**5
-        signal_hats = nan_array
+        signal_hat = nan_array
         post_cov = np.diag(unc_array)
         bayes_u = unc_array.copy()
     else:

@@ -78,10 +78,17 @@ def get_swot_reach_data(cfg, stretch_reaches, dark_thresh=1.0):
         pass_cont = cfg['data']['granule']
         df = None
         for reach in stretch_reaches:#df_stretches.keys():
-            fle_str = os.path.join(cfg['data']['data_path'],
-                '{}/{}/Multitemporal_Reach/{}_Reach_{}_{}.csv'.format(
-                    orbit, pass_cont, reach, pass_cont, orbit))
-            fles = glob.glob(fle_str)
+            if 'both' in orbit:
+                orbits = ['cal_orbit', 'science_orbit']
+            else:
+                orbits = [orbit,]
+            fles = []
+            for this_orbit in orbits:
+                fle_str = os.path.join(cfg['data']['data_path'],
+                    '{}/{}/Multitemporal_Reach/{}_Reach_{}_{}.csv'.format(
+                        this_orbit, pass_cont, reach, pass_cont, this_orbit))
+                this_fles = glob.glob(fle_str)
+                fles = fles + this_fles
             for fle in fles:
                 print('  ',fle)
                 # TODO: should catch if file doesnt exist or cant read it?
@@ -151,9 +158,9 @@ def main():
         print("processing {} of {}, stretch: {}".format(
             i, N, key), ", Reaches:", stretch_reaches)
         # check if already run
-        outfile_wse = os.path.join(outdir, '{}_wse_reach_avg.nc'.format(key))
-        outfile_width = os.path.join(outdir, '{}_width_reach_avg.nc'.format(key))
-        outfile_height_width = os.path.join(outdir, '{}_height_width_reach_avg.nc'.format(key))
+        outfile_wse = os.path.join(outdir, '{}_wse_reach_average.nc'.format(key))
+        outfile_width = os.path.join(outdir, '{}_width_reach_average.nc'.format(key))
+        outfile_height_width = os.path.join(outdir, '{}_height_width_reach_average.nc'.format(key))
 
         # check if output file exists, if it does skip, unless --force set
         if (os.path.exists(outfile_width) and (not args.force)):
@@ -195,9 +202,9 @@ def main():
         if wse_reach_avg is not None:
             wse_reach_avg.to_ncfile(outfile_wse)
         if width_reach_avg is not None:
-            width_reach_avg.to_ncfile(outfile_wse)
+            width_reach_avg.to_ncfile(outfile_width)
         if height_width is not None:
-            height_width.to_ncfile(outfile_wse)
+            height_width.to_ncfile(outfile_height_width)
         this_stop = time.time()
         print('  execution time: {:2.2f} seconds'.format(this_stop - this_start))
 
