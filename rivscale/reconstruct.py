@@ -34,6 +34,52 @@ import geopandas as gpd
 
 import rivscale.data
 
+######## Feb 2025
+
+def process_bayes_reconstruction(
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        height_width,
+        wse_dark_thresh=0.8,
+        width_dark_thresh=0.2,
+        width_outlier_scale=10,
+        rho_wse_width=0.7
+        ):
+    #
+    # populate witdh_u
+    node_len = stretch_stack['area_total'] / stretch_stack['width']
+    stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
+    # make measurement uncert at least as much as signal uncert we assume
+    stretch_stack['width_u'] = stretch_stack['width_u'] + 10 # + 500#2*prior_unc_alpha_width
+    # filter out bad data
+    #stretch_stack = rivscale.filter.filter_width_node_outliers(
+    #    stretch_stack, width_stats, width_outlier_scale, plot=True)
+    plot = False
+    stretch_stack.filter_node_outliers(wse_stats, key='wse', plot=plot)
+    stretch_stack.filter_node_outliers(width_stats, key='width', plot=plot)
+    if plot:
+        plt.show()
+    # filter out high dark_frac nodes
+    stretch_stack.width[
+        stretch_stack.dark_frac>width_dark_thresh] = np.nan
+    stretch_stack.wse[
+        stretch_stack.dark_frac>wse_dark_thresh] = np.nan
+    # drop rows with too  little data
+    #reach_id = None
+    reach_id = 'nope'
+    stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
+        reach_id=reach_id)
+    # now do the reconstruction
+    joint_bayes = rivscale.products.BayesData.joint(
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        height_width,
+        rho_wse_width=rho_wse_width)
+    return joint_bayes
+
+
 def generate_cov_matrix(
         stretch_stack,
         char_length_tau,

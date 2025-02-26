@@ -149,6 +149,59 @@ class StretchStack(Product):
         if show:
             plt.show()
 
+    def filter_node_outliers(
+            self,
+            along_stats,
+            key='wse',# or width etc
+            IQR_scale=5.0,
+            plot=False):
+        # handle data
+        arr0 = self[key]
+        ref = along_stats.reference
+        p = along_stats.percentile_list
+        p25 = along_stats.percentiles[:,p==25].squeeze()
+        p75 = along_stats.percentiles[:,p==75].squeeze()
+        IQR = p75 - p25
+        # first filter global
+        #p25_g = np.median(p25 - ref)
+        #p75_g = np.median(p75 - ref)
+        #IQR_g = (p75_g - p25_g) + np.zeros_like(ref)
+        IQR_g0 = np.nanmean(IQR[IQR>0])
+        IQR_g = IQR_g0 + np.zeros_like(ref)
+        # for some reason Pekel sometimes give negative IQR? so hande it
+        IQR[IQR<0] = IQR_g0
+        arr1 = rivscale.filter.scaled_spread_outlier_rejector(
+            arr0, ref, IQR_g, IQR_scale)
+        # now filter per-node
+        arr = rivscale.filter.scaled_spread_outlier_rejector(
+            arr1, ref, IQR, IQR_scale)
+        self[key] = arr
+        #breakpoint()
+        if plot:
+            outlier_mask = np.logical_and(
+                np.isfinite(arr0),
+                np.isnan(arr))
+            dist_out = np.broadcast_to(
+                self.dist_out,
+                np.shape(arr0.T)).T
+            plt.figure()
+            plt.plot(dist_out, arr0)
+            plt.plot(
+                dist_out[outlier_mask],
+                arr0[outlier_mask],'x')
+            plt.plot(
+                self.dist_out,
+                ref + IQR_scale*IQR,'k', linewidth=2)
+            plt.plot(
+                self.dist_out,
+                ref - IQR_scale*IQR,'k', linewidth=2)
+            plt.plot(
+                self.dist_out,
+                ref + IQR_scale*IQR_g,'g', linewidth=2)
+            plt.plot(
+                self.dist_out,
+                ref - IQR_scale*IQR_g,'g', linewidth=2)
+
 class AlongStretchStats(Product):
     ATTRIBUTES = odict([
         ['description',{'dtype':'str', 'value': textjoin("""
@@ -324,6 +377,7 @@ class AlongStretchStats(Product):
         for key in set(self.variables.keys()) - set(['reaches',]):
             stats[key] = self[key][mask[0]:mask[-1]]
         return stats
+
 
 class StretchAverageStats(Product):
     ATTRIBUTES = odict([

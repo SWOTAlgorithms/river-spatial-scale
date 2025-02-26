@@ -164,9 +164,9 @@ def main():
 
         else:
             # single object plot
-            if 'reach' not in key:
-                # dont plot the time series of reach data
-                dic[key].plot(outdir=args.outdir, show=False)
+            #if 'reach' not in key:
+            #    # dont plot the time series of reach data
+            dic[key].plot(outdir=args.outdir, show=False)
     
     if args.outdir is None:
         plt.show()

@@ -31,6 +31,97 @@ import statsmodels.api
 
 import geopandas as gpd
 
+import rivscale.filter
+
+########### Feb 2025 ######
+def smooth_widths(widths_in, size=11):
+    #widths = stretch_stack['width'].copy()
+    widths = widths_in.copy()
+    w_mask = np.zeros(np.shape(widths))
+    w_mask[np.isfinite(widths)] = 1
+    widths[w_mask==0] = 0
+    w_filt = scipy.ndimage.uniform_filter1d(widths, size, axis=0)
+    w_cnt = scipy.ndimage.uniform_filter1d(w_mask, size, axis=0)
+    width_filt = w_filt / w_cnt
+    width_filt[w_mask==0] = np.nan
+    return width_filt
+
+def process_stretch_average(
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        wse_dark_thresh = 0.8,
+        width_dark_thresh=0.2,
+        width_outlier_scale=1.5,
+        char_length_tau_wse = 100000,
+        prior_unc_alpha_wse = 1.5,
+        char_length_tau_width = 100000,
+        prior_unc_alpha_width = 50, #200,
+        rho_wse_width = 0.7,
+        ):
+    """
+    # do some filtering and massaging of the data
+    # populate witdh_u
+    node_len = stretch_stack['area_total'] / stretch_stack['width']
+    stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
+    # make measurement uncert at least as much as signal uncert we assume
+    stretch_stack['width_u'] = stretch_stack['width_u'] + 100#2*prior_unc_alpha_width
+
+    # TODO: quantify amount of flagged out data?
+    # filter out bad data (call it twice to get them all)
+    stretch_stack = rivscale.filter.filter_bad_stretch_stack(
+        stretch_stack, wse_dark_thresh, width_dark_thresh)
+    stretch_stack = rivscale.filter.filter_bad_stretch_stack(
+        stretch_stack, wse_dark_thresh, width_dark_thresh)
+    # drop times/cycles with too little good quality data
+    stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack)
+    if np.shape(stretch_stack.width)[1]==0:
+        print('  No SWOT data left after multitemporal filtering')
+        return None
+    """
+    #stretch_stack = rivscale.filter.filter_bad_stretch_stack(
+    #    stretch_stack, wse_dark_thresh, width_dark_thresh)
+    # filter width outlier
+    #stretch_stack = rivscale.filter.filter_width_node_outliers(
+    #    stretch_stack, width_stats, width_outlier_scale, plot=True)
+    plot = False
+    stretch_stack.filter_node_outliers(width_stats, key='width', plot=plot)
+    stretch_stack.filter_node_outliers(wse_stats, key='wse', plot=plot)
+    if plot:
+        plt.show()
+    # filter out high dark_frac nodes
+    stretch_stack.width[
+        stretch_stack.dark_frac>width_dark_thresh] = np.nan
+    stretch_stack.wse[
+        stretch_stack.dark_frac>wse_dark_thresh] = np.nan
+    # drop rows with too  little data
+    #reach_id = None
+    reach_id = 'nope'
+    stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
+        reach_id=reach_id)
+    # set up the cov params
+    wse_stats.char_length_tau=char_length_tau_wse
+    wse_stats.prior_unc_alpha=prior_unc_alpha_wse
+    width_stats.char_length_tau=char_length_tau_width
+    width_stats.prior_unc_alpha=prior_unc_alpha_width
+
+    # get stretch average stats
+    wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
+        stretch_stack, signal_key='wse', along_stats=wse_stats,
+        average_method='bayes_weighted',
+        slope_method='bayes',
+        reach_id=reach_id)
+    width_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
+        stretch_stack, signal_key='width', along_stats=width_stats,
+        average_method='bayes_weighted',
+        slope_method='bayes',
+        reach_id=reach_id)
+    # also filter stretch-outliers
+    #width_stretch_avg = rivscale.filter.filter_width_stretch_outliers(
+    #        width_stretch_avg, width_stats, width_outlier_scale)
+    return wse_stretch_avg, width_stretch_avg
+
+
 """
 def generate_cov_matrix(
         stretch_stack,

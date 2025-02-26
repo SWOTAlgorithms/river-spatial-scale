@@ -147,7 +147,8 @@ def plot_stretch_stats(
     x_label = x_key
     if x_key=='time_id':
         # convert to datetime
-        x = swot_time_to_field_time(x*60*60)
+        #breakpoint()
+        x = swot_time_to_field_time(x*60.0*60.0)
         x_label = 'time'
     y_key = stats.signal_key
     y_mean = stats.mean
@@ -160,12 +161,17 @@ def plot_stretch_stats(
         file_tag = 'stretch_avg'
     y_std = stats.std
     y_ptiles = stats.percentiles
-    ptiles = ['{}-%ile'.format(t) for t in stats['percentile_list']]
-    x2D = np.broadcast_to(x, np.shape(y_ptiles.T)).T
+    if len(y_ptiles)>0:
+        # plot the ptiles
+        ptiles = ['{}-%ile'.format(t) for t in stats['percentile_list']]
+        x2D = np.broadcast_to(x, np.shape(y_ptiles.T)).T
+    else:
+        ptiles = []
     #figsize=(10,5)
     plt.figure(figsize=figsize)
     plt.subplot(nplots,1,1)
-    plt.plot(x2D, y_ptiles)
+    if len(y_ptiles)>0:
+        plt.plot(x2D, y_ptiles)
     plt.plot(x, y_ref, 'k', linewidth=2)
     plt.legend(ptiles+['ref',])
     plt.grid()
