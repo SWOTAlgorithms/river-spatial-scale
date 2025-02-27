@@ -149,6 +149,11 @@ class StretchStack(Product):
         """
         if show:
             plt.show()
+            
+    def smooth_widths(self, size=11):
+        self.width = rivscale.estimate.smooth_widths(self.width, size=size)
+        # TODO: maybe should also update wsth_u?
+        # TODO: maybe should take into account dark water
 
     def filter_dark_water(self, key='wse', dark_thresh=0.8):
         """
@@ -366,7 +371,8 @@ class AlongStretchStats(Product):
             reaches,
             name,
             in_stats,
-            kernel_size=11):
+            smooth_size=None,
+            med_kernel_size=11):
         stats = cls()
         stats.stretch_name = name
         stats.reaches = np.array(reaches)
@@ -434,6 +440,12 @@ class AlongStretchStats(Product):
                 d['percentiles'] = np.append(
                     d['percentiles'],
                     np.array(this_d['percentiles']), axis=1)
+        # optionally smooth the percentile width estimates
+        # to reduce the wedging issues
+        if smooth_size is not None:
+            #breakpoint()
+            d['percentiles'] = rivscale.estimate.smooth_widths(
+                d['percentiles'].T, size=smooth_size).T
         for key in d.keys():
             if key == 'percentiles':
                 stats[key] = d[key].T
@@ -443,7 +455,7 @@ class AlongStretchStats(Product):
         msk = stats.percentile_list==50
         ref = stats.percentiles[:,msk].squeeze()
         ref_med = scipy.ndimage.median_filter(
-            ref, size=kernel_size, mode='nearest')
+            ref, size=med_kernel_size, mode='nearest')
         # median filter the ref profile
         # TODO: maybe should do mean filter?
         if np.sum(msk)>0:

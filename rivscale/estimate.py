@@ -49,7 +49,8 @@ def smooth_widths(widths_in, size=11):
 def process_along_stats(
         stretch_stack_in,
         wse_dark_thresh=0.8,
-        width_dark_thresh=0.8,
+        width_dark_thresh=0.3,
+        width_smooth_size=None,
         crop=True):
     """
     This function processes the original stack of multitemporal 
@@ -57,18 +58,6 @@ def process_along_stats(
     to estimate the along-river statistics for WSE and width
     """
     stretch_stack = stretch_stack_in.copy()
-    # populate witdh_u
-    node_len = stretch_stack['area_total'] / stretch_stack['width']
-    stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
-    # make measurement uncert at least as much as signal uncert we assume
-    stretch_stack['width_u'] = stretch_stack['width_u'] + 100#2*prior_unc_alpha_width
-    # first smooth widths to mitigate wedging artifacts
-    #stretch_data['width'] = smooth_widths(stretch_data, size=5)
-    # TODO: quantify amount of flagged out data?
-    # TODO: filter on dark frac here too?
-    # filter out bad data (call it twice to get them all)
-    #stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
-    #stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
     stretch_stack.filter_dark_water('wse', wse_dark_thresh)
     stretch_stack.filter_dark_water('width', width_dark_thresh)
     plot=False
@@ -83,6 +72,9 @@ def process_along_stats(
     if np.shape(stretch_stack.width)[1]==0:
         print('  No SWOT data left after multitemporal filtering')
         return None, None
+    # optionally smooth the widths
+    if width_smooth_size is not None:
+        stretch_stack.smooth_widths(size=width_smooth_size)
     # compute multitemporal statistics
     wse_stats = rivscale.products.AlongStretchStats.from_StretchStack(
         stretch_stack, signal_key='wse')
@@ -96,10 +88,17 @@ def process_along_stats(
 
 def process_stretch_average(
         stretch_stack_in,
-        wse_stats,
-        width_stats,
+        wse_stats_in,
+        width_stats_in,
         wse_dark_thresh = 0.8,
         width_dark_thresh=0.2,
+        width_smooth_size=None,
+        char_length_tau_wse = 100000,
+        prior_unc_alpha_wse = 1.5,
+        char_length_tau_width = 100000,
+        prior_unc_alpha_width = 50
+        ):
+    """
         width_outlier_scale=1.5,
         char_length_tau_wse = 100000,
         prior_unc_alpha_wse = 1.5,
@@ -107,7 +106,7 @@ def process_stretch_average(
         prior_unc_alpha_width = 50, #200,
         rho_wse_width = 0.7,
         ):
-    """
+    
     # do some filtering and massaging of the data
     # populate witdh_u
     node_len = stretch_stack['area_total'] / stretch_stack['width']
@@ -128,6 +127,8 @@ def process_stretch_average(
         return None
     """
     stretch_stack = stretch_stack_in.copy()
+    wse_stats = wse_stats_in.copy()
+    width_stats = width_stats_in.copy()
     #stretch_stack = rivscale.filter.filter_bad_stretch_stack(
     #    stretch_stack, wse_dark_thresh, width_dark_thresh)
     # filter width outlier
@@ -160,15 +161,20 @@ def process_stretch_average(
     if plot:
         plt.show()
     # filter out high dark_frac nodes
-    stretch_stack.width[
-        stretch_stack.dark_frac>width_dark_thresh] = np.nan
-    stretch_stack.wse[
-        stretch_stack.dark_frac>wse_dark_thresh] = np.nan
+    stretch_stack.filter_dark_water('wse', wse_dark_thresh)
+    stretch_stack.filter_dark_water('width', width_dark_thresh)
+    #stretch_stack.width[
+    #    stretch_stack.dark_frac>width_dark_thresh] = np.nan
+    #stretch_stack.wse[
+    #    stretch_stack.dark_frac>wse_dark_thresh] = np.nan
     # drop rows with too  little data
     #reach_id = None
     reach_id = 'nope'
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
+    # optionally smooth the widths
+    if width_smooth_size is not None:
+        stretch_stack.smooth_widths(size=width_smooth_size)
     # set up the cov params
     wse_stats.char_length_tau=char_length_tau_wse
     wse_stats.prior_unc_alpha=prior_unc_alpha_wse
