@@ -56,8 +56,31 @@ def process_bayes_reconstruction(
     #stretch_stack = rivscale.filter.filter_width_node_outliers(
     #    stretch_stack, width_stats, width_outlier_scale, plot=True)
     plot = False
-    stretch_stack.filter_node_outliers(wse_stats, key='wse', plot=plot)
-    stretch_stack.filter_node_outliers(width_stats, key='width', plot=plot)
+    #stretch_stack.filter_node_outliers(wse_stats, key='wse', plot=plot)
+    #stretch_stack.filter_node_outliers(width_stats, key='width', plot=plot)
+    # first remove outliers allowing typical spread of variability
+    # over all time obs
+    stretch_stack.filter_node_outliers(
+        width_stats,
+        key='width',
+        use_ptiles=True,
+        plot=plot)
+    stretch_stack.filter_node_outliers(
+        wse_stats,
+        key='wse',
+        plot=plot)
+    # now remove outliers considering relative spread 
+    stretch_stack.filter_node_outliers(
+        width_stats,
+        key='width',
+        Delta2=True,
+        plot=plot)
+    stretch_stack.filter_node_outliers(
+        wse_stats,
+        Delta2=True,
+        key='wse',
+        plot=plot)
+
     if plot:
         plt.show()
     # filter out high dark_frac nodes

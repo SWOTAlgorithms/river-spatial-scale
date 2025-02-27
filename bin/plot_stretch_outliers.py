@@ -29,6 +29,8 @@ def main():
         help='output directory to save plots')
     args = parser.parse_args()
     dic = {}
+    #dic['wse_stretch_average'] = None
+    #dic['width_stretch_average'] = None
     # plot each individual file
     for f in args.infile:
         base, fle = os.path.split(f)
@@ -44,12 +46,25 @@ def main():
         if 'pekel_stats' in fle:
             dic['pekel_stats'] = \
                     rivscale.products.AlongStretchStats.from_ncfile(f)
-    
+        #if 'wse_stretch_average' in fle:
+        #    dic['wse_stretch_average'] = \
+        #            rivscale.products.StretchAverageStats.from_ncfile(f)
+        #if 'width_stretch_average' in fle:
+        #    dic['width_stretch_average'] = \
+        #            rivscale.products.StretchAverageStats.from_ncfile(f)
     dic['stretch_stack'].filter_node_outliers(
-        dic['wse_stats'], key='wse',plot=True)
+        dic['wse_stats'],
+        key='wse',
+        Delta2=True,
+        use_percentiles=False,
+        plot=True)
     plt.title('wse outliers (x) using multitemporal wse stats')
     dic['stretch_stack'].filter_node_outliers(
-        dic['width_stats'], key='width',plot=True)
+        dic['width_stats'],
+        key='width',
+        Delta2=True,
+        use_percentiles=False,
+        plot=True)
     plt.title('width outliers (x) using multitemporal width stats')
     if 'pekel_stats' in dic.keys():
         dic['stretch_stack'].filter_node_outliers(

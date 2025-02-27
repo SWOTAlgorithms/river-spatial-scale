@@ -46,7 +46,11 @@ def smooth_widths(widths_in, size=11):
     width_filt[w_mask==0] = np.nan
     return width_filt
 
-def process_along_stats(stretch_stack_in, crop=True):
+def process_along_stats(
+        stretch_stack_in,
+        wse_dark_thresh=0.8,
+        width_dark_thresh=0.8,
+        crop=True):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
@@ -63,8 +67,17 @@ def process_along_stats(stretch_stack_in, crop=True):
     # TODO: quantify amount of flagged out data?
     # TODO: filter on dark frac here too?
     # filter out bad data (call it twice to get them all)
-    stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
-    stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
+    #stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
+    #stretch_stack = rivscale.filter.filter_bad_stretch_stack(stretch_stack)
+    stretch_stack.filter_dark_water('wse', wse_dark_thresh)
+    stretch_stack.filter_dark_water('width', width_dark_thresh)
+    plot=False
+    stretch_stack.filter_node_outliers(key='width', plot=plot)
+    stretch_stack.filter_node_outliers(key='wse', plot=plot)
+    stretch_stack.filter_node_outliers(key='width', Delta2=True, plot=plot)
+    stretch_stack.filter_node_outliers(key='wse', Delta2=True, plot=plot)
+    if plot:
+        plt.show()
     # drop times/cycles with too little good quality data
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack)
     if np.shape(stretch_stack.width)[1]==0:
@@ -82,7 +95,7 @@ def process_along_stats(stretch_stack_in, crop=True):
     return wse_stats, width_stats
 
 def process_stretch_average(
-        stretch_stack,
+        stretch_stack_in,
         wse_stats,
         width_stats,
         wse_dark_thresh = 0.8,
@@ -114,14 +127,36 @@ def process_stretch_average(
         print('  No SWOT data left after multitemporal filtering')
         return None
     """
+    stretch_stack = stretch_stack_in.copy()
     #stretch_stack = rivscale.filter.filter_bad_stretch_stack(
     #    stretch_stack, wse_dark_thresh, width_dark_thresh)
     # filter width outlier
     #stretch_stack = rivscale.filter.filter_width_node_outliers(
     #    stretch_stack, width_stats, width_outlier_scale, plot=True)
     plot = False
-    stretch_stack.filter_node_outliers(width_stats, key='width', plot=plot)
-    stretch_stack.filter_node_outliers(wse_stats, key='wse', plot=plot)
+    # first remove outliers allowing typical spread of variability
+    # over all time obs
+    stretch_stack.filter_node_outliers(
+        width_stats,
+        key='width',
+        use_ptiles=True,
+        plot=plot)
+    stretch_stack.filter_node_outliers(
+        wse_stats,
+        key='wse',
+        plot=plot)
+    # now remove outliers considering relative spread 
+    stretch_stack.filter_node_outliers(
+        width_stats,
+        key='width',
+        Delta2=True,
+        plot=plot)
+    stretch_stack.filter_node_outliers(
+        wse_stats,
+        Delta2=True,
+        key='wse',
+        plot=plot)
+
     if plot:
         plt.show()
     # filter out high dark_frac nodes

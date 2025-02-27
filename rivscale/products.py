@@ -150,32 +150,103 @@ class StretchStack(Product):
         if show:
             plt.show()
 
+    def filter_dark_water(self, key='wse', dark_thresh=0.8):
+        """
+        filter out dark water in variable 'key' by setting to nan
+        """
+        self[key][self.dark_frac>dark_thresh] = np.nan
+
     def filter_node_outliers(
             self,
-            along_stats,
+            along_stats=None,
             key='wse',# or width etc
+            Delta2=False,
+            use_ptiles=False,
             IQR_scale=5.0,
             plot=False):
+        """
+        This method filters the StretchStack object for the 'key'
+        variable by replacing the values with nans. The method applies
+        an Inter-Quartile Range (IQR) filter on the data for each node
+        using the multitemproal stack statistics.  Two IQR filters are
+        applied, one based on the statistics for each node and one based
+        on the statistics over the entire stretch. There are a few
+        options depending on the optional inputs:
+        
+        Inputs
+            along_stats: an AlongSStretchStats object.  If input the
+                         'reference' field is used instead of computing
+                         it using hte median of the data over time.
+
+            key:         'wse' or 'width' (i.e., which variable to filter)
+
+            Delta2:      if True, estimate a stretch average for each
+                         time to also subtract off to produce an the 
+                         anomaly-anomaly (Delta2) before computing the
+                         IQR stats.
+
+            use_ptiles:  use the 25th and 75th percentile from the
+                         along_stats object instead of computing them.
+            
+            IQR_scale:   postive float value indicating how many IQRs to
+                         set rejection threshold
+
+            plot:        make plots for debugging purposes
+        
+        TODO: should probably use masked arrays everywhere instead of
+              relying on nans.
+        TODO: probably should set a lower limit on the IQR based on the
+              known uncertainty of the 'key' variable
+        """
         # handle data
-        arr0 = self[key]
-        ref = along_stats.reference
-        p = along_stats.percentile_list
-        p25 = along_stats.percentiles[:,p==25].squeeze()
-        p75 = along_stats.percentiles[:,p==75].squeeze()
+        arr0 = self[key].copy()
+        if along_stats is None:
+            # use the median over time as ref
+            ref = np.nanmedian(arr0, axis=1)
+        else:
+            # use ref from along_stats
+            ref = along_stats.reference
+        ref2 = np.broadcast_to(ref, np.shape(arr0.T)).T
+        delta = arr0 - ref2
+        delta_tag='$\Delta$'
+        if Delta2:
+            # get the anomaly-anomaly
+            delta_bar = np.nanmean(delta, axis=0)
+            delta_bar = np.nanmedian(delta, axis=0)
+            delta_bar2 = np.broadcast_to(delta_bar, np.shape(arr0))
+            ref2 = ref2 + delta_bar2
+            use_ptiles=False
+            delta_tag = '$\Delta^2$'
+            #delta2 = arr0 - dmean2
+            #arr0 = delta2
+        #breakpoint()
+        if use_ptiles:
+            p = along_stats.percentile_list
+            p25 = along_stats.percentiles[:, p==25].squeeze()
+            p75 = along_stats.percentiles[:, p==75].squeeze()
+        else:
+            # compute the percentiles
+            p25 = np.nanpercentile(arr0-ref2, 25, axis=1)
+            p75 = np.nanpercentile(arr0-ref2, 75, axis=1)
+        #p = along_stats.percentile_list
+        #p25 = along_stats.percentiles[:,p==25].squeeze()
+        #p75 = along_stats.percentiles[:,p==75].squeeze()
         IQR = p75 - p25
+        IQR2 = np.broadcast_to(IQR, np.shape(arr0.T)).T
         # first filter global
         #p25_g = np.median(p25 - ref)
         #p75_g = np.median(p75 - ref)
         #IQR_g = (p75_g - p25_g) + np.zeros_like(ref)
         IQR_g0 = np.nanmean(IQR[IQR>0])
-        IQR_g = IQR_g0 + np.zeros_like(ref)
+        IQR_g = IQR_g0 + np.zeros_like(ref2)
         # for some reason Pekel sometimes give negative IQR? so hande it
         IQR[IQR<0] = IQR_g0
+        #breakpoint()
         arr1 = rivscale.filter.scaled_spread_outlier_rejector(
-            arr0, ref, IQR_g, IQR_scale)
+            arr0, ref2, IQR_g, IQR_scale)
         # now filter per-node
         arr = rivscale.filter.scaled_spread_outlier_rejector(
-            arr1, ref, IQR, IQR_scale)
+            arr1, ref2, IQR2, IQR_scale)
         self[key] = arr
         #breakpoint()
         if plot:
@@ -186,25 +257,25 @@ class StretchStack(Product):
                 self.dist_out,
                 np.shape(arr0.T)).T
             plt.figure(figsize=(10,5))
-            plt.plot(dist_out, arr0)
+            plt.plot(dist_out, arr0-ref2)
             plt.plot(
                 dist_out[outlier_mask],
-                arr0[outlier_mask],'x')
+                arr0[outlier_mask]-ref2[outlier_mask],'x')
+            plt.plot(
+                self.dist_out, #ref + \
+                IQR_scale*IQR,'k', linewidth=2)
             plt.plot(
                 self.dist_out,
-                ref + IQR_scale*IQR,'k', linewidth=2)
+                -IQR_scale*IQR,'k', linewidth=2)
             plt.plot(
                 self.dist_out,
-                ref - IQR_scale*IQR,'k', linewidth=2)
+                IQR_scale*IQR_g,'g', linewidth=2)
             plt.plot(
                 self.dist_out,
-                ref + IQR_scale*IQR_g,'g', linewidth=2)
-            plt.plot(
-                self.dist_out,
-                ref - IQR_scale*IQR_g,'g', linewidth=2)
+                -IQR_scale*IQR_g,'g', linewidth=2)
             plt.grid()
             plt.xlabel('dist_out')
-            plt.ylabel(key)
+            plt.ylabel(delta_tag+' '+key)
 
 class AlongStretchStats(Product):
     ATTRIBUTES = odict([
