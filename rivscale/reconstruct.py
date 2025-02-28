@@ -37,15 +37,33 @@ import rivscale.data
 ######## Feb 2025
 
 def process_bayes_reconstruction(
+        cfg,
         stretch_stack,
         wse_stats,
         width_stats,
-        height_width,
-        wse_dark_thresh=0.8,
-        width_dark_thresh=0.2,
-        width_outlier_scale=10,
-        rho_wse_width=0.7
-        ):
+        height_width):
+    """
+    TODO: enable overwriting of char_length_tau and prior_unc_alpha if commanded
+    """
+    # first handle optional config params
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['wse_dark_thresh'] = '0.8'
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['width_dark_thresh'] = '0.3'
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_char_length_tau' not in cfg.keys():
+        cfg['wse_char_length_tau'] = '100000.0'
+    if 'wse_prior_unc_alpha' not in cfg.keys():
+        cfg['wse_prior_unc_alpha'] = '1.5'
+    if 'width_char_length_tau' not in cfg.keys():
+        cfg['width_char_length_tau'] = '100000.0'
+    if 'width_prior_unc_alpha' not in cfg.keys():
+        cfg['width_prior_unc_alpha'] = '50.0'
+    if 'rho_wse_width' not in cfg.keys():
+        cfg['rho_wse_width'] = 50
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = False
     #
     # populate witdh_u
     node_len = stretch_stack['area_total'] / stretch_stack['width']
@@ -84,13 +102,17 @@ def process_bayes_reconstruction(
     if plot:
         plt.show()
     # filter out high dark_frac nodes
-    stretch_stack.width[
-        stretch_stack.dark_frac>width_dark_thresh] = np.nan
-    stretch_stack.wse[
-        stretch_stack.dark_frac>wse_dark_thresh] = np.nan
+    stretch_stack.filter_dark_water('width', cfg['width_dark_thresh'])
+    stretch_stack.filter_dark_water('wse', cfg['wse_dark_thresh'])
+    #stretch_stack.width[
+    #    stretch_stack.dark_frac>width_dark_thresh] = np.nan
+    #stretch_stack.wse[
+    #    stretch_stack.dark_frac>wse_dark_thresh] = np.nan
     # drop rows with too  little data
     #reach_id = None
     reach_id = 'nope'
+    if cfg['crop']:
+        reach_id = stretch_stack.stretch_name
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
     # now do the reconstruction
@@ -99,7 +121,7 @@ def process_bayes_reconstruction(
         wse_stats,
         width_stats,
         height_width,
-        rho_wse_width=rho_wse_width)
+        rho_wse_width=cfg['rho_wse_width'])
     return joint_bayes
 
 

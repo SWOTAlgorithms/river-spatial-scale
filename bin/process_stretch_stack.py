@@ -40,6 +40,7 @@ import scipy.ndimage
 import warnings
 
 import time
+import rivscale.misc
 
 EXAMPLE=''
 
@@ -53,17 +54,22 @@ def main():
         help='force rerun and overwriting of output files')
     args = parser.parse_args()
     # read in the config file
-    cfg = configparser.ConfigParser()
+    #cfg = configparser.ConfigParser()
+    #cfg.read(args.config)
+    cfg = rivscale.misc.CfgParser()
     cfg.read(args.config)
+    # handle non-strings for stretch_subset
+    #cfg['main']['stretch_subset'] = '{}'.format(cfg['main']['stretch_subset'])
     stretch_list0 = [
-        '{}'.format(t) for t in cfg['main']['stretch_subset'].split()]
+        '{}'.format(t) for t in '{}'.format(cfg['main']['stretch_subset']).split()]
     # make the output dir if needed
-    outdir = os.path.join(cfg['data']['out_path'],cfg['data']['orbit'])
+    outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
+    outdir = os.path.join(outdir0, cfg['main']['flavor'])
     stretch_files = []
     for stretch in stretch_list0:
         # get all reaches in basins smaller than stretch
         this_files = glob.glob(os.path.join(
-            outdir, '{}*_stretch_stack.nc'.format(stretch)))
+            outdir0, '{}*_stretch_stack.nc'.format(stretch)))
         stretch_files = stretch_files + this_files
     stretch_list = []
     for fle in stretch_files:
@@ -89,9 +95,9 @@ def main():
         # setup input/output files
         ####
         infile_stretch = os.path.join(
-            outdir, '{}_stretch_stack.nc'.format(key))
+            outdir0, '{}_stretch_stack.nc'.format(key))
         infile_pekel = os.path.join(
-            outdir, '{}_pekel_stats.nc'.format(key))
+            outdir0, '{}_pekel_stats.nc'.format(key))
         outfile_wse_stats = os.path.join(
             outdir, '{}_wse_stats.nc'.format(key))
         outfile_width_stats = os.path.join(
@@ -124,8 +130,9 @@ def main():
             stretch_stack = rivscale.products.StretchStack.from_ncfile(
                 infile_stretch)
             # process it
+            # TODO: handle config params
             wse_stats, width_stats = rivscale.estimate.process_along_stats(
-                stretch_stack, crop=False)# TODO: put arg for crop
+                cfg['along_stats'], stretch_stack)
             # write output files
             if wse_stats is not None:
                 wse_stats.to_ncfile(outfile_wse_stats)
@@ -154,7 +161,7 @@ def main():
             pekel_stats = rivscale.products.AlongStretchStats.from_ncfile(
                 infile_pekel)
             wse_avg, width_avg = rivscale.estimate.process_stretch_average(
-                stretch_stack, wse_stats, pekel_stats)
+                cfg['stretch_average'], stretch_stack, wse_stats, pekel_stats)
             if wse_avg is not None:
                 wse_avg.to_ncfile(outfile_wse_avg)
             if width_avg is not None:
@@ -170,6 +177,7 @@ def main():
         else:
             print("  Processing height_width")
             height_width = rivscale.products.HeightWidthModel.from_objects(
+                cfg['height_width'],
                 wse_avg,
                 width_avg,
                 width_stats)
@@ -183,6 +191,7 @@ def main():
         else:
             print("  Processing bayes")
             bayes = rivscale.reconstruct.process_bayes_reconstruction(
+                cfg['reconstruct'],
                 stretch_stack,
                 wse_stats,
                 width_stats,

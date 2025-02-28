@@ -9,6 +9,7 @@ Author: Brent Williams
 import numpy as np
 import scipy.ndimage
 
+from configparser import ConfigParser
 
 def reach_id_from_node_id_int(node_id_arr):
     return (node_id_arr/10000).astype(int)*10 + node_id_arr - (
@@ -60,3 +61,55 @@ def compute_anomaly(full_profile_data, bayes_data=None, sword_node_df=None):
     full_profile_data2['anomaly'] = anomaly
     full_profile_data2['med_prof_stack'] = medprof_stack
     return full_profile_data2
+
+class CfgParser(ConfigParser):
+    '''A wrapper to ConfigParser, with automatic data types'''
+    def __init__(self, *args, **kwargs):
+        super(ConfigParser, self).__init__(*args, **kwargs)
+        self.getting = False
+
+    def read(self, filename, *args, **kwargs):
+        """Load a file, adding 'main' section if necessary"""
+        string = open(filename, 'r').readlines()
+        if string[0][0] != '[' and string[0][-1] != ']':
+            string = ['[main]\n'] + string
+        string = ''.join(string)
+        super(ConfigParser, self).read_string(string)
+
+
+    def get(self, *args, **kwargs):
+        '''Get the data as specific type, if possible'''
+        # Deal with recursion; the various get*** methods call the 'get'
+        # function and then convert the value. If one of those is calling, we
+        # should call the super 'get'. Another option would be to implement
+        # the converters directly (though the boolean one has some actual
+        # smarts).
+        # print('in get', self.getting, args, kwargs)
+        if self.getting:
+            return super(ConfigParser, self).get(*args, **kwargs)
+        else:
+            self.getting = True
+        # Try to get with various types, this order should be sufficient.
+        try:
+            value = super(ConfigParser, self).getint(*args, **kwargs)
+            self.getting = False
+            return value
+        except ValueError:
+            try:
+                value = super(ConfigParser, self).getfloat(*args, **kwargs)
+                self.getting = False
+                return value
+            except ValueError:
+                try:
+                    value = super(ConfigParser, self).getboolean(
+                        *args, **kwargs)
+                    self.getting = False
+                    return value
+                except ValueError:
+                    value = super(ConfigParser, self).get(*args, **kwargs)
+                    # Cast 'None' strings to NoneTypes
+                    if value.lower() == 'none':
+                        value = None
+                    self.getting = False
+                    return value
+

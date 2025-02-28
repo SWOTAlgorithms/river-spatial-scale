@@ -46,25 +46,54 @@ def smooth_widths(widths_in, size=11):
     width_filt[w_mask==0] = np.nan
     return width_filt
 
-def process_along_stats(
-        stretch_stack_in,
-        wse_dark_thresh=0.8,
-        width_dark_thresh=0.3,
-        width_smooth_size=None,
-        crop=True):
+def process_along_stats(cfg, stretch_stack_in):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
     to estimate the along-river statistics for WSE and width
     """
+    # first handle optional config params
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['wse_dark_thresh'] = '0.8'
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['width_dark_thresh'] = '0.3'
+    if 'wse_outlier_scale' not in cfg.keys():
+        cfg['wse_outlier_scale'] = '5.0'
+    if 'width_outlier_scale' not in cfg.keys():
+        cfg['wodth_outlier_scale'] = '5.0'
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_ref_kernel_size' not in cfg.keys():
+        cfg['wse_ref_kernel_size'] = '35'
+    if 'width_ref_kernel_size' not in cfg.keys():
+        cfg['width_ref_kernel_size'] = '11'
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = False
     stretch_stack = stretch_stack_in.copy()
-    stretch_stack.filter_dark_water('wse', wse_dark_thresh)
-    stretch_stack.filter_dark_water('width', width_dark_thresh)
+    #breakpoint()
+    stretch_stack.filter_dark_water('wse', cfg['wse_dark_thresh'])
+    stretch_stack.filter_dark_water('width', cfg['width_dark_thresh'])
     plot=False
-    stretch_stack.filter_node_outliers(key='width', plot=plot)
-    stretch_stack.filter_node_outliers(key='wse', plot=plot)
-    stretch_stack.filter_node_outliers(key='width', Delta2=True, plot=plot)
-    stretch_stack.filter_node_outliers(key='wse', Delta2=True, plot=plot)
+    
+    stretch_stack.filter_node_outliers(
+        key='width',
+        IQR_scale=cfg['width_outlier_scale'],
+        plot=plot)
+    stretch_stack.filter_node_outliers(
+        key='wse',
+        IQR_scale=cfg['wse_outlier_scale'],
+        plot=plot)
+    
+    stretch_stack.filter_node_outliers(
+        key='width',
+        Delta2=True,
+        IQR_scale=cfg['width_outlier_scale'],
+        plot=plot)
+    stretch_stack.filter_node_outliers(
+        key='wse',
+        Delta2=True,
+        IQR_scale=cfg['wse_outlier_scale'],
+        plot=plot)
     if plot:
         plt.show()
     # drop times/cycles with too little good quality data
@@ -73,59 +102,49 @@ def process_along_stats(
         print('  No SWOT data left after multitemporal filtering')
         return None, None
     # optionally smooth the widths
-    if width_smooth_size is not None:
-        stretch_stack.smooth_widths(size=width_smooth_size)
+    if cfg['width_smooth_size'] is not None:
+        stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
     # compute multitemporal statistics
     wse_stats = rivscale.products.AlongStretchStats.from_StretchStack(
-        stretch_stack, signal_key='wse')
+        stretch_stack, signal_key='wse', kernel_size=cfg['wse_ref_kernel_size'])
     width_stats = rivscale.products.AlongStretchStats.from_StretchStack(
-        stretch_stack, signal_key='width', kernel_size=11)
-    if crop:
+        stretch_stack, signal_key='width', kernel_size=cfg['width_ref_kernel_size'])
+    if cfg['crop']:
         # crop to reach
         wse_stats = wse_stats.crop_to_reach()
         width_stats = width_stats.crop_to_reach()
     return wse_stats, width_stats
 
 def process_stretch_average(
+        cfg,
         stretch_stack_in,
         wse_stats_in,
-        width_stats_in,
-        wse_dark_thresh = 0.8,
-        width_dark_thresh=0.2,
-        width_smooth_size=None,
-        char_length_tau_wse = 100000,
-        prior_unc_alpha_wse = 1.5,
-        char_length_tau_width = 100000,
-        prior_unc_alpha_width = 50
-        ):
+        width_stats_in):
     """
-        width_outlier_scale=1.5,
-        char_length_tau_wse = 100000,
-        prior_unc_alpha_wse = 1.5,
-        char_length_tau_width = 100000,
-        prior_unc_alpha_width = 50, #200,
-        rho_wse_width = 0.7,
-        ):
-    
-    # do some filtering and massaging of the data
-    # populate witdh_u
-    node_len = stretch_stack['area_total'] / stretch_stack['width']
-    stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
-    # make measurement uncert at least as much as signal uncert we assume
-    stretch_stack['width_u'] = stretch_stack['width_u'] + 100#2*prior_unc_alpha_width
 
-    # TODO: quantify amount of flagged out data?
-    # filter out bad data (call it twice to get them all)
-    stretch_stack = rivscale.filter.filter_bad_stretch_stack(
-        stretch_stack, wse_dark_thresh, width_dark_thresh)
-    stretch_stack = rivscale.filter.filter_bad_stretch_stack(
-        stretch_stack, wse_dark_thresh, width_dark_thresh)
-    # drop times/cycles with too little good quality data
-    stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack)
-    if np.shape(stretch_stack.width)[1]==0:
-        print('  No SWOT data left after multitemporal filtering')
-        return None
     """
+    # first handle optional config params
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['wse_dark_thresh'] = '0.8'
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['width_dark_thresh'] = '0.3'
+    if 'wse_outlier_scale' not in cfg.keys():
+        cfg['wse_outlier_scale'] = '5.0'
+    if 'width_outlier_scale' not in cfg.keys():
+        cfg['wodth_outlier_scale'] = '5.0'
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_char_length_tau' not in cfg.keys():
+        cfg['wse_char_length_tau'] = '100000.0'
+    if 'wse_prior_unc_alpha' not in cfg.keys():
+        cfg['wse_prior_unc_alpha'] = '1.5'
+    if 'width_char_length_tau' not in cfg.keys():
+        cfg['width_char_length_tau'] = '100000.0'
+    if 'width_prior_unc_alpha' not in cfg.keys():
+        cfg['width_prior_unc_alpha'] = '50.0'
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = False
+
     stretch_stack = stretch_stack_in.copy()
     wse_stats = wse_stats_in.copy()
     width_stats = width_stats_in.copy()
@@ -141,28 +160,32 @@ def process_stretch_average(
         width_stats,
         key='width',
         use_ptiles=True,
+        IQR_scale=cfg['width_outlier_scale'],
         plot=plot)
     stretch_stack.filter_node_outliers(
         wse_stats,
         key='wse',
+        IQR_scale=cfg['wse_outlier_scale'],
         plot=plot)
     # now remove outliers considering relative spread 
     stretch_stack.filter_node_outliers(
         width_stats,
         key='width',
         Delta2=True,
+        IQR_scale=cfg['width_outlier_scale'],
         plot=plot)
     stretch_stack.filter_node_outliers(
         wse_stats,
         Delta2=True,
         key='wse',
+        IQR_scale=cfg['wse_outlier_scale'],
         plot=plot)
 
     if plot:
         plt.show()
     # filter out high dark_frac nodes
-    stretch_stack.filter_dark_water('wse', wse_dark_thresh)
-    stretch_stack.filter_dark_water('width', width_dark_thresh)
+    stretch_stack.filter_dark_water('wse', cfg['wse_dark_thresh'])
+    stretch_stack.filter_dark_water('width',cfg['width_dark_thresh'])
     #stretch_stack.width[
     #    stretch_stack.dark_frac>width_dark_thresh] = np.nan
     #stretch_stack.wse[
@@ -170,16 +193,18 @@ def process_stretch_average(
     # drop rows with too  little data
     #reach_id = None
     reach_id = 'nope'
+    if cfg['crop']:
+        reach_id = stretch_stack.stretch_name
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
     # optionally smooth the widths
-    if width_smooth_size is not None:
-        stretch_stack.smooth_widths(size=width_smooth_size)
+    if cfg['width_smooth_size'] is not None:
+        stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
     # set up the cov params
-    wse_stats.char_length_tau=char_length_tau_wse
-    wse_stats.prior_unc_alpha=prior_unc_alpha_wse
-    width_stats.char_length_tau=char_length_tau_width
-    width_stats.prior_unc_alpha=prior_unc_alpha_width
+    wse_stats.char_length_tau=cfg['wse_char_length_tau']
+    wse_stats.prior_unc_alpha=cfg['wse_prior_unc_alpha']
+    width_stats.char_length_tau=cfg['width_char_length_tau']
+    width_stats.prior_unc_alpha=cfg['width_prior_unc_alpha']
 
     # get stretch average stats
     wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(

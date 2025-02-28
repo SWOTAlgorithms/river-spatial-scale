@@ -1253,12 +1253,15 @@ class HeightWidthModel(Product):
     @classmethod
     def from_objects(
             cls,
+            cfg,
             wse_stretch_avg,
             width_stretch_avg,
             width_along_stats=None,
             wse_anom=True,
-            width_anom=True,
-            sigma_n=50):
+            width_anom=True):
+        if 'sigma_n' not in cfg.keys():
+            cfg['sigma_n'] = 50
+        sigma_n = cfg['sigma_n']
         height_width = cls()
         if width_along_stats is None:
             ptile_list = [5, 25, 32, 50, 68, 75, 95]
