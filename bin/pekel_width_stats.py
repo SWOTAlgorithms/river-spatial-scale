@@ -64,10 +64,13 @@ def main():
         help='force rerun and overwriting of output files')
     args = parser.parse_args()
     # read in the config file
-    cfg = configparser.ConfigParser()
+    #cfg = configparser.ConfigParser()
+    #cfg.read(args.config)
+    cfg = rivscale.misc.CfgParser()
     cfg.read(args.config)
     stretch_list0 = [
-        '{}'.format(t) for t in cfg['main']['stretch_subset'].split()]
+        '{}'.format(t) for t in '{}'.format(
+            cfg['main']['stretch_subset']).split()]
     # make the output dir if needed
     indir0 = os.path.join(cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
     outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
@@ -123,7 +126,7 @@ def main():
         input_width_stats = rivscale.products.AlongStretchStats.from_ncfile(
             infile_width_stats)
         width_stats = rivscale.products.AlongStretchStats.from_pekel_df(
-            df_list, stretch_reaches, key, input_width_stats)
+            cfg['pekel'],df_list, stretch_reaches, key, input_width_stats)
 
         if width_stats is not None:
             width_stats.to_ncfile(outfile_width_stats)

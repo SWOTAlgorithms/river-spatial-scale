@@ -367,12 +367,21 @@ class AlongStretchStats(Product):
     @classmethod
     def from_pekel_df(
             cls,
+            cfg,
             df_list,
             reaches,
             name,
-            in_stats,
-            smooth_size=None,
-            med_kernel_size=11):
+            in_stats):
+        """
+            #smooth_size=None,
+            #med_kernel_size=11):
+        """
+        # handle optional variables
+        if 'width_smooth_size' not in cfg.keys():
+            cfg['width_smooth_size'] = 'None'
+        if 'mid_kernel_size' not in cfg.keys():
+            cfg['mid_kernel_size'] = '11'
+        #
         stats = cls()
         stats.stretch_name = name
         stats.reaches = np.array(reaches)
@@ -442,10 +451,10 @@ class AlongStretchStats(Product):
                     np.array(this_d['percentiles']), axis=1)
         # optionally smooth the percentile width estimates
         # to reduce the wedging issues
-        if smooth_size is not None:
+        if cfg['width_smooth_size'] is not None:
             #breakpoint()
             d['percentiles'] = rivscale.estimate.smooth_widths(
-                d['percentiles'].T, size=smooth_size).T
+                d['percentiles'].T, size=cfg['width_smooth_size']).T
         for key in d.keys():
             if key == 'percentiles':
                 stats[key] = d[key].T
@@ -455,7 +464,7 @@ class AlongStretchStats(Product):
         msk = stats.percentile_list==50
         ref = stats.percentiles[:,msk].squeeze()
         ref_med = scipy.ndimage.median_filter(
-            ref, size=med_kernel_size, mode='nearest')
+            ref, size=cfg['med_kernel_size'], mode='nearest')
         # median filter the ref profile
         # TODO: maybe should do mean filter?
         if np.sum(msk)>0:
