@@ -69,8 +69,9 @@ def main():
     stretch_list0 = [
         '{}'.format(t) for t in cfg['main']['stretch_subset'].split()]
     # make the output dir if needed
-    outdir = os.path.join(cfg['data']['out_path'],cfg['data']['orbit'])
-    pekeldir = cfg['data']['pekel_dir']
+    indir0 = os.path.join(cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
+    outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
+    pekeldir = cfg['main']['pekel_in_path']
     stretch_files = []
     for stretch in stretch_list0:
         # get all reaches in basins smaller than stretch
@@ -85,12 +86,18 @@ def main():
     df_stretches = pd.read_csv(
         cfg['main']['stretch_file'],
         usecols=stretch_list)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
+    #if not os.path.exists(outdir):
+    #    os.makedirs(outdir)
     # go through each stretch and process it
     N = len(df_stretches.keys())
     #stretch_list = []
     for i,key in enumerate(df_stretches.keys()):
+        outdir = os.path.join(outdir0, key, 'pekel_{}'.format(
+            cfg['main']['flavor']))
+        stretch_dir = os.path.join(indir0, key, 'stretch_stack_{}'.format(
+            cfg['main']['stretch_stack_flavor']))
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
         this_start = time.time()
         stretch_reaches = np.array(
             df_stretches[df_stretches[key]>0][key]).astype(int)
@@ -99,7 +106,7 @@ def main():
         # check if already run
         #infile_width_stats = os.path.join(outdir, '{}_width_stats.nc'.format(key))
         infile_width_stats = os.path.join(
-                outdir, '{}_stretch_stack.nc'.format(key))
+                stretch_dir, '{}_stretch_stack.nc'.format(key))
         outfile_width_stats = os.path.join(outdir, '{}_pekel_stats.nc'.format(key))
         if not(os.path.exists(infile_width_stats)):
             print("  The input widh_stats file has not been created")

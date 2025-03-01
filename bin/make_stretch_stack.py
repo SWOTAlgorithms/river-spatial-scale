@@ -43,7 +43,7 @@ import time
 
 EXAMPLE=''
 
-
+"""
 def manage_fields(df, use_wse_sm=False, dark_thresh=1.0):
     if df is None:
         return None
@@ -69,13 +69,13 @@ def manage_fields(df, use_wse_sm=False, dark_thresh=1.0):
     return df
 
 def get_swot_node_data(cfg, stretch_reaches, sword_node_df, dark_thresh=1.0):
-    if cfg['data']['method'] == 'csv':
-        df = pd.read_csv(cfg['data']['data_path'])
+    if cfg['main']['method'] == 'csv':
+        df = pd.read_csv(cfg['main']['data_path'])
         # TODO: filter out orbit and granules we want
-    elif cfg['data']['method'] == 'reach':
+    elif cfg['main']['method'] == 'reach':
         # go through all the RiverSP data for the desired granules/orbit
-        orbit = cfg['data']['orbit']
-        pass_cont = cfg['data']['granule']
+        orbit = cfg['main']['orbit']
+        pass_cont = cfg['main']['granule']
         df = None
         for reach in stretch_reaches:#df_stretches.keys():
             if 'both' in orbit:
@@ -84,7 +84,7 @@ def get_swot_node_data(cfg, stretch_reaches, sword_node_df, dark_thresh=1.0):
                 orbits = [orbit,]
             fles = []
             for this_orbit in orbits:
-                fle_str = os.path.join(cfg['data']['data_path'],
+                fle_str = os.path.join(cfg['main']['data_path'],
                     '{}/{}/Multitemporal_Node/{}_Node_{}_{}.csv'.format(
                         this_orbit, pass_cont, reach, pass_cont, this_orbit))
                 this_fles = glob.glob(fle_str)
@@ -112,6 +112,7 @@ def get_swot_node_data(cfg, stretch_reaches, sword_node_df, dark_thresh=1.0):
     # don't filter on dark frac here...only on qual
     df = manage_fields(df, use_wse_sm=use_wse_sm)#, dark_thresh=dark_thresh)
     return df
+"""
 
 def main():
     parser = argparse.ArgumentParser(
@@ -123,7 +124,9 @@ def main():
         help='force rerun and overwriting of output files')
     args = parser.parse_args()
     # read in the config file
-    cfg = configparser.ConfigParser()
+    #cfg = configparser.ConfigParser()
+    #cfg.read(args.config)
+    cfg = rivscale.misc.CfgParser()
     cfg.read(args.config)
     # read int he SWORD file
     print('reading SWORD file')
@@ -131,7 +134,8 @@ def main():
         cfg['main']['sword_file'])
     # get the list of stretches (or multireaches)
     stretch_list0 = [
-        '{}'.format(t) for t in cfg['main']['stretch_subset'].split()]
+        '{}'.format(t) for t in '{}'.format(
+            cfg['main']['stretch_subset']).split()]
     stretch_list = []
     for stretch in stretch_list0:
         # get all reaches in basins smaller than stretch
@@ -145,14 +149,20 @@ def main():
         cfg['main']['stretch_file'],
         usecols=stretch_list)
     # make the output dir if needed
-    outdir = os.path.join(cfg['data']['out_path'],cfg['data']['orbit'])
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
+    outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
+    #if not os.path.exists(outdir):
+    #    os.makedirs(outdir)
     # go through each stretch and process it
     N = len(df_stretches.keys())
     #breakpoint()
     stretch_list = []
     for i,key in enumerate(df_stretches.keys()):
+        outdir = os.path.join(
+            outdir0,
+            key,
+            'stretch_stack_{}'.format(cfg['main']['flavor']))
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
         this_start = time.time()
         stretch_reaches = np.array(
             df_stretches[df_stretches[key]>0][key]).astype(int)
@@ -165,7 +175,10 @@ def main():
             print("  This stretch already processed")
             continue
         # get the SWOT node data
-        swot_node_df = get_swot_node_data(cfg, stretch_reaches, sword_node_df) 
+        swot_node_df = rivscale.data.get_swot_data(
+            cfg,
+            stretch_reaches,#sword_node_df,
+            kind='Node')
         #breakpoint()
         if swot_node_df is None:
             # skip cases where we have no data
@@ -178,6 +191,7 @@ def main():
         # create the data stack
         stretch_stack = rivscale.data.make_stretch_stack(
             key, stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
+        # TODO: now qual filter?
         #
         if stretch_stack is not None:
             stretch_stack.to_ncfile(outfile_stretch)

@@ -68,7 +68,7 @@ def process_along_stats(cfg, stretch_stack_in):
     if 'width_ref_kernel_size' not in cfg.keys():
         cfg['width_ref_kernel_size'] = '11'
     if 'crop' not in cfg.keys():
-        cfg['crop'] = False
+        cfg['crop'] = 'False'
     stretch_stack = stretch_stack_in.copy()
     #breakpoint()
     stretch_stack.filter_dark_water('wse', cfg['wse_dark_thresh'])
@@ -143,7 +143,7 @@ def process_stretch_average(
     if 'width_prior_unc_alpha' not in cfg.keys():
         cfg['width_prior_unc_alpha'] = '50.0'
     if 'crop' not in cfg.keys():
-        cfg['crop'] = False
+        cfg['crop'] = 'False'
 
     stretch_stack = stretch_stack_in.copy()
     wse_stats = wse_stats_in.copy()

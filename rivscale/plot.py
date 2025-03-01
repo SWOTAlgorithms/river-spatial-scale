@@ -145,11 +145,13 @@ def plot_stretch_stats(
     title = stats.stretch_name
     x = stats[x_key]
     x_label = x_key
+    marker=None
     if x_key=='time_id':
         # convert to datetime
         #breakpoint()
         x = swot_time_to_field_time(x*60.0*60.0)
         x_label = 'time'
+        marker = '.'
     y_key = stats.signal_key
     y_mean = stats.mean
     file_tag = 'profile_stats'
@@ -171,7 +173,7 @@ def plot_stretch_stats(
     plt.figure(figsize=figsize)
     plt.subplot(nplots,1,1)
     if len(y_ptiles)>0:
-        plt.plot(x2D, y_ptiles)
+        plt.plot(x2D, y_ptiles, marker=marker)
     plt.plot(x, y_ref, 'k', linewidth=2)
     plt.legend(ptiles+['ref',])
     plt.grid()
@@ -179,7 +181,7 @@ def plot_stretch_stats(
     plt.ylabel(y_key)
     plt.suptitle(title+'{} statistics'.format(y_key))
     plt.subplot(nplots,1,2)
-    plt.plot(x, y_mean)
+    plt.plot(x, y_mean, marker=marker)
     plt.plot(x, y_mean+y_std,'--')
     plt.plot(x, y_mean-y_std,'--')
     plt.plot(x, y_ref, 'k', linewidth=2)
@@ -189,8 +191,8 @@ def plot_stretch_stats(
     plt.ylabel(y_key)
     if plot_slope:
         plt.subplot(nplots,1,3)
-        plt.plot(x, stats.slope, label='data')
-        plt.plot(x, stats.slope_reference, label='reference')
+        plt.plot(x, stats.slope, label='data', marker=marker)
+        plt.plot(x, stats.slope_reference, label='reference', marker=marker)
         plt.legend()
         plt.grid()
         plt.xlabel(x_label)

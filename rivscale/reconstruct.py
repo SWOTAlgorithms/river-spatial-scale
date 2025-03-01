@@ -63,7 +63,7 @@ def process_bayes_reconstruction(
     if 'rho_wse_width' not in cfg.keys():
         cfg['rho_wse_width'] = 50
     if 'crop' not in cfg.keys():
-        cfg['crop'] = False
+        cfg['crop'] = 'False'
     #
     # populate witdh_u
     node_len = stretch_stack['area_total'] / stretch_stack['width']

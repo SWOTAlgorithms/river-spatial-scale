@@ -63,13 +63,18 @@ def main():
     stretch_list0 = [
         '{}'.format(t) for t in '{}'.format(cfg['main']['stretch_subset']).split()]
     # make the output dir if needed
+    stretch_dir0 = os.path.join(
+        cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
+    pekel_dir0 = os.path.join(
+        cfg['main']['pekel_in_path'],cfg['main']['orbit'])
     outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
-    outdir = os.path.join(outdir0, cfg['main']['flavor'])
+    #outdir = os.path.join(outdir0, cfg['main']['flavor'])
     stretch_files = []
     for stretch in stretch_list0:
         # get all reaches in basins smaller than stretch
         this_files = glob.glob(os.path.join(
-            outdir0, '{}*_stretch_stack.nc'.format(stretch)))
+            stretch_dir0,'{}'.format(stretch),
+            'stretch_stack_*', '{}*_stretch_stack.nc'.format(stretch)))
         stretch_files = stretch_files + this_files
     stretch_list = []
     for fle in stretch_files:
@@ -78,13 +83,24 @@ def main():
     df_stretches = pd.read_csv(
         cfg['main']['stretch_file'],
         usecols=stretch_list)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
+    #if not os.path.exists(outdir):
+    #    os.makedirs(outdir)
     # go through each stretch and process it
     N = len(df_stretches.keys())
     #breakpoint()
+    if len(df_stretches.keys())==0:
+        print('no files to process')
     stretch_list = []
     for i,key in enumerate(df_stretches.keys()):
+        stretch_dir = os.path.join(
+            stretch_dir0, key, 'stretch_stack_{}'.format(
+                cfg['main']['stretch_stack_flavor']))
+        pekel_dir = os.path.join(
+            pekel_dir0, key, 'pekel_{}'.format(
+                cfg['main']['pekel_flavor']))
+        outdir = os.path.join(outdir0, key, cfg['main']['flavor'])
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
         this_start = time.time()
         stretch_reaches = np.array(
             df_stretches[df_stretches[key]>0][key]).astype(int)
@@ -95,9 +111,9 @@ def main():
         # setup input/output files
         ####
         infile_stretch = os.path.join(
-            outdir0, '{}_stretch_stack.nc'.format(key))
+            stretch_dir, '{}_stretch_stack.nc'.format(key))
         infile_pekel = os.path.join(
-            outdir0, '{}_pekel_stats.nc'.format(key))
+            pekel_dir, '{}_pekel_stats.nc'.format(key))
         outfile_wse_stats = os.path.join(
             outdir, '{}_wse_stats.nc'.format(key))
         outfile_width_stats = os.path.join(
@@ -110,6 +126,11 @@ def main():
             outdir, '{}_height_width.nc'.format(key))
         outfile_bayes = os.path.join(
             outdir, '{}_bayes.nc'.format(key))
+        ####
+        # read the stretch data
+        ####
+        stretch_stack = rivscale.products.StretchStack.from_ncfile(
+            infile_stretch)
         ####
         # first process along stats
         ####
@@ -126,9 +147,6 @@ def main():
                 outfile_width_stats)
         else:
             print("  Processing along_stretch")
-            # read the stretch data
-            stretch_stack = rivscale.products.StretchStack.from_ncfile(
-                infile_stretch)
             # process it
             # TODO: handle config params
             wse_stats, width_stats = rivscale.estimate.process_along_stats(

@@ -43,7 +43,7 @@ import time
 
 EXAMPLE=''
 
-
+"""
 def manage_fields(df, use_wse_sm=False, dark_thresh=1.0):
     if df is None:
         return None
@@ -101,17 +101,22 @@ def get_swot_reach_data(cfg, stretch_reaches, dark_thresh=1.0):
                         [df,pd.read_csv(fle, keep_default_na=False)],
                         ignore_index=True)
     #
-    use_wse_sm = False
-    sm = cfg['data']['use_wse_sm']
-    if ((sm == 'True') or (sm == 'True') or (sm is True)):
-        use_wse_sm = True
+    #use_wse_sm = False
+    #sm = cfg['data']['use_wse_sm']
+    #if ((sm == 'True') or (sm == 'True') or (sm is True)):
+    #    use_wse_sm = True
     #
     #if 'dark_thresh' in cfg['data'].keys():
     #dark_thresh = float(cfg['data']['dark_thresh'])
     # don't filter on dark frac here...only on qual
-    df = manage_fields(df, use_wse_sm=use_wse_sm)#, dark_thresh=dark_thresh)
+    df = manage_fields(
+        df,
+        use_wse_sm=cfg['use_wse_sm'],
+        qual_filter=cfg['qual_filter'],
+        dark_thresh=cfg['dark_thresh'],
+        )#, dark_thresh=dark_thresh)
     return df
-
+"""
 def main():
     parser = argparse.ArgumentParser(
         description='Process river stretch, reach, or multireach',
@@ -122,7 +127,9 @@ def main():
         help='force rerun and overwriting of output files')
     args = parser.parse_args()
     # read in the config file
-    cfg = configparser.ConfigParser()
+    #cfg = configparser.ConfigParser()
+    #cfg.read(args.config)
+    cfg = rivscale.misc.CfgParser()
     cfg.read(args.config)
     # read int he SWORD file
     print('reading SWORD file')
@@ -130,7 +137,8 @@ def main():
         cfg['main']['sword_file'])
     # get the list of stretches (or multireaches)
     stretch_list0 = [
-        '{}'.format(t) for t in cfg['main']['stretch_subset'].split()]
+        '{}'.format(t) for t in '{}'.format(
+            cfg['main']['stretch_subset']).split()]
     stretch_list = []
     for stretch in stretch_list0:
         # get all reaches in basins smaller than stretch
@@ -144,30 +152,42 @@ def main():
         cfg['main']['stretch_file'],
         usecols=stretch_list)
     # make the output dir if needed
-    outdir = os.path.join(cfg['data']['out_path'],cfg['data']['orbit'])
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
+    outdir0 = os.path.join(cfg['main']['out_path'], cfg['main']['orbit'])
+    #if not os.path.exists(outdir):
+    #    os.makedirs(outdir)
     # go through each stretch and process it
     N = len(df_stretches.keys())
     #breakpoint()
     stretch_list = []
     for i,key in enumerate(df_stretches.keys()):
+        outdir = os.path.join(outdir0, key, 'reach_avg_{}'.format(
+            cfg['main']['flavor']))
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
         this_start = time.time()
         stretch_reaches = np.array(
             df_stretches[df_stretches[key]>0][key]).astype(int)
         print("processing {} of {}, stretch: {}".format(
             i, N, key), ", Reaches:", stretch_reaches)
         # check if already run
-        outfile_wse = os.path.join(outdir, '{}_wse_reach_average.nc'.format(key))
-        outfile_width = os.path.join(outdir, '{}_width_reach_average.nc'.format(key))
-        outfile_height_width = os.path.join(outdir, '{}_height_width_reach_average.nc'.format(key))
+        outfile_wse = os.path.join(
+            outdir, '{}_wse_reach_average.nc'.format(key))
+        outfile_width = os.path.join(
+            outdir, '{}_width_reach_average.nc'.format(key))
+        outfile_height_width = os.path.join(
+            outdir, '{}_height_width_reach_average.nc'.format(key))
 
         # check if output file exists, if it does skip, unless --force set
         if (os.path.exists(outfile_width) and (not args.force)):
             print("  This stretch already processed")
             continue
         # get the SWOT node data
-        swot_reach_df = get_swot_reach_data(cfg, stretch_reaches) 
+        #swot_reach_df = get_swot_reach_data(cfg, stretch_reaches) 
+        # get the SWOT node data
+        swot_reach_df = rivscale.data.get_swot_data(
+            cfg,
+            stretch_reaches,#sword_node_df,
+            kind='Reach')
         #breakpoint()
         if swot_reach_df is None:
             # skip cases where we have no data
@@ -186,12 +206,13 @@ def main():
             swot_reach_df, key, 'wse')
         width_reach_avg = rivscale.products.StretchAverageStats.from_reach_df(
             swot_reach_df, key, 'width')
+        #breakpoint()
         # also create the height_width object from the reaches
         height_width = None
         if (len(wse_reach_avg.percentiles)>0) and \
                 (len(width_reach_avg.percentiles)>0):
             height_width = rivscale.products.HeightWidthModel.from_objects(
-                wse_reach_avg, width_reach_avg)
+                {},wse_reach_avg, width_reach_avg)
         #
         """
         plt.figure()

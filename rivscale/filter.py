@@ -115,8 +115,10 @@ def filter_width_node_outliers(
 def filter_qual(
         df,
         height=True,
-        area=False,
-        dark_thresh=0.8):
+        area=True,
+        dark_thresh=1.0,
+        kind='OB',
+        ):
     """
     filter out swot data based on quality, dark_frac, ice,
     location in swath etc...
@@ -127,32 +129,69 @@ def filter_qual(
     else:
         qual_key = 'reach_q'
         qual_b_key = 'reach_q_b'
-    # filter out swath edges
-    #df = df[np.abs(df['xtrk_dist']) > 10000]
-    #df = df[np.abs(df['xtrk_dist']) < 60000] 
-    df = df[np.bitwise_and(df[qual_b_key], 2**13) == 0]
-    df = df[np.bitwise_and(df[qual_b_key], 2**14) == 0]
-    
-    # filter out high dark frac
-    df = df[df['dark_frac'] < dark_thresh]
+
+    ###
+    # compute all the various masks for wse and area
+    ###
     # filter out ice
-    df = df[df['ice_clim_f']==0]
+    ice = df['ice_clim_f']==0
+    
     # filter out bad qual
-    df = df[df[qual_key] < 3]
+    bad  = df[qual_key] < 3
     # drop xovr_cal_q == 2
-    df = df[df['xovr_cal_q'] < 2]
-    # now drop bitwise qual if commanded
+    xover = df['xovr_cal_q'] < 2
+    #    # fill values
+    wse_fill = df['wse'] > -99999999.0
+    area_fill = df['area_total'] > -99999999.0
+    
+    # filter out swath edges
+    near = np.bitwise_and(df[qual_b_key], 2**13) == 0
+    far = np.bitwise_and(df[qual_b_key], 2**14) == 0
+
+    # geolocation_qual_degraded
+    geoloc_deg = np.bitwise_and(df[qual_b_key], 2**19) == 0
+    # wse outlier
+    wse_outlier = np.bitwise_and(df[qual_b_key], 2**23) == 0
+    # classification_qual_degraded
+    class_q_deg = np.bitwise_and(df[qual_b_key], 2**18) == 0
+    # filter out high dark frac
+    dark = df['dark_frac'] <= dark_thresh
+    ###
+    # always drop ice, xover, and bad_q, and fill and dark_frac
+    # for both wse and area
+    ###
+    wse_keep = np.logical_and.reduce([ice, bad, xover, wse_fill, dark])
+    area_keep = np.logical_and.reduce([ice, bad, xover, area_fill, dark])
+    
+    if 'OB' in kind:
+        # filter out swath edges fo both wse and area
+        wse_keep = np.logical_and.reduce([wse_keep, near, far])
+        area_keep = np.logical_and.reduce([area_keep, near, far])
+        # drop degraded wse and wse outliers
+        wse_keep = np.logical_and.reduce([wse_keep, geoloc_deg, wse_outlier])
+        # drop classification_qual_degraded
+        area_keep = np.logical_and.reduce([area_keep, class_q_deg])
+    # TODO: handle OBIM etc
+    #breakpoint()
+    # null-out the bad data with nans
     if height:
-        # fill values
-        df = df[df['wse'] > -99999999.0]
-        # geolocation_qual_degraded
-        df = df[np.bitwise_and(df[qual_b_key], 2**19) == 0]
-        # wse outlier
-        df = df[np.bitwise_and(df[qual_b_key], 2**23) == 0]
+        wse_drop = np.logical_not(wse_keep)
+        df['wse'][wse_drop] = np.nan
+        if not area:
+            # drop all the nodes with bad wse
+            df = df[wse_keep]
     if area:
-        df = df[df['area_total'] > -99999999.0]
-        # classification_qual_degraded
-        df = df[np.bitwise_and(df[qual_b_key], 2**18) == 0]
+        area_drop = np.logical_not(area_keep)
+        df['area_total'][area_drop] = np.nan
+        df['area_det'][area_drop] = np.nan
+        df['width'][area_drop] = np.nan
+        if not height:
+            # drop all the nodes with bad area/width
+            df = df[width_keep]
+    if (height and area):
+        # drop only where both wse and area are bad
+        keep_df = np.logical_or(wse_keep, area_keep)
+        df = df[keep_df]
     return df
 
 def filter_bad_stretch_stack(

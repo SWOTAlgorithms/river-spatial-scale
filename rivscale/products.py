@@ -523,7 +523,12 @@ class StretchAverageStats(Product):
             plt.show()
 
     @classmethod
-    def from_reach_df(cls, df_in, reach, signal_key):
+    def from_reach_df(
+            cls,
+            df_in,
+            reach,
+            signal_key,
+            percentiles=[5, 25, 32, 50, 68, 75, 95]):
         stats = cls()
         stats.signal_key = signal_key
         stats.reaches = [reach,]
@@ -571,8 +576,20 @@ class StretchAverageStats(Product):
             mean * nan_msk) * np.ones_like(stats.mean)
         if signal_key=='wse':
             # TODO: should we also use the nanmask for slope reference?
+            stats.slope = np.array(slope).squeeze()
             stats.slope_reference = np.nanmean(
                 slope) * np.ones_like(stats.mean)
+        # create percentiles
+        stats.percentile_list = np.array(percentiles)
+        ptiles = np.zeros((
+            len(stats.mean),
+            len(percentiles),
+            )) + np.nan
+        for k, ptile in enumerate(percentiles):
+            ptiles[:,k] = np.nanpercentile(
+                stats.mean - stats.mean_reference,
+                ptile, axis=0) + stats.mean_reference
+        stats.percentiles = ptiles
         return stats
 
     @classmethod

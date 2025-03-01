@@ -36,6 +36,112 @@ import rivscale.misc
 
 import rivscale.products
 
+
+##### Feb 2025
+def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0): 
+    if df is None:
+        return None
+    if use_wse_sm:
+        df['wse'] = np.array(df['wse_sm']).copy()
+        df['wse_u'] = np.array(df['wse_sm_u']).copy()
+        df['wse_q'] = np.array(df['wse_sm_q']).copy()
+        df['wse_q_b'] = np.array(df['wse_sm_q_b']).copy()
+    # drop elements with no_data times
+    df = df[df['time_str']!='no_data']
+    df['time_str'] = pd.to_datetime(df['time_str'])
+    df['date'] = [ dt.date() for dt in df['time_str']]
+
+    # dont qual filter at this stage...only later
+    # drop bad data
+    # TODO: robustify qual filter methods (OB, IM, OBIM etc)
+    df = rivscale.filter.filter_qual(
+        df, height=True, area=False,
+        kind=qual_filter, dark_thresh=dark_thresh)
+    #
+    if 'cycle_id' in df.keys():
+        df['cycle'] = df['cycle_id']
+    if 'node_id' in df.keys():
+        df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(
+            df['node_id'])
+    df['wse_u'] = df['wse_r_u']
+    df['dist_out'] = df['p_dist_out']
+    return df
+
+def get_swot_data(
+        cfg,
+        stretch_reaches,#sword_node_df,
+        kind='Node'):
+    """
+    kind can be 'Node' or 'Reach'
+    """
+    # first handle optional config params
+    section = 'stretch_stack'
+    if kind == 'Reach':
+        section = 'reach_avg'
+
+    if 'method' not in cfg[section].keys():
+        cfg[section]['method'] = 'csv'
+    if 'use_wse_sm' not in cfg[section].keys():
+        cfg[section]['use_wse_sm'] = 'False'
+    if 'qual_filter' not in cfg[section].keys():
+        cfg[section]['qual_filter'] = 'OB'
+    if 'dark_thresh' not in cfg[section].keys():
+        cfg[section]['dark_thresh'] = '1.0'
+    if cfg[section]['method'] == 'csv':
+        df = pd.read_csv(cfg['main']['data_path'])
+        # TODO: filter out orbit and granules we want
+    elif cfg[section]['method'] == 'reach':
+        # go through all the RiverSP data for the desired granules/orbit
+        orbit = cfg['main']['orbit']
+        pass_cont = cfg['main']['granule']
+        df = None
+        for reach in stretch_reaches:#df_stretches.keys():
+            if 'both' in orbit:
+                orbits = ['cal_orbit', 'science_orbit']
+            else:
+                orbits = [orbit,]
+            fles = []
+            for this_orbit in orbits:
+                fle_str = os.path.join(cfg['main']['data_path'],
+                    '{}/{}/Multitemporal_{}/{}_{}_{}_{}.csv'.format(
+                        this_orbit,
+                        pass_cont,
+                        kind,
+                        reach,
+                        kind,
+                        pass_cont,
+                        this_orbit))
+                this_fles = glob.glob(fle_str)
+                fles = fles + this_fles
+
+            for fle in fles:
+                print('  ',fle)
+                # TODO: should catch if file doesnt exist or cant read it?
+                if df is None:
+                    # note that keep_default_na=False handles the 'NA'
+                    # fields so they dont become 'NaN'
+                    df = pd.read_csv(fle, keep_default_na=False)
+                else:
+                    df = pd.concat(
+                        [df,pd.read_csv(fle, keep_default_na=False)],
+                        ignore_index=True)
+    #
+    #use_wse_sm = False
+    #sm = cfg['stretch_stack']['use_wse_sm']
+    #if ((sm == 'True') or (sm == 'True') or (sm is True)):
+    #    use_wse_sm = True
+    #
+    #if 'dark_thresh' in cfg['data'].keys():
+    #dark_thresh = float(cfg['data']['dark_thresh'])
+    # don't filter on dark frac here...only on qual
+    #df = manage_fields(df, use_wse_sm=use_wse_sm)#, dark_thresh=dark_thresh)
+    df = manage_fields(
+        df,
+        use_wse_sm=cfg[section]['use_wse_sm'],
+        qual_filter=cfg[section]['qual_filter'],
+        dark_thresh=cfg[section]['dark_thresh'])
+    return df
+
 ########## Sept 2024, modified to use product class for river stretch processing
 def init_dict_from_keys(keys):
     """
