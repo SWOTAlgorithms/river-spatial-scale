@@ -1424,6 +1424,7 @@ class HeightWidthModel(Product):
             self,
             wse_data=None,
             width_data=None,
+            granule_id=None,
             outdir=None,
             show=False,
             title_tag=None):
@@ -1431,16 +1432,31 @@ class HeightWidthModel(Product):
         if (wse_data is not None) and (
                 width_data is not None):
             label = None
+            gid = None
             if isinstance(wse_data, np.ndarray):
                 d_width = width_data.copy()
                 d_wse = wse_data.copy()
+                if granule_id is not None:
+                    gid=granule_id.copy()
             else:
                 # assume it is a stretch average
                 if title_tag is None:
                     label='stretch average'
                 d_width = width_data.mean - width_data.mean_reference
                 d_wse = wse_data.mean - wse_data.mean_reference
-            plt.plot(d_width, d_wse, 'o', label=label)
+                gid = wse_data.granule_id.copy()
+            pid = None
+            if gid is not None:
+                # get the pass_id
+                pid = np.array([g.split('_')[1] for g in gid])
+                upid = np.unique(pid)
+            if pid is None:
+                plt.plot(d_width, d_wse, 'o', label=label)
+            else:
+                for p in upid:
+                    wse0 = d_wse[pid==p].flatten()
+                    width0 = d_width[pid==p].flatten()
+                    plt.plot(width0, wse0, 'o', label='pass {}'.format(p))
         plt.plot(self.width_coords, self.wse_coords,'-k', linewidth=2, label='model fit')
         plt.xlabel('$\Delta$ width')
         plt.ylabel('$\Delta$ wse')

@@ -73,7 +73,7 @@ def main():
     for stretch in stretch_list0:
         # get all reaches in basins smaller than stretch
         this_files = glob.glob(os.path.join(
-            stretch_dir0,'{}'.format(stretch),
+            stretch_dir0,'{}*'.format(stretch),
             'stretch_stack_*', '{}*_stretch_stack.nc'.format(stretch)))
         stretch_files = stretch_files + this_files
     stretch_list = []
