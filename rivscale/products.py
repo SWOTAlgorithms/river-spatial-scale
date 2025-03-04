@@ -578,6 +578,7 @@ class StretchAverageStats(Product):
         mean = []
         std = []
         other = []
+        granule_id = []
         other_key = 'wse'
         if signal_key=='wse':
             df[df['slope']<-1e5] = np.nan
@@ -595,9 +596,23 @@ class StretchAverageStats(Product):
             time_id.append(time_i)
             if signal_key=='wse':
                 slope.append(this_df['slope'])
+            ####
+            g_ids = []
+            for cyc, pas, cont in zip(
+                    this_df['cycle'], this_df['pass'], this_df['continent']):
+                g_id = '{:03d}_{:03d}_{}'.format(int(cyc), int(pas), cont)
+                g_ids.append(g_id)
+            #breakpoint()
+            ugids = np.unique(g_ids)
+            ugid='000_000_00'
+            if len(ugids)>0:
+                ugid = ugids[0]
+            granule_id.append(ugid)
+            ####
         #breakpoint()
         Other = np.array(other).squeeze()
         stats.time_id = np.array(time_id).squeeze()
+        stats.granule_id = np.array(granule_id).squeeze()
         stats.dist_out = np.array(dist_out).squeeze()
         stats.mean = np.array(mean).squeeze()
         stats.std = np.array(std).squeeze()
@@ -1456,8 +1471,17 @@ class HeightWidthModel(Product):
                 for p in upid:
                     wse0 = d_wse[pid==p].flatten()
                     width0 = d_width[pid==p].flatten()
-                    plt.plot(width0, wse0, 'o', label='pass {}'.format(p))
-        plt.plot(self.width_coords, self.wse_coords,'-k', linewidth=2, label='model fit')
+                    # also compute spearman
+                    res = scipy.stats.spearmanr(width0, wse0)
+                    #breakpoint()
+                    this_label = 'pass {}, $\gamma_s$={:1.2f}'.format(
+                        p, res.correlation)
+                    plt.plot(width0, wse0, 'o', label=this_label)
+        msk = np.logical_and(np.isfinite(d_width), np.isfinite(d_wse))
+        res = scipy.stats.spearmanr(d_width[msk], d_wse[msk])
+        this_label = 'model fit, tot $\gamma_s$={:1.2f}'.format(res.correlation)
+        plt.plot(self.width_coords, self.wse_coords,'-k', linewidth=2,
+            label=this_label)
         plt.xlabel('$\Delta$ width')
         plt.ylabel('$\Delta$ wse')
         plt.legend()
