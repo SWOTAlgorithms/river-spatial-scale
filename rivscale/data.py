@@ -205,7 +205,7 @@ def make_stretch_stack(stretch_name, stretch_reaches, swot_node_df, sword_node_d
     #breakpoint()
     # get separate list of the 1D keys
     sword_keys = ['dist_out', 'node_id','local_node_id']
-    extra_keys = sword_keys + ['time_id',]
+    extra_keys = sword_keys + ['time_id','granule_id']
     time_ids = np.sort(np.unique(np.floor(swot_node_df['time']/60/60)))
     stretch_data = init_dict_from_keys(keys + extra_keys)
     # go through each reach and stack the various items
@@ -233,6 +233,24 @@ def make_stretch_stack(stretch_name, stretch_reaches, swot_node_df, sword_node_d
                     full_key[nodes==n] = kk
                 signal[key].append(full_key)
             signal['time_id'].append(t_id)
+            g_ids = []
+            for cyc, pas, cont in zip(
+                    that_df['cycle'], that_df['pass'], that_df['continent']):
+                g_id = '{:03d}_{:03d}_{}'.format(cyc, pas, cont)
+                g_ids.append(g_id)
+            #breakpoint()
+            ugids = np.unique(g_ids)
+            ugid='000_000_00'
+            if len(ugids)>0:
+                ugid = ugids[0]
+            #else:
+            #    breakpoint()
+            #for g in ugids:# concat strings
+            #    if len(ugid)==0:
+            #        ugid = g
+            #    else:
+            #        ugid = ugid + "_" + g
+            signal['granule_id'].append(ugid)
         if len(np.array(signal[keys[0]]))==0:
             continue
         for key in keys:
@@ -240,10 +258,18 @@ def make_stretch_stack(stretch_name, stretch_reaches, swot_node_df, sword_node_d
         for key in sword_keys:
             stretch_data[key].append(this_sword_df[key])
         stretch_data['time_id'].append(np.array(signal['time_id']))
+        stretch_data['granule_id'].append(np.array(signal['granule_id']))
     # now smash each consecutive reach together
     for key in keys + sword_keys:
         data[key] = np.concatenate(stretch_data[key])
     data['time_id'] = stretch_data['time_id'][0]
+    #breakpoint()
+    # squash out the '000_000_00' if possible
+    out_g = stretch_data['granule_id'][0].copy()
+    for k in range(len(stretch_reaches)):
+        this_g = stretch_data['granule_id'][k].copy()
+        out_g[out_g=='000_000_00'] = this_g[out_g=='000_000_00']
+    data['granule_id'] = out_g
     return data
 
 ########## Older code ... TODO: clean up/delete/revise

@@ -86,7 +86,7 @@ class StretchStack(Product):
         ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['cycle_id', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['granule_id', odict([['dimensions', odict([['num_times', 0]])]])],
         #['swot_time', odict([['dimensions', odict([['num_times', 0]])]])],
         ['date_hour', odict([['dimensions', odict([['num_times', 0]])]])],
         ['wse', odict([['dimensions', DIMENSIONS_2D]])],
@@ -261,7 +261,8 @@ class StretchStack(Product):
             dist_out = np.broadcast_to(
                 self.dist_out,
                 np.shape(arr0.T)).T
-            plt.figure(figsize=(10,5))
+            plt.figure(figsize=(10,10))
+            plt.subplot(2,1,1)
             plt.plot(dist_out, arr0-ref2)
             plt.plot(
                 dist_out[outlier_mask],
@@ -281,6 +282,26 @@ class StretchStack(Product):
             plt.grid()
             plt.xlabel('dist_out')
             plt.ylabel(delta_tag+' '+key)
+            #
+            # Also plot 2D plots
+            #
+            darr = arr0-ref2
+            darr_out = np.zeros(np.shape(darr))
+            lim = np.median(IQR_g * IQR_scale)
+            darr_out[outlier_mask] = 1
+            #plt.figure()
+            plt.subplot(2,1,2)
+            plt.imshow(darr_out.T,
+                interpolation='none', aspect='auto', cmap='gray_r', clim=(0,1.1))
+            plt.imshow(darr.T,
+                interpolation='none', aspect='auto', cmap='jet', alpha=0.5,
+                clim=(-lim,lim))
+            plt.colorbar(label=delta_tag+' '+key)
+            #plt.title(delta_tag+' '+key)
+            plt.xlabel('node')
+            plt.ylabel('time')
+            #plt.tight_layout()
+            #breakpoint()
 
 class AlongStretchStats(Product):
     ATTRIBUTES = odict([
@@ -463,8 +484,10 @@ class AlongStretchStats(Product):
         # put the 50%ile in as the reference
         msk = stats.percentile_list==50
         ref = stats.percentiles[:,msk].squeeze()
-        ref_med = scipy.ndimage.median_filter(
-            ref, size=cfg['med_kernel_size'], mode='nearest')
+        ref_med = ref.copy()
+        if cfg['med_kernel_size'] is not None:
+            ref_med = scipy.ndimage.median_filter(
+                ref, size=cfg['med_kernel_size'], mode='nearest')
         # median filter the ref profile
         # TODO: maybe should do mean filter?
         if np.sum(msk)>0:
@@ -513,7 +536,8 @@ class StretchAverageStats(Product):
         ['reaches', odict([['dimensions', odict([['num_reaches', 0]])]])],
         ['dist_out', odict([['dimensions', odict([['num_times', 0]])]])],
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
-        ['cycle_id', odict([['dimensions', odict([['num_times', 0]])]])],
+        #['cycle_id', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['granule_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['mean', odict([['dimensions', odict([['num_times', 0]])]])],
         ['mean_reference', odict([['dimensions', odict([['num_times', 0]])]])],
         ['std', odict([['dimensions', odict([['num_times', 0]])]])],
@@ -620,7 +644,8 @@ class StretchAverageStats(Product):
         stats.signal_key = signal_key
         stats.reaches = stretch_stack.reaches.copy()
         stats.time_id = stretch_stack.time_id.copy()
-        stats.cycle_id = stretch_stack.cycle_id.copy()
+        #stats.cycle_id = stretch_stack.cycle_id.copy()
+        stats.granule_id = stretch_stack.granule_id.copy()
         # get stats
         signal = stretch_stack[signal_key]
         signal_u = stretch_stack[signal_key+'_u']
