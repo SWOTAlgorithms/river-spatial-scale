@@ -57,6 +57,14 @@ def main():
     width = dic['stretch_stack'].width.copy()
     #
     dark_frac = dic['stretch_stack'].dark_frac.copy()
+    # plot dark frac 2D
+    kwargs = {'cmap':'jet', 'aspect':'auto', 'interpolation':'none'}
+    plt.figure()
+    plt.imshow(dark_frac.T, **kwargs)
+    plt.title('dark_frac')
+    plt.xlabel('node')
+    plt.ylabel('time')
+    plt.colorbar()
     # wse
     wse_stretch_stack = dic['stretch_stack'].copy()
     wse2_stretch_stack = dic['stretch_stack'].copy() 
@@ -97,6 +105,11 @@ def main():
         pekel_stretch_stack.filter_node_outliers(
             dic['pekel_stats'], key='width',plot=True)
         plt.suptitle('width outliers (x) using pekel width stats')
+
+    if args.outdir is None:
+        plt.show()
+    breakpoint()
+    return 
     """
     # plot 2d
     #dic['stretch_stack'].filter_dark_water('width',0.2)

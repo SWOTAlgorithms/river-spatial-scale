@@ -137,6 +137,9 @@ def main():
         if not(os.path.exists(infile_stretch)):
             print("  The input stretch has not been created")
             continue
+        if len(stretch_stack.node_id) < 50:
+            print("  This is a short stretch, dont process it?")
+            continue
         # check if output file exists, if it does skip, unless --force set
         if (os.path.exists(outfile_width_stats) and (not args.force)):
             print("  This along_stretch already processed")

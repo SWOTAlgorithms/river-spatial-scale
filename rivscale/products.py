@@ -492,6 +492,9 @@ class AlongStretchStats(Product):
         # TODO: maybe should do mean filter?
         if np.sum(msk)>0:
             stats.reference = ref_med
+        if len(stats.percentile_list)<2:
+            # dont create 1d version
+            return None
         return stats
 
     def crop_to_reach(

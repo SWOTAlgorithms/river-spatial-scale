@@ -46,8 +46,8 @@ EXAMPLE=''
 def get_pekel_dfs(reaches, pekel_dir):
     df_list = []
     for r in reaches:
-        glob_str = os.path.join(pekel_dir,'*','Multitemporal_Node','{}_*.csv'.format(r))
-        
+        glob_str = os.path.join(
+            pekel_dir,'*','Multitemporal_Node','{}_*.csv'.format(r))
         this_fle = glob.glob(glob_str)
         if len(this_fle)>0:
             df_list.append(pd.read_csv(this_fle[0]))
