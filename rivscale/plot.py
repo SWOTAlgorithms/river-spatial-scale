@@ -175,7 +175,10 @@ def plot_stretch_stats(
     if len(y_ptiles)>0:
         plt.plot(x2D, y_ptiles, marker=marker)
     plt.plot(x, y_ref, 'k', linewidth=2)
-    plt.legend(ptiles+['ref',])
+    ncols = np.ceil((len(ptiles)+1)/3)
+    #if ncols==0:
+    #    ncols=1
+    plt.legend(ptiles+['ref',], ncol=ncols)
     plt.grid()
     plt.xlabel(x_label)
     plt.ylabel(y_key)
