@@ -14,43 +14,18 @@ import numpy as np
 import rivscale.products
 import matplotlib.pyplot as plt
 import argparse
+import configparser
 import os.path
+import glob
+import pandas as pd
+import rivscale.reconstruct
+
 EXAMPLE = ''
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Plot river stretch, reach, or multireach',
-        formatter_class=argparse.RawTextHelpFormatter,
-        epilog=EXAMPLE)
-    parser.add_argument('infile', nargs='+', help='input file(s)')
-    #parser.add_argument('-t','--filetype', type=str, default='StretchData',
-    #    help='StreachData, AlongStretchStats')
-    parser.add_argument('-o','--outdir', default=None,
-        help='output directory to save plots')
-    args = parser.parse_args()
-    #breakpoint()
-    """
-    filetype = []
-    # guess type from file names
-    # TODO: check that all are form the same stretch?
-    for fle in args.infile:
-        head, tail = os.path.split(fle)
-        #parts = tail.split('.nc')[0].split('_')
-        #kind = ''
-        #for part in parts[1:]:
-        #    kind = kind+'_'+part
-        if 'stretch_stack' in fle:
-            filetype.append('StretchStack')
-        elif 'stats' in fle:
-            filetype.append('AlongStretchStats')
-        elif 'stretch_average' in fle:
-            filetype.append('StretchAverageStats')
-        elif 'height_width' in fle:
-            filetype.append('HeightWidthModel')
-    """
+def plot_single_stretch(files, outdir=None, cfg=None):
     dic = {}
     # plot each individual file
-    for f in args.infile:
+    for f in files:
         base, fle = os.path.split(f)
         if 'stretch_stack' in fle:
             dic['stretch_stack'] = \
@@ -98,7 +73,7 @@ def main():
                 dic[key].plot(
                     wse_data=wse_data,
                     width_data=width_data,
-                    outdir=args.outdir,
+                    outdir=outdir,
                     show=False,
                     title_tag='stretch average data')
                 something_plotted=True
@@ -118,7 +93,7 @@ def main():
                 dic[key].plot(
                     wse_data=wse - ref2,
                     width_data=width - ref2_w,
-                    outdir=args.outdir,
+                    outdir=outdir,
                     show=False, 
                     title_tag='node measurements')
                 something_plotted=True
@@ -137,14 +112,14 @@ def main():
                 dic[key].plot(
                     wse_data=d_wse,
                     width_data=d_width,
-                    outdir=args.outdir,
+                    outdir=outdir,
                     show=False,
                     title_tag='Bayes node estimates')
                 something_plotted=True
             if not something_plotted:
                 # plot just the h/w fit
                 dic[key].plot(
-                    outdir=args.outdir,
+                    outdir=outdir,
                     show=False)
         elif key=='height_width_reach_average':
             wse_data = None
@@ -158,7 +133,7 @@ def main():
             dic[key].plot(
                 wse_data=wse_data,
                 width_data=width_data,
-                outdir=args.outdir,
+                outdir=outdir,
                 show=False,
                 title_tag=title_tag)
 
@@ -166,9 +141,128 @@ def main():
             # single object plot
             #if 'reach' not in key:
             #    # dont plot the time series of reach data
-            dic[key].plot(outdir=args.outdir, show=False)
-    
-    if args.outdir is None:
+            dic[key].plot(outdir=outdir, show=False)
+    # optionally plot the outliers?
+    if cfg is not None:
+        try:
+            stretch_stack = rivscale.reconstruct.reconstruct_filter_data(
+                cfg['reconstruct'],
+                dic['stretch_stack'].copy(),
+                dic['wse_stats'],
+                dic['pekel_stats'],
+                plot=True)
+        except:
+            print('could not plot outliers')
+    #if outdir is None:
+    #    plt.show()
+
+def setup_from_cfg(cfg):
+    """
+
+    """
+    stretch_list0 = [
+        '{}'.format(t) for t in '{}'.format(
+            cfg['main']['stretch_subset']).split()]
+    # make the output dir if needed
+    stretch_dir0 = os.path.join(
+        cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
+    pekel_dir0 = os.path.join(
+        cfg['main']['pekel_in_path'],cfg['main']['orbit'])
+    outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
+    #outdir = os.path.join(outdir0, cfg['main']['flavor'])
+    stretch_files = []
+    for stretch in stretch_list0:
+        # get all reaches in basins smaller than stretch
+        this_files = glob.glob(os.path.join(
+            stretch_dir0,'{}*'.format(stretch),
+            'stretch_stack_*', '{}*_stretch_stack.nc'.format(stretch)))
+        stretch_files = stretch_files + this_files
+    stretch_list = []
+    for fle in stretch_files:
+        head, tail = os.path.split(fle)
+        stretch_list.append(tail.split('_')[0])
+    df_stretches = pd.read_csv(
+        cfg['main']['stretch_file'],
+        usecols=stretch_list)
+    return df_stretches, stretch_dir0, pekel_dir0, outdir0
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Plot river stretch, reach, or multireach',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=EXAMPLE)
+    parser.add_argument('-c','--config', default=None,
+        help='output directory to save plots')
+    parser.add_argument('--infile', nargs='+', help='input file(s)')
+    #parser.add_argument('-t','--filetype', type=str, default='StretchData',
+    #    help='StreachData, AlongStretchStats')
+    #parser.add_argument('-o','--outdir', default=None,
+    #    help='output directory to save plots')
+    parser.add_argument('-s','--stretch_name', nargs='+', default=None,
+        help='stretch_name(s) to plot')
+    args = parser.parse_args()
+    cfg = configparser.ConfigParser()
+    cfg.read(args.config)
+    df_stretches, stretch_dir0, pekel_dir0, outdir0 = setup_from_cfg(cfg)
+    if len(df_stretches.keys())==0:
+        print('no files to process')
+    all_stretches = list(df_stretches.keys())
+    #breakpoint()
+    if args.stretch_name is not None:
+        all_stretches = list(args.stretch_name)
+    for i,key in enumerate(all_stretches):
+        stretch_dir = os.path.join(
+            stretch_dir0, key, 'stretch_stack_{}'.format(
+                cfg['main']['stretch_stack_flavor']))
+        pekel_dir = os.path.join(
+            pekel_dir0, key, 'pekel_{}'.format(
+                cfg['main']['pekel_flavor']))
+        outdir = os.path.join(outdir0, key, cfg['main']['flavor'])
+
+        file_stretch = os.path.join(
+            stretch_dir, '{}_stretch_stack.nc'.format(key))
+        file_pekel = os.path.join(
+            pekel_dir, '{}_pekel_stats.nc'.format(key))
+        file_wse_stats = os.path.join(
+            outdir, '{}_wse_stats.nc'.format(key))
+        file_width_stats = os.path.join(
+            outdir, '{}_width_stats.nc'.format(key))
+        file_wse_avg = os.path.join(
+            outdir, '{}_wse_stretch_average.nc'.format(key))
+        file_width_avg = os.path.join(
+            outdir, '{}_width_stretch_average.nc'.format(key))
+        file_height_width = os.path.join(
+            outdir, '{}_height_width.nc'.format(key))
+        file_bayes = os.path.join(
+            outdir, '{}_bayes.nc'.format(key))
+        files = []
+        if os.path.exists(file_stretch):
+            files.append(file_stretch)
+        if os.path.exists(file_pekel):
+            files.append(file_pekel)
+        if os.path.exists(file_wse_stats):
+            files.append(file_wse_stats)
+        if os.path.exists(file_width_stats):
+            files.append(file_width_stats)
+        if os.path.exists(file_wse_avg):
+            files.append(file_wse_avg)
+        if os.path.exists(file_width_avg):
+            files.append(file_width_avg)
+        if os.path.exists(file_height_width):
+            files.append(file_height_width)
+        if os.path.exists(file_bayes):
+            files.append(file_bayes)
+        #breakpoint()
+        # plot the stretch
+        #if os.path.exists(file_stretch):
+        #    plot_single_stretch([file_stretch], outdir=None)
+        # TODO: try to plot the reach one guessing the name?
+        # plot the pekel
+        #if os.path.exists(file_pekel):
+        #    plot_single_stretch([file_pekel,], outdir=None)
+        # now plot the rest
+        plot_single_stretch(files, outdir=None, cfg=cfg)
+        #if outdir is None:
         plt.show()
 
 if __name__ == "__main__":

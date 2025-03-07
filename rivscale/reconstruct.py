@@ -36,13 +36,20 @@ import rivscale.data
 
 ######## Feb 2025
 
-def process_bayes_reconstruction(
+def reconstruct_filter_data(
+        cfg,
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        plot=False):
+    """
+    def process_bayes_reconstruction(
         cfg,
         stretch_stack,
         wse_stats,
         width_stats,
         height_width):
-    """
+    
     TODO: enable overwriting of char_length_tau and prior_unc_alpha if commanded
     """
     # first handle optional config params
@@ -52,6 +59,11 @@ def process_bayes_reconstruction(
         cfg['width_dark_thresh'] = '0.3'
     if 'width_smooth_size' not in cfg.keys():
         cfg['width_smooth_size'] = 'None'
+    if 'wse_outlier_scale' not in cfg.keys():
+        cfg['wse_outlier_scale'] = '5.0'
+    if 'width_outlier_sclae' not in cfg.keys():
+        cfg['width_outlier_scale'] = '5.0'
+    """
     if 'wse_char_length_tau' not in cfg.keys():
         cfg['wse_char_length_tau'] = '100000.0'
     if 'wse_prior_unc_alpha' not in cfg.keys():
@@ -62,6 +74,7 @@ def process_bayes_reconstruction(
         cfg['width_prior_unc_alpha'] = '50.0'
     if 'rho_wse_width' not in cfg.keys():
         cfg['rho_wse_width'] = 50
+    """
     if 'crop' not in cfg.keys():
         cfg['crop'] = 'False'
     #
@@ -73,7 +86,7 @@ def process_bayes_reconstruction(
     # filter out bad data
     #stretch_stack = rivscale.filter.filter_width_node_outliers(
     #    stretch_stack, width_stats, width_outlier_scale, plot=True)
-    plot = False
+    #plot = False
     #stretch_stack.filter_node_outliers(wse_stats, key='wse', plot=plot)
     #stretch_stack.filter_node_outliers(width_stats, key='width', plot=plot)
     # first remove outliers allowing typical spread of variability
@@ -99,8 +112,8 @@ def process_bayes_reconstruction(
         key='wse',
         plot=plot)
 
-    if plot:
-        plt.show()
+    #if plot:
+    #    plt.show()
     # filter out high dark_frac nodes
     stretch_stack.filter_dark_water('width', cfg['width_dark_thresh'])
     stretch_stack.filter_dark_water('wse', cfg['wse_dark_thresh'])
@@ -115,6 +128,45 @@ def process_bayes_reconstruction(
         reach_id = stretch_stack.stretch_name
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
+    return stretch_stack
+
+def process_bayes_reconstruction(
+        cfg,
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        height_width):
+    # first handle optional config params
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['wse_dark_thresh'] = '0.8'
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['width_dark_thresh'] = '0.3'
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_outlier_scale' not in cfg.keys():
+        cfg['wse_outlier_scale'] = '5.0'
+    if 'width_outlier_sclae' not in cfg.keys():
+        cfg['width_outlier_scale'] = '5.0'
+    if 'wse_char_length_tau' not in cfg.keys():
+        cfg['wse_char_length_tau'] = '100000.0'
+    if 'wse_prior_unc_alpha' not in cfg.keys():
+        cfg['wse_prior_unc_alpha'] = '1.5'
+    if 'width_char_length_tau' not in cfg.keys():
+        cfg['width_char_length_tau'] = '100000.0'
+    if 'width_prior_unc_alpha' not in cfg.keys():
+        cfg['width_prior_unc_alpha'] = '50.0'
+    if 'rho_wse_width' not in cfg.keys():
+        cfg['rho_wse_width'] = 50
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = 'False'
+
+    # filter the data
+    stretch_stack = reconstruct_filter_data(
+        cfg,
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        plot=False)
     # now do the reconstruction
     joint_bayes = rivscale.products.BayesData.joint(
         stretch_stack,

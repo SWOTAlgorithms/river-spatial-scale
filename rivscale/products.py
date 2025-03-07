@@ -98,6 +98,7 @@ class StretchStack(Product):
         ['node_q_b', odict([['dimensions', DIMENSIONS_2D]])],
         ['dark_frac', odict([['dimensions', DIMENSIONS_2D]])],
     ])
+    # TODO: should w also keep ice flag, n_good_pix, sig0 etc...?
 
     def plot(
             self,
@@ -168,7 +169,8 @@ class StretchStack(Product):
             Delta2=False,
             use_ptiles=False,
             IQR_scale=5.0,
-            plot=False):
+            plot=False,
+            title_tag=''):
         """
         This method filters the StretchStack object for the 'key'
         variable by replacing the values with nans. The method applies
@@ -282,6 +284,8 @@ class StretchStack(Product):
             plt.grid()
             plt.xlabel('dist_out')
             plt.ylabel(delta_tag+' '+key)
+            yscale = IQR_scale*IQR_g[0,0]*2
+            plt.ylim((-yscale, yscale))
             #
             # Also plot 2D plots
             #
@@ -300,6 +304,8 @@ class StretchStack(Product):
             #plt.title(delta_tag+' '+key)
             plt.xlabel('node')
             plt.ylabel('time')
+            #breakpoint()
+            plt.suptitle(self.stretch_name+' '+title_tag)
             #plt.tight_layout()
             #breakpoint()
 
@@ -1305,6 +1311,10 @@ class HeightWidthModel(Product):
             holding stretch_average estimates (over all nodes) of wse
             and width derived from 2D multitemporal data
             """)}],
+        ['stretch_name',{'dtype':'str', 'value': textjoin("""
+            Name given to this stretch instance (e.g., center reach
+            or river name)
+            """)}],
         ['width_err',{'dtype':'float', 'value':-1}],
         ['wse_err',{'dtype':'float', 'value':-1}],
         ['count',{'dtype':'int', 'value':0}],
@@ -1332,6 +1342,7 @@ class HeightWidthModel(Product):
             cfg['sigma_n'] = 50
         sigma_n = cfg['sigma_n']
         height_width = cls()
+        height_width.stretch_name = wse_stretch_avg.stretch_name
         if width_along_stats is None:
             ptile_list = [5, 25, 32, 50, 68, 75, 95]
         else:
@@ -1490,7 +1501,7 @@ class HeightWidthModel(Product):
         plt.legend()
         plt.grid()
         if title_tag is not None:
-            plt.title(title_tag)
+            plt.title(self.stretch_name+' '+title_tag)
         # TODO: write to file if commanded
         #if outdir is not None:
         if show:

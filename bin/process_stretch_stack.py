@@ -61,7 +61,8 @@ def main():
     # handle non-strings for stretch_subset
     #cfg['main']['stretch_subset'] = '{}'.format(cfg['main']['stretch_subset'])
     stretch_list0 = [
-        '{}'.format(t) for t in '{}'.format(cfg['main']['stretch_subset']).split()]
+        '{}'.format(t) for t in '{}'.format(
+            cfg['main']['stretch_subset']).split()]
     # make the output dir if needed
     stretch_dir0 = os.path.join(
         cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
@@ -90,7 +91,7 @@ def main():
     #breakpoint()
     if len(df_stretches.keys())==0:
         print('no files to process')
-    stretch_list = []
+    #stretch_list = []
     for i,key in enumerate(df_stretches.keys()):
         stretch_dir = os.path.join(
             stretch_dir0, key, 'stretch_stack_{}'.format(
