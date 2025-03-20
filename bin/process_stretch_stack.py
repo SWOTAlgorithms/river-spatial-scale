@@ -119,6 +119,8 @@ def main():
             outdir, '{}_wse_stats.nc'.format(key))
         outfile_width_stats = os.path.join(
             outdir, '{}_width_stats.nc'.format(key))
+        outfile_dark_stats = os.path.join(
+            outdir, '{}_dark_stats.nc'.format(key))
         outfile_wse_avg = os.path.join(
             outdir, '{}_wse_stretch_average.nc'.format(key))
         outfile_width_avg = os.path.join(
@@ -149,28 +151,50 @@ def main():
                 outfile_wse_stats)
             width_stats = rivscale.products.AlongStretchStats.from_ncfile(
                 outfile_width_stats)
+            dark_stats = rivscale.products.AlongStretchStats.from_ncfile(
+                outfile_dark_stats)
         else:
             print("  Processing along_stretch")
             # process it
-            # TODO: handle config params
-            wse_stats, width_stats = rivscale.estimate.process_along_stats(
-                cfg['along_stats'], stretch_stack)
+            wse_stats, width_stats, dark_stats = \
+                rivscale.estimate.process_along_stats(
+                    cfg['along_stats'], stretch_stack)
             # write output files
             if wse_stats is not None:
                 wse_stats.to_ncfile(outfile_wse_stats)
             if width_stats is not None:
                 width_stats.to_ncfile(outfile_width_stats)
+            if dark_stats is not None:
+                dark_stats.to_ncfile(outfile_dark_stats)
             if (wse_stats is None):
                 print(" wse_stats not generated, skipping rest of processing")
                 # TODO: should we check width too? but only of not using Pekel?
                 continue
         ####
+        # handle optionally using Pekel
+        # stop here if commanded but pekel files dont exist
+        ####
+        pekel_stats = None
+        sa_cfg = cfg['stretch_average']
+        hw_cfg = cfg['height_width']
+        bayes_cfg = cfg['reconstruct']
+        if 'use_pekel' not in sa_cfg.keys():
+            sa_cfg['use_pekel'] = 'False'
+        if 'use_pekel' not in hw_cfg.keys():
+            hw_cfg['use_pekel'] = 'False'
+        if 'use_pekel' not in bayes_cfg.keys():
+            bayes_cfg['use_pekel'] = 'False'
+        if (sa_cfg['use_pekel']) or (hw_cfg['use_pekel']) or (
+                bayes_cfg['use_pekel']):
+            if not(os.path.exists(infile_pekel)):
+                print("  The input pekel file has not been created")
+                continue
+            else:
+                pekel_stats = rivscale.products.AlongStretchStats.from_ncfile(
+                    infile_pekel)
+        ####
         # now process stretch_average
         ####
-        # TODO: handle optionally using Pekel
-        if not(os.path.exists(infile_pekel)):
-            print("  The input pekel file has not been created")
-            continue
         # check if output file exists, if it does skip, unless --force set
         if (os.path.exists(outfile_width_avg) and (not args.force)):
             print("  This stretch_average already processed")
@@ -180,10 +204,12 @@ def main():
                 outfile_width_avg)
         else:
             print("  Processing stretch_average")
-            pekel_stats = rivscale.products.AlongStretchStats.from_ncfile(
-                infile_pekel)
+            if sa_cfg['use_pekel']:
+                this_width_stats = pekel_stats
+            else:
+                this_width_stats = width_stats.copy()
             wse_avg, width_avg = rivscale.estimate.process_stretch_average(
-                cfg['stretch_average'], stretch_stack, wse_stats, pekel_stats)
+                sa_cfg, stretch_stack, wse_stats, this_width_stats)
             if wse_avg is not None:
                 wse_avg.to_ncfile(outfile_wse_avg)
             if width_avg is not None:
@@ -198,11 +224,15 @@ def main():
                 outfile_height_width)
         else:
             print("  Processing height_width")
+            if hw_cfg['use_pekel']:
+                this_width_stats = pekel_stats
+            else:
+                this_width_stats = width_stats.copy()
             height_width = rivscale.products.HeightWidthModel.from_objects(
                 cfg['height_width'],
                 wse_avg,
                 width_avg,
-                width_stats)
+                this_width_stats)
             if height_width is not None:
                 height_width.to_ncfile(outfile_height_width)
         ####
@@ -212,11 +242,15 @@ def main():
             print("  This bayes already processed")
         else:
             print("  Processing bayes")
+            if bayes_cfg['use_pekel']:
+                this_width_stats = pekel_stats
+            else:
+                this_width_stats = width_stats.copy()
             bayes = rivscale.reconstruct.process_bayes_reconstruction(
                 cfg['reconstruct'],
                 stretch_stack,
                 wse_stats,
-                width_stats,
+                this_width_stats,
                 height_width)
             if bayes is not None:
                 bayes.to_ncfile(outfile_bayes)

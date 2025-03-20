@@ -53,6 +53,15 @@ def process_along_stats(cfg, stretch_stack_in):
     to estimate the along-river statistics for WSE and width
     """
     # first handle optional config params
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_ref_kernel_size' not in cfg.keys():
+        cfg['wse_ref_kernel_size'] = '35'
+    if 'width_ref_kernel_size' not in cfg.keys():
+        cfg['width_ref_kernel_size'] = '11'
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = 'False'
+    """
     if 'wse_dark_thresh' not in cfg.keys():
         cfg['wse_dark_thresh'] = '0.8'
     if 'wse_dark_thresh' not in cfg.keys():
@@ -69,7 +78,12 @@ def process_along_stats(cfg, stretch_stack_in):
         cfg['width_ref_kernel_size'] = '11'
     if 'crop' not in cfg.keys():
         cfg['crop'] = 'False'
+    """
     stretch_stack = stretch_stack_in.copy()
+    # create the dark stats before any filtering
+    dark_stats = rivscale.products.AlongStretchStats.from_StretchStack(
+        stretch_stack, signal_key='dark_frac', kernel_size=None)
+    """
     #breakpoint()
     stretch_stack.filter_dark_water('wse', cfg['wse_dark_thresh'])
     stretch_stack.filter_dark_water('width', cfg['width_dark_thresh'])
@@ -98,12 +112,20 @@ def process_along_stats(cfg, stretch_stack_in):
         plt.show()
     # drop times/cycles with too little good quality data
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack)
+    """
+    # filter the data
+    stretch_stack, _ = rivscale.filter.filter_stretch_stack(
+        cfg,
+        stretch_stack,
+        wse_stats=None,
+        width_stats=None,
+        plot=False)
     if np.shape(stretch_stack.width)[1]==0:
         print('  No SWOT data left after multitemporal filtering')
-        return None, None
-    # optionally smooth the widths
-    if cfg['width_smooth_size'] is not None:
-        stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
+        return None, None, None
+    ## optionally smooth the widths
+    #if cfg['width_smooth_size'] is not None:
+    #    stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
     # compute multitemporal statistics
     wse_stats = rivscale.products.AlongStretchStats.from_StretchStack(
         stretch_stack, signal_key='wse', kernel_size=cfg['wse_ref_kernel_size'])
@@ -113,7 +135,7 @@ def process_along_stats(cfg, stretch_stack_in):
         # crop to reach
         wse_stats = wse_stats.crop_to_reach()
         width_stats = width_stats.crop_to_reach()
-    return wse_stats, width_stats
+    return wse_stats, width_stats, dark_stats
 
 def process_stretch_average(
         cfg,
@@ -121,7 +143,7 @@ def process_stretch_average(
         wse_stats_in,
         width_stats_in):
     """
-
+    if reach_id is a valid id in the, crop the stats to be only over that reach
     """
     # first handle optional config params
     if 'wse_dark_thresh' not in cfg.keys():
@@ -148,6 +170,7 @@ def process_stretch_average(
     stretch_stack = stretch_stack_in.copy()
     wse_stats = wse_stats_in.copy()
     width_stats = width_stats_in.copy()
+    """
     #stretch_stack = rivscale.filter.filter_bad_stretch_stack(
     #    stretch_stack, wse_dark_thresh, width_dark_thresh)
     # filter width outlier
@@ -197,6 +220,14 @@ def process_stretch_average(
         reach_id = stretch_stack.stretch_name
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
+    """
+    # filter the data
+    stretch_stack, reach_id = rivscale.filter.filter_stretch_stack(
+        cfg,
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        plot=False)
     # optionally smooth the widths
     if cfg['width_smooth_size'] is not None:
         stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
@@ -209,12 +240,12 @@ def process_stretch_average(
     # get stretch average stats
     wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
         stretch_stack, signal_key='wse', along_stats=wse_stats,
-        average_method='bayes_weighted',
+        average_method='bayes_simple',#'bayes_weighted',
         slope_method='bayes',
         reach_id=reach_id)
     width_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
         stretch_stack, signal_key='width', along_stats=width_stats,
-        average_method='bayes_weighted',
+        average_method='bayes_simple',#'bayes_weighted',
         slope_method='bayes',
         reach_id=reach_id)
     # also filter stretch-outliers
@@ -264,8 +295,10 @@ def get_med_profile(signal, dist_out, kernel_size=35):
     med_interp = np.interp(
         dist_out, dist_out[msk], med[msk], left=med_min, right=med_max)
     # do along-river smoothing, preserving discontinuitites
-    #med_filt = scipy.signal.medfilt(med_interp, kernel_size=kernel_size)
-    med_filt = scipy.ndimage.median_filter(med_interp, size=kernel_size, mode='nearest')
+    med_filt = med_interp.copy()
+    if kernel_size is not None:
+        med_filt = scipy.ndimage.median_filter(
+            med_interp, size=kernel_size, mode='nearest')
     return med_filt
 
 def get_local_std(signal, signal_ref_1d, size=10):

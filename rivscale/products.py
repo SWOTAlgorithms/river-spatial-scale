@@ -22,6 +22,7 @@ import rivscale.plot
 import matplotlib.pyplot as plt
 import scipy.interpolate
 import pandas as pd
+import os.path
 
 def textjoin(text):
     """Dedent join and strip text"""
@@ -120,6 +121,21 @@ class StretchStack(Product):
                 y_anom=[False, True],
                 outdir=outdir,
                 title_tag=title_tag)
+            # plot the 2D wse and wse_anom
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='wse',
+                y_reference=wse_reference,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='wse',
+                y_reference=wse_reference,
+                y_anom=True,
+                outdir=outdir,
+                title_tag=title_tag)
         if width_reference is not None:
             # plot the width and width_anom together
             rivscale.plot.plot_stretch_stack(
@@ -128,6 +144,21 @@ class StretchStack(Product):
                 y_keys=['width','width'],
                 y_reference=[width_reference, width_reference],
                 y_anom=[False, True],
+                outdir=outdir,
+                title_tag=title_tag)
+            # plot the 2D width and width anom
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='width',
+                y_reference=width_reference,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='width',
+                y_reference=width_reference,
+                y_anom=True,
                 outdir=outdir,
                 title_tag=title_tag)
         if (wse_reference is None) and (width_reference is None):
@@ -140,14 +171,38 @@ class StretchStack(Product):
                 y_anom=[False, False],
                 outdir=outdir,
                 title_tag=title_tag)
-        """
-        rivscale.plot.plot_stretch_stack(
-            self,
-            x_key='time_id',
-            y_keys=['wse','width'],
-            outdir=outdir,
-            marker='o')
-        """
+            # plot the 2D height and width
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='wse',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='width',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        if np.nansum(self['dark_frac'])>0:
+            # also plot the dark frac 1D and 2D
+            rivscale.plot.plot_stretch_stack(
+                self,
+                x_key=x_key,
+                y_keys=['dark_frac',],
+                y_reference=[None,],
+                y_anom=[False,],
+                outdir=outdir,
+                title_tag=title_tag)
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='dark_frac',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
         if show:
             plt.show()
             
@@ -170,7 +225,8 @@ class StretchStack(Product):
             use_ptiles=False,
             IQR_scale=5.0,
             plot=False,
-            title_tag=''):
+            title_tag='',
+            outdir=None):
         """
         This method filters the StretchStack object for the 'key'
         variable by replacing the values with nans. The method applies
@@ -282,8 +338,8 @@ class StretchStack(Product):
                 self.dist_out,
                 -IQR_scale*IQR_g,'g', linewidth=2)
             plt.grid()
-            plt.xlabel('dist_out')
-            plt.ylabel(delta_tag+' '+key)
+            plt.xlabel('dist_out (m)')
+            plt.ylabel(rivscale.plot.label_units(delta_tag+' '+key))
             yscale = IQR_scale*IQR_g[0,0]*2
             plt.ylim((-yscale, yscale))
             #
@@ -300,14 +356,28 @@ class StretchStack(Product):
             plt.imshow(darr.T,
                 interpolation='none', aspect='auto', cmap='jet', alpha=0.5,
                 clim=(-lim,lim))
-            plt.colorbar(label=delta_tag+' '+key)
+            plt.colorbar(label=rivscale.plot.label_units(delta_tag+' '+key))
             #plt.title(delta_tag+' '+key)
-            plt.xlabel('node')
-            plt.ylabel('time')
+            plt.xlabel('node index')
+            plt.ylabel('time index')
             #breakpoint()
-            plt.suptitle(self.stretch_name+' '+title_tag)
+            if title_tag != '':
+                title_tag = title_tag + ' '
+            subtitle = '(x and dark hue flagged as outliers)'
+            title = '{} {} {} {}outliers'.format(
+                self.stretch_name, delta_tag, key, title_tag)
+            plt.suptitle(title+'\n'+subtitle)
             #plt.tight_layout()
             #breakpoint()
+            if outdir is not None:
+                # create output dir if not exist
+                if not os.path.exists(outdir):
+                    os.makedirs(outdir)
+                #breakpoint()
+                fname = title.replace(' ','_').replace(
+                    '$\Delta$','delta').replace('$\Delta^2$','delta2')
+                plt.savefig(os.path.join(outdir, fname), dpi=300)
+                plt.close()
 
 class AlongStretchStats(Product):
     ATTRIBUTES = odict([
@@ -340,12 +410,13 @@ class AlongStretchStats(Product):
     ])
 
 
-    def plot(self, outdir=None, show=False):
+    def plot(self, outdir=None, show=False, title_tag=''):
         rivscale.plot.plot_stretch_stats(
             self,
             x_key='dist_out',
             outdir=outdir,
-            show=show)
+            show=show,
+            title_tag=title_tag)
 
     @classmethod
     def from_StretchStack(
@@ -550,17 +621,25 @@ class StretchAverageStats(Product):
         ['mean', odict([['dimensions', odict([['num_times', 0]])]])],
         ['mean_reference', odict([['dimensions', odict([['num_times', 0]])]])],
         ['std', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['uncert', odict([['dimensions', odict([['num_times', 0]])]])],
         ['count', odict([['dimensions', odict([['num_times', 0]])]])],
         ['percentiles', odict([['dimensions', DIMENSIONS_PCNT]])],
         ['percentile_list', odict([['dimensions', odict([['num_percentiles', 0]])]])],
         ['slope', odict([['dimensions', odict([['num_times', 0]])]])],
         ['slope_reference', odict([['dimensions', odict([['num_times', 0]])]])],
     ])
-    def plot(self, outdir=None, show=False):
+    def plot(self, outdir=None, show=False, title_tag='', per_pass=False):
         rivscale.plot.plot_stretch_stats(
             self,
             x_key='time_id',
-            outdir=outdir)
+            outdir=outdir,
+            title_tag=title_tag)
+        if per_pass:
+            # also plot the per-pass time-series wse and width
+            rivscale.plot.plot_per_pass_time_series(
+                self,
+                outdir=outdir,
+                title_tag=title_tag)
         if show:
             plt.show()
 
@@ -680,9 +759,10 @@ class StretchAverageStats(Product):
                 bayes = BayesData.simple(
                     stretch_stack,
                     along_stats,
-                    signal_key)
-                    #char_length_tau,
-                    #prior_unc_alpha)
+                    signal_key)# use bayes parameters in along_stats
+                #ref = along_stats.reference.copy()
+                #ref2 = np.broadcast_to(ref, np.shape(signal.T)).T
+                #breakpoint()
             if 'bayes' in average_method:
                 signal = bayes.signal
                 signal_u = bayes.signal_u
@@ -725,7 +805,7 @@ class StretchAverageStats(Product):
         # always do simple mean of reference
         #stats.mean_reference = np.nanmean(np.array(reference), axis=0)
         # weighted mean of ref too
-        stats.mean_reference = np.nansum(
+        stats.mean_reference = np.nansum(# TODO: double check if use widow_valid
             reference * window, axis=0) / (
                 sum_window)#).filled(np.nan)
         if isinstance(stats.mean_reference, np.ma.MaskedArray):
@@ -749,7 +829,23 @@ class StretchAverageStats(Product):
         mask = np.zeros(np.shape(signal))
         mask[np.isfinite((
             signal-reference) * window_valid)] = 1
+        # TODO: handle count when doing Bayes?
+        #       maybe also/just compute an estimate of the error
+        #       of the stretch average estimate?
         stats.count = np.nansum(mask, axis=0)
+        if 'bayes' in average_method:
+            # put in the bayes uncert instead of sample std
+            post_cov = bayes.signal_post_cov
+            #breakpoint()
+            std = []
+            N = len(stretch_stack.node_id)
+            One = np.ones((N,1)).squeeze()
+            for k,mn in enumerate(stats.mean):
+                sig2 = 1/N**2 * One @ post_cov[:,:,k] @ One.T
+                std.append(np.sqrt(sig2))
+            stats.uncert = np.array(std)
+        else:
+            stats.uncert = stats.std / np.sqrt(stats.count)
         stats.percentile_list = np.array(percentiles)
         ptiles = np.zeros((
             len(stats.mean),
@@ -816,8 +912,9 @@ class BayesData(Product):
             self,
             x_key='dist_out', # or 'time_id'
             outdir=None,
-            show=False):
-        title_tag = 'Bayes'
+            show=False,
+            title_tag=''):
+        title_tag = title_tag+'Bayes'
         # create reference object
         wse_reference = AlongStretchStats()
         width_reference = AlongStretchStats()
@@ -853,7 +950,9 @@ class BayesData(Product):
         stretch_stack.plot(
             wse_reference,
             width_reference,
-            title_tag=title_tag)
+            title_tag=title_tag,
+            outdir=outdir,
+            show=show)
 
     @classmethod
     def simple(
@@ -1337,24 +1436,45 @@ class HeightWidthModel(Product):
             width_stretch_avg,
             width_along_stats=None,
             wse_anom=True,
-            width_anom=True):
+            width_anom=True,
+            stretch_name=None):
         if 'sigma_n' not in cfg.keys():
             cfg['sigma_n'] = 50
         sigma_n = cfg['sigma_n']
         height_width = cls()
-        height_width.stretch_name = wse_stretch_avg.stretch_name
+        if stretch_name is not None:
+            height_width.stretch_name = stretch_name
+        else:
+            if isinstance(wse_stretch_avg, StretchAverageStats):
+                height_width.stretch_name = wse_stretch_avg.stretch_name
+            elif isinstance(width_stretch_avg, StretchAverageStats):
+                height_width.stretch_name = width_stretch_avg.stretch_name
+            else:
+                height_width.stretch_name = 'arrays'
         if width_along_stats is None:
             ptile_list = [5, 25, 32, 50, 68, 75, 95]
         else:
             ptile_list = width_along_stats.percentile_list
         # get percntiles of measured reach data
         #Pm = np.nanpercentile(width_stretch_avg.mean, ptile_list)
-        wse = wse_stretch_avg.mean
-        width = width_stretch_avg.mean
+        if isinstance(wse_stretch_avg, StretchAverageStats):
+            wse = wse_stretch_avg.mean
+            wse_reference = wse_stretch_avg.mean_reference
+        else:
+            # assume it is an array
+            wse = wse_stretch_avg.copy()
+            wse_reference = np.nanmedian(wse)
+        if isinstance(width_stretch_avg, StretchAverageStats):
+            width = width_stretch_avg.mean
+            width_reference = width_stretch_avg.mean_reference
+        else:
+            # assume it is an array
+            width = width_stretch_avg.copy()
+            width_reference = np.nanmedian(width)
         if wse_anom:
-            wse = wse - wse_stretch_avg.mean_reference 
+            wse = wse - wse_reference 
         if width_anom:
-            width = width - width_stretch_avg.mean_reference
+            width = width - width_reference
         # check that wse and width are all valid over the same places
         good_msk = np.logical_and(np.isfinite(wse), np.isfinite(width))
         wse = wse[good_msk]
@@ -1465,6 +1585,9 @@ class HeightWidthModel(Product):
             if isinstance(wse_data, np.ndarray):
                 d_width = width_data.copy()
                 d_wse = wse_data.copy()
+                # make them anomalies
+                d_wse = d_wse - np.nanmedian(d_wse)
+                d_width = d_width - np.nanmedian(d_width)
                 if granule_id is not None:
                     gid=granule_id.copy()
             else:
@@ -1496,14 +1619,23 @@ class HeightWidthModel(Product):
         this_label = 'model fit, tot $\gamma_s$={:1.2f}'.format(res.correlation)
         plt.plot(self.width_coords, self.wse_coords,'-k', linewidth=2,
             label=this_label)
-        plt.xlabel('$\Delta$ width')
-        plt.ylabel('$\Delta$ wse')
+        plt.xlabel('$\Delta$ width (m)')
+        plt.ylabel('$\Delta$ wse (m)')
         plt.legend()
         plt.grid()
+
+        title = self.stretch_name
         if title_tag is not None:
-            plt.title(self.stretch_name+' '+title_tag)
-        # TODO: write to file if commanded
-        #if outdir is not None:
+            title = title + ' ' +title_tag
+        fname = title + '_wse_vs_width'
+        plt.title(title)
+        if outdir is not None:
+            # create output dir if not exist
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+            fname = fname.replace(' ','_')
+            plt.savefig(os.path.join(outdir, fname), dpi=300)
+            plt.close()
         if show:
             plt.show()
 

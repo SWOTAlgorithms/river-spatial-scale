@@ -36,6 +36,13 @@ import rivscale.reconstruct
 import seaborn as sns
 
 ########## Jan 2025 add spectral plots
+def label_units(label):
+    if 'slope' in label:
+        label = label + ' (m/m)'
+    elif ('wse' in label) or ('width' in label) or ('dist_out' in label):
+        label = label + ' (m)'
+    return label
+
 def plot_stretch_average_hw(stretch_data):
     p_est = stretch_data['hw_params']
     wse = stretch_data.stretch_wse_mean
@@ -136,13 +143,16 @@ def plot_stretch_stats(
         outdir=None,
         show=False,
         figsize=(10,5),
-        plot_slope=False):
+        plot_slope=False,
+        title_tag=''):
     nplots = 2
     if 'slope' in (stats.variables.keys()):
         plot_slope = True
         figsize = (figsize[0], figsize[1] + 2)
         nplots = 3
     title = stats.stretch_name
+    if title_tag != '':
+        title = title+' '+title_tag
     x = stats[x_key]
     x_label = x_key
     marker=None
@@ -177,12 +187,14 @@ def plot_stretch_stats(
     plt.plot(x, y_ref, 'k', linewidth=2)
     ncols = np.ceil((len(ptiles)+1)/3)
     #if ncols==0:
-    #    ncols=1
+    #    ncols=i
+    y_label = y_key
     plt.legend(ptiles+['ref',], ncol=ncols)
     plt.grid()
-    plt.xlabel(x_label)
-    plt.ylabel(y_key)
-    plt.suptitle(title+'{} statistics'.format(y_key))
+    plt.xlabel(label_units(x_label))
+    plt.ylabel(label_units(y_label))
+    title = title+' {} statistics'.format(y_key)
+    plt.suptitle(title)
     plt.subplot(nplots,1,2)
     plt.plot(x, y_mean, marker=marker)
     plt.plot(x, y_mean+y_std,'--')
@@ -190,68 +202,156 @@ def plot_stretch_stats(
     plt.plot(x, y_ref, 'k', linewidth=2)
     plt.legend(['mean', 'mean + std', 'mean - std', 'ref'])
     plt.grid()
-    plt.xlabel(x_label)
-    plt.ylabel(y_key)
+    plt.xlabel(label_units(x_label))
+    plt.ylabel(label_units(y_label))
     if plot_slope:
         plt.subplot(nplots,1,3)
         plt.plot(x, stats.slope, label='data', marker=marker)
         plt.plot(x, stats.slope_reference, label='reference', marker=marker)
         plt.legend()
         plt.grid()
-        plt.xlabel(x_label)
-        plt.ylabel(y_key+'_slope')
+        plt.xlabel(label_units(x_label))
+        plt.ylabel(label_units(y_key+'_slope'))
     plt.tight_layout()
     if outdir is not None:
         # create output dir if not exist
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        fname = '{}_{}_{}_vs_{}'.format(title, file_tag, y_key, x_label)
+        fname = '{}_{}_vs_{}'.format(
+            title.replace(' ', '_').replace('$\Delta$','delta'),
+            file_tag, x_label)
         plt.savefig(os.path.join(outdir, fname), dpi=300)
         plt.close()
     else:
         if show:
             plt.show()
 
-def plot_stretch_stats_defunkt(
-        stretch_data,
-        x_key='dist_out',
-        y_key='dark_frac',
-        title='',
+def plot_the_per_pass(gid, x, y, y_u, marker):
+    pid = np.array([g.split('_')[1] for g in gid])
+    upid = np.unique(pid)
+    for p in upid:
+        this_y = y[pid==p].flatten()
+        this_x = x[pid==p].flatten()
+        this_x = swot_time_to_field_time(this_x*60.0*60.0)
+        this_y_u = y_u[pid==p].flatten()
+        plt.errorbar(this_x, this_y, yerr=this_y_u,
+            marker=marker, label='pass {}'.format(p))
+        #plt.plot(this_x, this_y, marker=marker, label='pass {}'.format(p))
+    plt.grid()
+    plt.legend()
+
+def plot_per_pass_time_series(
+        stats,
+        stats2=None,
         outdir=None,
-        show=False):
-    """
-    function for plotting profile stats
-    """
-    x = stretch_data[x_key]
-    y_mean = stretch_data[y_key+'_mean']
-    y_std = stretch_data[y_key+'_std']
-    y_ptiles = stretch_data[y_key+'_percentiles']
-    #breakpoint()
-    ptiles = ['{}-%ile'.format(t) for t in stretch_data['percentiles']]
-    x2D = np.broadcast_to(x, np.shape(y_ptiles.T)).T
-    figsize=(10,5)
+        show=False,
+        figsize=(10,5),
+        title_tag='',
+        err_type='node_std'):
+    x_key='time_id'
+    nplots = 1
+    title = stats.stretch_name
+    if title_tag != '':
+        title = title+' '+title_tag
+    #title = title + ' (per pass)'
+    x = stats[x_key]
+    x_label = x_key
+    #x = swot_time_to_field_time(x*60.0*60.0)
+    x_label = 'time'
+    marker = '.'
+    #file_tag = 'stretch_avg'
+    y_key = stats.signal_key
+    y_mean = stats.mean
+    if err_type=='node_std':
+        y_u = stats.std
+    elif err_type=='stretch_std':
+        y_u = stats.std / np.sqrt(stats.count)
+    else:
+        y_u = stats.uncert
+    y_ref = stats.mean_reference + np.zeros_like(y_mean)
+    gid = stats.granule_id.copy()
+    if stats2 is not None:
+        nplots=2
     plt.figure(figsize=figsize)
-    plt.subplot(2,1,1)
-    plt.plot(x2D, y_ptiles)
-    plt.legend(ptiles)
-    plt.grid()
-    plt.xlabel(x_key)
-    plt.ylabel(y_key)
-    plt.suptitle(title+'{} statistics'.format(y_key))
-    plt.subplot(2,1,2)
-    plt.plot(x, y_mean)
-    plt.plot(x, y_mean+y_std,'--')
-    plt.plot(x, y_mean-y_std,'--')
-    plt.legend(['mean', 'mean + std', 'mean - std'])
-    plt.grid()
-    plt.xlabel(x_key)
-    plt.ylabel(y_key)
+    plt.subplot(nplots,1,1)
+    plot_the_per_pass(gid, x, y_mean, y_u, marker)
+    plt.xlabel(label_units(x_label))
+    plt.ylabel(label_units(y_key))
+    if stats2 is not None:
+        y_key2 = stats2.signal_key
+        y_mean2 = stats2.mean
+        if err_type=='node_std':
+            y_u2 = stats2.std
+        elif err_type=='stretch_std':
+            y_u2 = stats2.std / np.sqrt(stats2.count)
+        else:
+            y_u2 = stats2.uncert
+        #y_u2 = stats2.std / np.sqrt(stats.count)
+        y_ref2 = stats2.mean_reference + np.zeros_like(y_mean2)
+        gid2 = stats2.granule_id.copy()
+        plt.subplot(nplots,1,2)
+        plot_the_per_pass(gid2, x, y_mean2, y_u2, marker)
+        plt.xlabel(label_units(x_label))
+        plt.ylabel(label_units(y_key2))
+    if stats2 is None:
+        title = title+' {} (per pass)'.format(y_key)
+    else:
+        title = title+' {} and {} (per pass)'.format(y_key, y_key2)
+    plt.suptitle(title)
     plt.tight_layout()
     if outdir is not None:
         # create output dir if not exist
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        fname = '{}_profile_stats_{}_vs_{}'.format(title, y_key, x_key)
+        fname = '{}_vs_time'.format(
+            title.replace(' ', '_').replace('$\Delta$','delta').replace(
+                '(','').replace(')',''))
+        plt.savefig(os.path.join(outdir, fname), dpi=300)
+        plt.close()
+    else:
+        if show:
+            plt.show()
+
+def plot_2D_stretch_stack(
+        stretch_stack,
+        y_key='wse',
+        y_reference=None,
+        y_anom=False,
+        outdir=None,
+        figsize=(10,5),
+        show = False,
+        title_tag=''):
+    clabel = y_key
+    y = stretch_stack[y_key].copy()
+    ref_2D = np.zeros_like(y)
+    if y_reference is not None:
+        ref = y_reference.reference
+        ref_2D = np.broadcast_to(ref, np.shape(y.T)).T
+        if y_anom:
+            clabel = '$\Delta$ '+ y_key
+            y = y - ref_2D
+    title = '{} {} image'.format(
+        stretch_stack.stretch_name,
+        clabel)
+    if title_tag != '':
+        title = title+ ' ' + title_tag
+    clim = (np.nanpercentile(y.flatten(),5),
+            np.nanpercentile(y.flatten(),95),)
+    if y_key=='dark_frac':
+        clim=(0,1)
+    kwargs = {'cmap':'jet', 'interpolation':'none', 'aspect':'auto'}
+    plt.figure(figsize=figsize)
+    plt.imshow(y.T, clim=clim, **kwargs)
+    plt.colorbar(label=label_units(clabel))
+    plt.ylabel('time index')
+    plt.xlabel('node index')
+    plt.title(title)
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}'.format(
+                title.replace(' ','_').replace('$\Delta$','delta'))
         plt.savefig(os.path.join(outdir, fname), dpi=300)
         plt.close()
     else:
@@ -268,10 +368,10 @@ def plot_stretch_stack(
         figsize=(10,5),
         show = False,
         marker='-',
-        title_tag=None):
-    ttl = stretch_stack.stretch_name
-    if title_tag is not None:
-        ttl =ttl + ' ' + title_tag
+        title_tag=''):
+    title = stretch_stack.stretch_name
+    if title_tag != '':
+        title =title + ' ' + title_tag
     ylabel = ''
     x = stretch_stack[x_key]
     y = stretch_stack[y_keys[0]]
@@ -287,13 +387,13 @@ def plot_stretch_stack(
         ref = y_reference[0].reference
         ref_2D = np.broadcast_to(ref, np.shape(y.T)).T
         if y_anom[0]:
-            y_labels[0] = '$\Delta $'+ y_keys[0]
+            y_labels[0] = '$\Delta$ '+ y_keys[0]
     if len(y_reference)==2:
         if y_reference[1] is not None:
             ref2 = y_reference[1].reference
             ref2_2D = np.broadcast_to(ref2, np.shape(y.T)).T
         if y_anom[1]:
-            y_labels[1] = '$\Delta $'+y_keys[1]
+            y_labels[1] = '$\Delta$ '+y_keys[1]
     if y_anom[0]:
         y = y - ref_2D
     if len(y_anom)==2:
@@ -309,12 +409,14 @@ def plot_stretch_stack(
     plt.figure(figsize=figsize)
     if len(y_keys)==2:
         plt.subplot(2,1,1)
-        ylabel = '{},{}'.format(y_keys[0], y_labels[1])
+        ylabel = '{}_{}'.format(y_keys[0], y_labels[1])
+    else:
+        ylabel = '{}'.format(y_keys[0])
     plt.plot(x, y, marker, markersize=1)
     if np.sum(np.isfinite(ref)):
         plt.plot(x, ref, 'k', linewidth=2, label='reference')
         plt.legend()
-    plt.ylabel(y_labels[0])
+    plt.ylabel(label_units(y_labels[0]))
     plt.grid()
     # TODO: enable plotting reference
     # make first plot
@@ -322,17 +424,19 @@ def plot_stretch_stack(
         plt.subplot(2,1,2)
         # make second plot
         plt.plot(x, y2, marker, markersize=1)
-        plt.ylabel(y_labels[1])
-        plt.suptitle(ttl)
+        plt.ylabel(label_units(y_labels[1]))
+        plt.suptitle(title)
         plt.grid()
     else:
-        plt.title(ttl)
-    plt.xlabel(x_label)
+        plt.title(title)
+    plt.xlabel(label_units(x_label))
     if outdir is not None:
         # create output dir if not exist
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        fname = '{}_profile_{}_vs_{}'.format(title, ylabel, x_label)
+        fname = '{}_{}_vs_{}'.format(
+                title.replace(' ','_').replace('$\Delta$','delta'),
+                ylabel.replace(' ','_').replace('$\Delta$','delta'), x_label)
         plt.savefig(os.path.join(outdir, fname), dpi=300)
         plt.close()
     else:

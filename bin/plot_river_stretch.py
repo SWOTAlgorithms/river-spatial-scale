@@ -19,6 +19,7 @@ import os.path
 import glob
 import pandas as pd
 import rivscale.reconstruct
+import rivscale.plot
 
 EXAMPLE = ''
 
@@ -36,6 +37,9 @@ def plot_single_stretch(files, outdir=None, cfg=None):
         if 'width_stats' in fle:
             dic['width_stats'] = \
                     rivscale.products.AlongStretchStats.from_ncfile(f)
+        if 'dark_stats' in fle:
+            dic['dark_stats'] = \
+                    rivscale.products.AlongStretchStats.from_ncfile(f)
         if 'pekel_stats' in fle:
             dic['pekel_stats'] = \
                     rivscale.products.AlongStretchStats.from_ncfile(f)
@@ -49,12 +53,17 @@ def plot_single_stretch(files, outdir=None, cfg=None):
             dic['wse_reach_average'] = \
                     rivscale.products.StretchAverageStats.from_ncfile(f)
         if 'width_reach_average' in fle:
-            dic['width_reach_average'] = \
+            if 'height_width' in fle:
+                dic['height_width_reach_average'] = \
+                    rivscale.products.HeightWidthModel.from_ncfile(f)
+            else:
+                dic['width_reach_average'] = \
                     rivscale.products.StretchAverageStats.from_ncfile(f)
         if 'height_width' in fle:
             if 'reach_average' in fle:
-                dic['height_width_reach_average'] = \
-                    rivscale.products.HeightWidthModel.from_ncfile(f)
+                pass
+                #dic['height_width_reach_average'] = \
+                #    rivscale.products.HeightWidthModel.from_ncfile(f)
             else:
                 dic['height_width'] = \
                     rivscale.products.HeightWidthModel.from_ncfile(f)
@@ -76,6 +85,12 @@ def plot_single_stretch(files, outdir=None, cfg=None):
                     outdir=outdir,
                     show=False,
                     title_tag='stretch average data')
+                # also plot the per_pass wse and width time series
+                rivscale.plot.plot_per_pass_time_series(
+                    wse_data,
+                    width_data,
+                    outdir=outdir,
+                    title_tag='stretch average')
                 something_plotted=True
             if (('stretch_stack' in dic.keys()) and (
                     'wse_stats' in dic.keys()) and (
@@ -130,29 +145,46 @@ def plot_single_stretch(files, outdir=None, cfg=None):
                 wse_data = dic['wse_reach_average']
                 width_data = dic['width_reach_average']
                 title_tag='reach average data'
+                # plot the wse and width time series per-pass
+                rivscale.plot.plot_per_pass_time_series(
+                    wse_data,
+                    width_data,
+                    outdir=outdir,
+                    title_tag='reach average')
             dic[key].plot(
                 wse_data=wse_data,
                 width_data=width_data,
                 outdir=outdir,
                 show=False,
                 title_tag=title_tag)
-
         else:
             # single object plot
-            #if 'reach' not in key:
-            #    # dont plot the time series of reach data
-            dic[key].plot(outdir=outdir, show=False)
+            title_tag = ''
+            if 'pekel' in key:
+                title_tag = 'Pekel'
+            if 'reach' in key:
+                title_tag = 'reach'
+            dic[key].plot(outdir=outdir, show=False, title_tag=title_tag)
     # optionally plot the outliers?
     if cfg is not None:
         try:
-            stretch_stack = rivscale.reconstruct.reconstruct_filter_data(
-                cfg['reconstruct'],
+            this_cfg = cfg['reconstruct']
+            if 'use_pekel' not in this_cfg.keys():
+                this_cfg['use_pekel'] = 'false'
+            if this_cfg['use_pekel']:
+                this_width_stats = dic['pekel_stats']
+            else:
+                this_width_stats = dic['width_stats']
+            #breakpoint()
+            stretch_stack, _ = rivscale.filter.filter_stretch_stack(
+                this_cfg,
                 dic['stretch_stack'].copy(),
                 dic['wse_stats'],
-                dic['pekel_stats'],
-                plot=True)
-        except:
-            print('could not plot outliers')
+                this_width_stats,
+                plot=True,
+                outdir=outdir)
+        except KeyError as e:
+            print('could not plot outliers: {}'.format(e))
     #if outdir is None:
     #    plt.show()
 
@@ -201,7 +233,9 @@ def main():
     parser.add_argument('-s','--stretch_name', nargs='+', default=None,
         help='stretch_name(s) to plot')
     args = parser.parse_args()
-    cfg = configparser.ConfigParser()
+    #cfg = configparser.ConfigParser()
+    #cfg.read(args.config)
+    cfg = rivscale.misc.CfgParser()
     cfg.read(args.config)
     df_stretches, stretch_dir0, pekel_dir0, outdir0 = setup_from_cfg(cfg)
     if len(df_stretches.keys())==0:
@@ -211,8 +245,12 @@ def main():
     if args.stretch_name is not None:
         all_stretches = list(args.stretch_name)
     for i,key in enumerate(all_stretches):
+        print('plotting stretch: {}'.format(key))
         stretch_dir = os.path.join(
             stretch_dir0, key, 'stretch_stack_{}'.format(
+                cfg['main']['stretch_stack_flavor']))
+        reach_dir = os.path.join(# guess this one
+            stretch_dir0, key, 'reach_avg_{}'.format(
                 cfg['main']['stretch_stack_flavor']))
         pekel_dir = os.path.join(
             pekel_dir0, key, 'pekel_{}'.format(
@@ -221,12 +259,20 @@ def main():
 
         file_stretch = os.path.join(
             stretch_dir, '{}_stretch_stack.nc'.format(key))
+        file_reach_wse = os.path.join(
+            reach_dir, '{}_wse_reach_average.nc'.format(key))
+        file_reach_width = os.path.join(
+            reach_dir, '{}_width_reach_average.nc'.format(key))
+        file_reach_height_width = os.path.join(
+            reach_dir, '{}_height_width_reach_average.nc'.format(key))
         file_pekel = os.path.join(
             pekel_dir, '{}_pekel_stats.nc'.format(key))
         file_wse_stats = os.path.join(
             outdir, '{}_wse_stats.nc'.format(key))
         file_width_stats = os.path.join(
             outdir, '{}_width_stats.nc'.format(key))
+        file_dark_stats = os.path.join(
+            outdir, '{}_dark_stats.nc'.format(key))
         file_wse_avg = os.path.join(
             outdir, '{}_wse_stretch_average.nc'.format(key))
         file_width_avg = os.path.join(
@@ -238,12 +284,20 @@ def main():
         files = []
         if os.path.exists(file_stretch):
             files.append(file_stretch)
+        if os.path.exists(file_reach_wse):
+            files.append(file_reach_wse)
+        if os.path.exists(file_reach_width):
+            files.append(file_reach_width)
+        if os.path.exists(file_reach_height_width):
+            files.append(file_reach_height_width)
         if os.path.exists(file_pekel):
             files.append(file_pekel)
         if os.path.exists(file_wse_stats):
             files.append(file_wse_stats)
         if os.path.exists(file_width_stats):
             files.append(file_width_stats)
+        if os.path.exists(file_dark_stats):
+            files.append(file_dark_stats)
         if os.path.exists(file_wse_avg):
             files.append(file_wse_avg)
         if os.path.exists(file_width_avg):
@@ -260,10 +314,16 @@ def main():
         # plot the pekel
         #if os.path.exists(file_pekel):
         #    plot_single_stretch([file_pekel,], outdir=None)
+        plotdir = None
+        if args.stretch_name is None:
+            plotdir = os.path.join(outdir, 'plots')
+            if not os.path.exists(plotdir):
+                os.makedirs(plotdir)
         # now plot the rest
-        plot_single_stretch(files, outdir=None, cfg=cfg)
-        #if outdir is None:
-        plt.show()
+        plot_single_stretch(files, outdir=plotdir, cfg=cfg)
+        if plotdir is None:
+            plt.show()
+        plt.close('all')
 
 if __name__ == "__main__":
     main()

@@ -32,6 +32,87 @@ import geopandas as gpd
 
 import rivscale.data
 
+def filter_stretch_stack(
+        cfg,
+        stretch_stack,
+        wse_stats,
+        width_stats,
+        plot=False,
+        outdir=None,
+        reach_id='nope'):
+    """
+    Perform outier rejection and dark frac filtering etc
+    """
+    #breakpoint()
+    # first handle optional config params
+    # TODO: define parameter defaults all in one place?
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_dark_thresh' not in cfg.keys():
+        cfg['wse_dark_thresh'] = '0.8'
+    if 'width_dark_thresh' not in cfg.keys():
+        cfg['width_dark_thresh'] = '0.3'
+    if 'wse_outlier_scale' not in cfg.keys():
+        cfg['wse_outlier_scale'] = '5.0'
+    if 'width_outlier_scale' not in cfg.keys():
+        cfg['width_outlier_scale'] = '5.0'
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = 'False'
+    #
+    # populate witdh_u
+    # TODO: fix the uncertainty itself instead of fudging it here  
+    node_len = stretch_stack['area_total'] / stretch_stack['width']
+    stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
+    # make measurement uncert at least as much as signal uncert we assume
+    stretch_stack['width_u'] = stretch_stack['width_u'] + 10 # + 500#2*prior_unc_alpha_width
+    # smooth the widths before anything else, if commanded
+    if cfg['width_smooth_size'] is not None:
+        stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
+    # first remove outliers allowing typical spread of variability
+    use_ptiles = False
+    if width_stats is not None:
+        # assume it is a pekel, TODO: parameterize this
+        use_ptiles = True
+    # over all time obs
+    stretch_stack.filter_node_outliers(# TODO: pass in scale parameter
+        width_stats,
+        key='width',
+        use_ptiles=use_ptiles,
+        IQR_scale=cfg['width_outlier_scale'],
+        plot=plot,
+        outdir=outdir)
+    stretch_stack.filter_node_outliers(
+        wse_stats,
+        key='wse',
+        IQR_scale=cfg['wse_outlier_scale'],
+        plot=plot,
+        outdir=outdir)
+    # now remove outliers considering relative spread 
+    stretch_stack.filter_node_outliers(
+        width_stats,
+        key='width',
+        use_ptiles=use_ptiles,
+        IQR_scale=cfg['width_outlier_scale'],
+        Delta2=True,
+        plot=plot,
+        outdir=outdir)
+    stretch_stack.filter_node_outliers(
+        wse_stats,
+        Delta2=True,
+        key='wse',
+        IQR_scale=cfg['wse_outlier_scale'],
+        plot=plot,
+        outdir=outdir)
+    # filter out high dark_frac nodes
+    stretch_stack.filter_dark_water('width', cfg['width_dark_thresh'])
+    stretch_stack.filter_dark_water('wse', cfg['wse_dark_thresh'])
+    # drop rows with too  little data
+    #reach_id = 'nope' # TODO: handle this as param
+    if cfg['crop']:
+        reach_id = stretch_stack.stretch_name
+    stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
+        reach_id=reach_id)
+    return stretch_stack, reach_id
 
 def scaled_spread_outlier_rejector(arr_in, mean, spread, scale=5.0):
     """

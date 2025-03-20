@@ -35,21 +35,15 @@ import geopandas as gpd
 import rivscale.data
 
 ######## Feb 2025
-
+'''
 def reconstruct_filter_data(
         cfg,
         stretch_stack,
         wse_stats,
         width_stats,
-        plot=False):
+        plot=False,
+        outdir=None):
     """
-    def process_bayes_reconstruction(
-        cfg,
-        stretch_stack,
-        wse_stats,
-        width_stats,
-        height_width):
-    
     TODO: enable overwriting of char_length_tau and prior_unc_alpha if commanded
     """
     # first handle optional config params
@@ -63,64 +57,45 @@ def reconstruct_filter_data(
         cfg['wse_outlier_scale'] = '5.0'
     if 'width_outlier_sclae' not in cfg.keys():
         cfg['width_outlier_scale'] = '5.0'
-    """
-    if 'wse_char_length_tau' not in cfg.keys():
-        cfg['wse_char_length_tau'] = '100000.0'
-    if 'wse_prior_unc_alpha' not in cfg.keys():
-        cfg['wse_prior_unc_alpha'] = '1.5'
-    if 'width_char_length_tau' not in cfg.keys():
-        cfg['width_char_length_tau'] = '100000.0'
-    if 'width_prior_unc_alpha' not in cfg.keys():
-        cfg['width_prior_unc_alpha'] = '50.0'
-    if 'rho_wse_width' not in cfg.keys():
-        cfg['rho_wse_width'] = 50
-    """
     if 'crop' not in cfg.keys():
         cfg['crop'] = 'False'
     #
     # populate witdh_u
+    """
     node_len = stretch_stack['area_total'] / stretch_stack['width']
     stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
     # make measurement uncert at least as much as signal uncert we assume
     stretch_stack['width_u'] = stretch_stack['width_u'] + 10 # + 500#2*prior_unc_alpha_width
-    # filter out bad data
-    #stretch_stack = rivscale.filter.filter_width_node_outliers(
-    #    stretch_stack, width_stats, width_outlier_scale, plot=True)
-    #plot = False
-    #stretch_stack.filter_node_outliers(wse_stats, key='wse', plot=plot)
-    #stretch_stack.filter_node_outliers(width_stats, key='width', plot=plot)
+    """
     # first remove outliers allowing typical spread of variability
     # over all time obs
     stretch_stack.filter_node_outliers(
         width_stats,
         key='width',
         use_ptiles=True,
-        plot=plot)
+        plot=plot,
+        outdir=outdir)
     stretch_stack.filter_node_outliers(
         wse_stats,
         key='wse',
-        plot=plot)
+        plot=plot,
+        outdir=outdir)
     # now remove outliers considering relative spread 
     stretch_stack.filter_node_outliers(
         width_stats,
         key='width',
         Delta2=True,
-        plot=plot)
+        plot=plot,
+        outdir=outdir)
     stretch_stack.filter_node_outliers(
         wse_stats,
         Delta2=True,
         key='wse',
-        plot=plot)
-
-    #if plot:
-    #    plt.show()
+        plot=plot,
+        outdir=outdir)
     # filter out high dark_frac nodes
     stretch_stack.filter_dark_water('width', cfg['width_dark_thresh'])
     stretch_stack.filter_dark_water('wse', cfg['wse_dark_thresh'])
-    #stretch_stack.width[
-    #    stretch_stack.dark_frac>width_dark_thresh] = np.nan
-    #stretch_stack.wse[
-    #    stretch_stack.dark_frac>wse_dark_thresh] = np.nan
     # drop rows with too  little data
     #reach_id = None
     reach_id = 'nope'
@@ -129,7 +104,7 @@ def reconstruct_filter_data(
     stretch_stack = rivscale.filter.drop_stretch_nans(stretch_stack,
         reach_id=reach_id)
     return stretch_stack
-
+'''
 def process_bayes_reconstruction(
         cfg,
         stretch_stack,
@@ -161,7 +136,7 @@ def process_bayes_reconstruction(
         cfg['crop'] = 'False'
 
     # filter the data
-    stretch_stack = reconstruct_filter_data(
+    stretch_stack, reach_id = rivscale.filter.filter_stretch_stack(
         cfg,
         stretch_stack,
         wse_stats,
