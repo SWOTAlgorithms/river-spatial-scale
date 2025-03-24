@@ -98,6 +98,7 @@ class StretchStack(Product):
         ['area_tot_u', odict([['dimensions', DIMENSIONS_2D]])],
         ['node_q_b', odict([['dimensions', DIMENSIONS_2D]])],
         ['dark_frac', odict([['dimensions', DIMENSIONS_2D]])],
+        ['sig0 (dB)', odict([['dimensions', DIMENSIONS_2D]])],
     ])
     # TODO: should w also keep ice flag, n_good_pix, sig0 etc...?
 
@@ -188,6 +189,7 @@ class StretchStack(Product):
                 title_tag=title_tag)
         if np.nansum(self['dark_frac'])>0:
             # also plot the dark frac 1D and 2D
+            """
             rivscale.plot.plot_stretch_stack(
                 self,
                 x_key=x_key,
@@ -196,6 +198,7 @@ class StretchStack(Product):
                 y_anom=[False,],
                 outdir=outdir,
                 title_tag=title_tag)
+            """
             rivscale.plot.plot_2D_stretch_stack(
                 self,
                 y_key='dark_frac',
@@ -203,6 +206,16 @@ class StretchStack(Product):
                 y_anom=False,
                 outdir=outdir,
                 title_tag=title_tag)
+        if np.nansum(np.isfinite(self['sig0 (dB)']))>0:
+            # also plot the sig0 2D
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='sig0 (dB)',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        # TODO: make a 2D plot for each qual bit?
         if show:
             plt.show()
             

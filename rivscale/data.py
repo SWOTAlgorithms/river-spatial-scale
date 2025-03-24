@@ -65,6 +65,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
             df['node_id'])
     df['wse_u'] = df['wse_r_u']
     df['dist_out'] = df['p_dist_out']
+    # put sig0 in dB
+    df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
     return df
 
 def get_swot_data(
