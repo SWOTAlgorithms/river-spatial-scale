@@ -99,6 +99,9 @@ class StretchStack(Product):
         ['node_q_b', odict([['dimensions', DIMENSIONS_2D]])],
         ['dark_frac', odict([['dimensions', DIMENSIONS_2D]])],
         ['sig0 (dB)', odict([['dimensions', DIMENSIONS_2D]])],
+        ['flow_angle', odict([['dimensions', DIMENSIONS_2D]])],
+        ['layovr_val', odict([['dimensions', DIMENSIONS_2D]])],
+        ['n_good_pix', odict([['dimensions', DIMENSIONS_2D]])],
     ])
     # TODO: should w also keep ice flag, n_good_pix, sig0 etc...?
 
@@ -109,7 +112,11 @@ class StretchStack(Product):
             x_key='dist_out', # or 'time_id'
             outdir=None,
             show=False,
-            title_tag=None):
+            title_tag=None,
+            bits_to_plot=[]
+            #bits_to_plot=[0,1,2,3,4,7,9,10,11,18,19,22]
+            #bits_to_plot=[0,1,2,3,4,7,9,10,11,13,14,18,19,22,23,24,25,26,27,28]
+            ):
         if title_tag is None:
             title_tag = 'stretch stack data'
         if wse_reference is not None:
@@ -215,7 +222,43 @@ class StretchStack(Product):
                 y_anom=False,
                 outdir=outdir,
                 title_tag=title_tag)
-        # TODO: make a 2D plot for each qual bit?
+        if np.nansum(np.isfinite(self['flow_angle']))>0:
+            # also plot the flow_dir 2D
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='flow_angle',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        if np.nansum(np.isfinite(self['layovr_val']))>0:
+            # also plot the flow_dir 2D
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='layovr_val',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        if np.nansum(np.isfinite(self['n_good_pix']))>0:
+            # also plot the flow_dir 2D
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='n_good_pix',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        # make a 2D plot for commanded qual bits?
+        for bit in bits_to_plot:
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='node_q_b',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag,
+                bit=bit)
         if show:
             plt.show()
             

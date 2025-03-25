@@ -16,6 +16,7 @@ import pandas as pd
 
 import errtools.plots
 import matplotlib.pyplot as plt
+import matplotlib.colors
 
 import scipy.ndimage
 from scipy.linalg import pinv, svd, eigh, norm
@@ -40,6 +41,10 @@ def label_units(label):
     if 'slope' in label:
         label = label + ' (m/m)'
     elif ('wse' in label) or ('width' in label) or ('dist_out' in label):
+        label = label + ' (m)'
+    elif ('flow' in label):
+        label = label + ' (deg.)'
+    elif ('layovr' in label):
         label = label + ' (m)'
     return label
 
@@ -320,9 +325,26 @@ def plot_2D_stretch_stack(
         outdir=None,
         figsize=(10,5),
         show = False,
-        title_tag=''):
+        title_tag='',
+        bit=None):
+    cmap = 'jet'
+    if y_key=='flow_angle':
+        cmap='hsv'
+    clim = None
     clabel = y_key
     y = stretch_stack[y_key].copy()
+    if y_key=='node_q_b':
+        #y = np.logical_and(y,2**bit)
+        out, mask = rivscale.misc.decode_node_q_b(np.array(y).astype('uint32'))
+        #breakpoint()
+        bit_name = ''
+        for key in mask.keys():
+            if (mask[key] == 2**bit):
+                bit_name = key
+        y = out[bit_name]
+        clabel = clabel + ' bit {:d} {}'.format(bit, bit_name)
+        clim = (0,1)
+        cmap = matplotlib.colors.ListedColormap(['deepskyblue', 'crimson'])
     ref_2D = np.zeros_like(y)
     if y_reference is not None:
         ref = y_reference.reference
@@ -335,11 +357,12 @@ def plot_2D_stretch_stack(
         clabel)
     if title_tag != '':
         title = title+ ' ' + title_tag
-    clim = (np.nanpercentile(y.flatten(),5),
+    if clim is None:
+        clim = (np.nanpercentile(y.flatten(),5),
             np.nanpercentile(y.flatten(),95),)
     if y_key=='dark_frac':
-        clim=(0,1)
-    kwargs = {'cmap':'jet', 'interpolation':'none', 'aspect':'auto'}
+        clim = (0,1)
+    kwargs = {'cmap':cmap, 'interpolation':'none', 'aspect':'auto'}
     plt.figure(figsize=figsize)
     plt.imshow(y.T, clim=clim, **kwargs)
     plt.colorbar(label=label_units(clabel))

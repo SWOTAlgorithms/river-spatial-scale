@@ -11,6 +11,25 @@ import scipy.ndimage
 
 from configparser import ConfigParser
 
+import SWOTRiver.products.rivertile
+
+def decode_bitflag(flag_meanings, flag_masks, qual=None):
+    out = {}
+    mask = {}
+    # TODO: maybe should check if flag_masks are powers of 2...
+    for flag_mask, flag_meaning in zip(flag_masks, flag_meanings):
+        if qual is not None:
+            out[flag_meaning] = (np.bitwise_and(qual, flag_mask) / flag_mask).astype('uint32')
+        mask[flag_meaning] = flag_mask
+    return out, mask
+
+def decode_node_q_b(node_qual, key='node_q_b'):
+    tmp = SWOTRiver.products.rivertile.RiverTileNodes()
+    flag_meanings = tmp.VARIABLES[key]['flag_meanings'].split()
+    flag_masks = tmp.VARIABLES[key]['flag_masks']
+    return decode_bitflag(flag_meanings, flag_masks, node_qual)
+
+
 def reach_id_from_node_id_int(node_id_arr):
     return (node_id_arr/10000).astype(int)*10 + node_id_arr - (
         node_id_arr/10).astype(int)*10

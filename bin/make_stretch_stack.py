@@ -43,76 +43,6 @@ import time
 
 EXAMPLE=''
 
-"""
-def manage_fields(df, use_wse_sm=False, dark_thresh=1.0):
-    if df is None:
-        return None
-    if use_wse_sm:
-        df['wse'] = np.array(df['wse_sm']).copy()
-        df['wse_u'] = np.array(df['wse_sm_u']).copy()
-        df['wse_q'] = np.array(df['wse_sm_q']).copy()
-        df['wse_q_b'] = np.array(df['wse_sm_q_b']).copy()
-    # drop elements with no_data times
-    df = df[df['time_str']!='no_data']
-    df['time_str'] = pd.to_datetime(df['time_str'])
-    df['date'] = [ dt.date() for dt in df['time_str']]
-
-    # drop bad data
-    df = rivscale.filter.filter_qual(
-        df, height=True, area=False, dark_thresh=dark_thresh)
-    #
-    if 'cycle_id' in df.keys():
-        df['cycle'] = df['cycle_id']
-    df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(df['node_id'])
-    df['wse_u'] = df['wse_r_u']
-    df['dist_out'] = df['p_dist_out']
-    return df
-
-def get_swot_node_data(cfg, stretch_reaches, sword_node_df, dark_thresh=1.0):
-    if cfg['main']['method'] == 'csv':
-        df = pd.read_csv(cfg['main']['data_path'])
-        # TODO: filter out orbit and granules we want
-    elif cfg['main']['method'] == 'reach':
-        # go through all the RiverSP data for the desired granules/orbit
-        orbit = cfg['main']['orbit']
-        pass_cont = cfg['main']['granule']
-        df = None
-        for reach in stretch_reaches:#df_stretches.keys():
-            if 'both' in orbit:
-                orbits = ['cal_orbit', 'science_orbit']
-            else:
-                orbits = [orbit,]
-            fles = []
-            for this_orbit in orbits:
-                fle_str = os.path.join(cfg['main']['data_path'],
-                    '{}/{}/Multitemporal_Node/{}_Node_{}_{}.csv'.format(
-                        this_orbit, pass_cont, reach, pass_cont, this_orbit))
-                this_fles = glob.glob(fle_str)
-                fles = fles + this_fles
-
-            for fle in fles:
-                print('  ',fle)
-                # TODO: should catch if file doesnt exist or cant read it?
-                if df is None:
-                    # note that keep_default_na=False handles the 'NA'
-                    # fields so they dont become 'NaN'
-                    df = pd.read_csv(fle, keep_default_na=False)
-                else:
-                    df = pd.concat(
-                        [df,pd.read_csv(fle, keep_default_na=False)],
-                        ignore_index=True)
-    #
-    use_wse_sm = False
-    sm = cfg['data']['use_wse_sm']
-    if ((sm == 'True') or (sm == 'True') or (sm is True)):
-        use_wse_sm = True
-    #
-    #if 'dark_thresh' in cfg['data'].keys():
-    #dark_thresh = float(cfg['data']['dark_thresh'])
-    # don't filter on dark frac here...only on qual
-    df = manage_fields(df, use_wse_sm=use_wse_sm)#, dark_thresh=dark_thresh)
-    return df
-"""
 
 def main():
     parser = argparse.ArgumentParser(
@@ -178,7 +108,8 @@ def main():
         swot_node_df = rivscale.data.get_swot_data(
             cfg,
             stretch_reaches,#sword_node_df,
-            kind='Node')
+            kind='Node',
+            force=args.force)
         #breakpoint()
         if swot_node_df is None:
             # skip cases where we have no data

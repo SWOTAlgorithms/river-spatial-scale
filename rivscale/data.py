@@ -36,6 +36,24 @@ import rivscale.misc
 
 import rivscale.products
 
+import xarray as xr
+
+##### Mar 2025
+def rivertiles_to_node_dataframe(rivertiles):
+    dataframe_list = []
+    for rivertile in rivertiles:
+        ds = xr.open_dataset(rivertile, group='nodes', decode_cf=False)
+        df = ds.to_dataframe()
+        _, tail = os.path.split(rivertile)
+        parts = tail.split('_')
+        #print(parts)
+        df['cycle_id'] = int(parts[4])
+        df['pass'] = int(parts[5])
+        df['continent'] = 'NA' # TODO: figure out how to not hard code this one
+        dataframe_list.append(df)
+    swot_node_dataframe = pd.concat(dataframe_list)
+    swot_node_dataframe = swot_node_dataframe.reset_index(drop=True)
+    return swot_node_dataframe
 
 ##### Feb 2025
 def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0): 
@@ -50,7 +68,7 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     df = df[df['time_str']!='no_data']
     df['time_str'] = pd.to_datetime(df['time_str'])
     df['date'] = [ dt.date() for dt in df['time_str']]
-
+    #
     # dont qual filter at this stage...only later
     # drop bad data
     # TODO: robustify qual filter methods (OB, IM, OBIM etc)
@@ -72,7 +90,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
 def get_swot_data(
         cfg,
         stretch_reaches,#sword_node_df,
-        kind='Node'):
+        kind='Node',
+        force=False):
     """
     kind can be 'Node' or 'Reach'
     """
@@ -92,6 +111,34 @@ def get_swot_data(
     if cfg[section]['method'] == 'csv':
         df = pd.read_csv(cfg['main']['data_path'])
         # TODO: filter out orbit and granules we want
+    elif cfg[section]['method'] == 'offline':
+        node_csv_file = cfg['main']['node_csv_file']
+        if (os.path.isfile(node_csv_file)) and (not force):
+            # just read the already-made input file
+            df = pd.read_csv(node_csv_file)
+        else:
+            #read in and create the csv file on the fly
+            slc_flavor = cfg['main']['slc_flavor']
+            if slc_flavor is None:
+                slc_flavor = ''
+            pixc_flavor = cfg['main']['pixc_flavor']
+            river_flavor = cfg['main']['river_flavor']
+            basedir = cfg['main']['data_path']
+            glob_str = os.path.join(
+                basedir,
+                '???_*/*/SWOT_L1B_HR_SLC_*/{}'.format(slc_flavor),
+                'SWOT_L2_HR_PIXC_*',
+                '{}'.format(pixc_flavor),
+                'SWOT_L2_HR_RiverTile_*',
+                'SWOT_L2_HR_RiverTile_*{}'.format(river_flavor),
+                'SWOT_L2_HR_RiverTile*.nc')
+            print(glob_str)
+            rivertiles = glob.glob(glob_str)
+            df = rivertiles_to_node_dataframe(rivertiles)
+            # write out the csv file
+            df.to_csv(node_csv_file, index=False)
+        # filter out reaches we want to keep
+        df = df[df['reach_id'].isin(stretch_reaches)]
     elif cfg[section]['method'] == 'reach':
         # go through all the RiverSP data for the desired granules/orbit
         orbit = cfg['main']['orbit']
