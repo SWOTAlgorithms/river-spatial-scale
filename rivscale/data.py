@@ -37,6 +37,7 @@ import rivscale.misc
 import rivscale.products
 
 import xarray as xr
+import rivscale.ingest
 
 ##### Mar 2025
 def rivertiles_to_node_dataframe(rivertiles):
@@ -78,6 +79,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     #
     if 'cycle_id' in df.keys():
         df['cycle'] = df['cycle_id']
+    if 'pass_id' in df.keys():
+        df['pass'] = df['pass_id']
     if 'node_id' in df.keys():
         df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(
             df['node_id'])
@@ -85,6 +88,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     df['dist_out'] = df['p_dist_out']
     # put sig0 in dB
     df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
+    if 'continent' not in df.keys():
+        df['continent'] = 'NA' # TODO: un-hard-code this one
     return df
 
 def get_swot_data(
@@ -111,6 +116,32 @@ def get_swot_data(
     if cfg[section]['method'] == 'csv':
         df = pd.read_csv(cfg['main']['data_path'])
         # TODO: filter out orbit and granules we want
+    if cfg[section]['method'] == 'ingest':
+        node_csv_file = cfg['main']['node_csv_file']
+        if (os.path.isfile(node_csv_file)) and (not force):
+            # just read the already-made input file
+            df = pd.read_csv(node_csv_file)
+        else:
+            basin_ids = cfg['main']['stretch_subset']
+            if isinstance(basin_ids, int):
+                basin_ids = [basin_ids,] 
+            basin_ids0 = list(set(basin_ids).union(set(stretch_reaches)))
+            # take off the last number if it is a full reach_id
+            # TODO: maybe should ingest more than one reach since
+            #       (it is faster to grab a bunch than one at a time)
+            basin_ids = []
+            for bid in basin_ids0:
+                id_str = '{}'.format(bid)
+                if len(id_str)==11:
+                   bid = int(id_str[0:10])
+                basin_ids.append(bid)
+            basin_ids = np.unique(basin_ids)
+            print("ingesting basins:", basin_ids)
+            df = rivscale.ingest.basin_loop(
+                basin_ids,
+                out_csv_name=node_csv_file)
+        # filter out reaches we want to keep
+        df = df[df['reach_id'].isin(stretch_reaches)]
     elif cfg[section]['method'] == 'offline':
         node_csv_file = cfg['main']['node_csv_file']
         if (os.path.isfile(node_csv_file)) and (not force):
