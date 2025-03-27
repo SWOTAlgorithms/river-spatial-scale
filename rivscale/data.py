@@ -81,6 +81,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
         df['cycle'] = df['cycle_id']
     if 'pass_id' in df.keys():
         df['pass'] = df['pass_id']
+    if 'continent_id' in df.keys():
+        df['continent'] = df['continent_id']
     if 'node_id' in df.keys():
         df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(
             df['node_id'])
@@ -88,8 +90,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     df['dist_out'] = df['p_dist_out']
     # put sig0 in dB
     df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
-    if 'continent' not in df.keys():
-        df['continent'] = 'NA' # TODO: un-hard-code this one
+    #if 'continent' not in df.keys():
+    #    df['continent'] = 'NA' # TODO: un-hard-code this one
     return df
 
 def get_swot_data(
@@ -132,7 +134,7 @@ def get_swot_data(
             basin_ids = []
             for bid in basin_ids0:
                 id_str = '{}'.format(bid)
-                if len(id_str)==11:
+                if len(id_str)>10:#==11:
                    bid = int(id_str[0:10])
                 basin_ids.append(bid)
             basin_ids = np.unique(basin_ids)

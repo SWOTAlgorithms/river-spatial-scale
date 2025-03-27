@@ -23,6 +23,8 @@ import requests
 import datetime
 from io import StringIO
 
+import os
+
 def query_fts(query_url, params):
     """Query Feature Translation Service (FTS) for reach identifers using the query_url parameter.
 
@@ -131,7 +133,7 @@ def query_main(BASIN_IDENTIFIER, start_time = "2023-07-28T00:00:00Z", end_time =
     # Create queries that return Pandas.DataFrame objects
     #start_time = "2023-07-28T00:00:00Z"
     #end_time = "2024-07-24T00:00:00Z"
-    fields = "reach_id,node_id,river_name,time,time_str,crid,pass_id,cycle_id,node_q,node_q_b,xovr_cal_q,dark_frac,ice_clim_f,wse,wse_r_u,area_total,area_tot_u,area_detct,area_det_u,area_wse,width,p_dist_out,xtrk_dist,rdr_sig0,node_dist,flow_angle,n_good_pix,lat,lon"
+    fields = "reach_id,node_id,river_name,time,time_str,crid,pass_id,cycle_id,continent_id,node_q,node_q_b,xovr_cal_q,dark_frac,ice_clim_f,wse,wse_r_u,area_total,area_tot_u,area_detct,area_det_u,area_wse,width,p_dist_out,xtrk_dist,rdr_sig0,node_dist,flow_angle,n_good_pix,lat,lon"
     results = []
     for node in node_ids:
         # Create an empty dataframe for cases where no data is returned for a reach identifier
@@ -144,6 +146,7 @@ def query_main(BASIN_IDENTIFIER, start_time = "2023-07-28T00:00:00Z", end_time =
             "crid":'PGC0',
             "pass_id": 0,
             "cycle_id": 0,
+            "continent_id":'NA',
             "node_q": 4,
             "node_q_b": 3,
             "xovr_cal_q": 20,
@@ -233,9 +236,13 @@ def basin_loop(
         # write out each time
         if out_csv_name is not None:
             out_csv_name = out_csv_name.split('.csv')[0]
-            df.to_csv('{}_tmp.csv'.format(out_csv_name), index=False)
+            tmp_name = '{}_tmp.csv'.format(out_csv_name)
+            df.to_csv(tmp_name, index=False)
     if out_csv_name is not None:
         df.to_csv('{}.csv'.format(out_csv_name), index=False)
+        # remove the tmp one
+        if os.path.isfile(tmp_name):
+            os.remove(tmp_name)
     client.close()
     return df
 
