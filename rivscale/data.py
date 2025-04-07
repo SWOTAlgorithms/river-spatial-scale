@@ -37,8 +37,11 @@ import rivscale.misc
 import rivscale.products
 
 import xarray as xr
-import rivscale.ingest
 
+try:
+    import rivscale.ingest
+except ModuleNotFoundError:
+    print("Problm importing ingest tools, can't use hydrochron")
 ##### Mar 2025
 def rivertiles_to_node_dataframe(rivertiles):
     dataframe_list = []
