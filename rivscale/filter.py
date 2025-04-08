@@ -215,8 +215,8 @@ def filter_qual(
     # compute all the various masks for wse and area
     ###
     # filter out ice
-    #ice = df['ice_clim_f']==0
-    ice = df['ice_clim_f']<=0 # ignore ice flag if it is negative/fill_value
+    ice = df['ice_clim_f']==0
+    #ice = df['ice_clim_f']<=0 # ignore ice flag if it is negative/fill_value
     # filter out bad qual
     bad  = df[qual_key] < 3
     # drop xovr_cal_q == 2
