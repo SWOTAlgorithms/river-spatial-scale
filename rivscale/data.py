@@ -41,19 +41,23 @@ import xarray as xr
 try:
     import rivscale.ingest
 except ModuleNotFoundError:
-    print("Problm importing ingest tools, can't use hydrochron")
-##### Mar 2025
-def rivertiles_to_node_dataframe(rivertiles):
+    print("Problem importing ingest tools, can't use hydrochron")
+##### April 2025
+def rivertiles_to_dataframe(rivertiles, group='nodes', continent='NA'):
     dataframe_list = []
     for rivertile in rivertiles:
-        ds = xr.open_dataset(rivertile, group='nodes', decode_cf=False)
+        ds = xr.open_dataset(rivertile, group=group, decode_cf=False)
+        if group=='reaches':
+            ds = ds.drop(['centerline_lat', 'centerline_lon',
+                'n_reach_up','n_reach_dn','rch_id_up', 'rch_id_dn'])
         df = ds.to_dataframe()
         _, tail = os.path.split(rivertile)
         parts = tail.split('_')
         #print(parts)
         df['cycle_id'] = int(parts[4])
         df['pass'] = int(parts[5])
-        df['continent'] = 'NA' # TODO: figure out how to not hard code this one
+        df['continent'] = continent
+        #breakpoint()
         dataframe_list.append(df)
     swot_node_dataframe = pd.concat(dataframe_list)
     swot_node_dataframe = swot_node_dataframe.reset_index(drop=True)
@@ -75,6 +79,7 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     #
     # dont qual filter at this stage...only later
     # drop bad data
+    #breakpoint()
     # TODO: robustify qual filter methods (OB, IM, OBIM etc)
     df = rivscale.filter.filter_qual(
         df, height=True, area=False,
@@ -92,7 +97,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     df['wse_u'] = df['wse_r_u']
     df['dist_out'] = df['p_dist_out']
     # put sig0 in dB
-    df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
+    if 'rdr_sig0' in df.keys():
+        df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
     #if 'continent' not in df.keys():
     #    df['continent'] = 'NA' # TODO: un-hard-code this one
     return df
@@ -107,8 +113,10 @@ def get_swot_data(
     """
     # first handle optional config params
     section = 'stretch_stack'
+    group = 'nodes'
     if kind == 'Reach':
         section = 'reach_avg'
+        group = 'reaches'
 
     if 'method' not in cfg[section].keys():
         cfg[section]['method'] = 'csv'
@@ -160,9 +168,11 @@ def get_swot_data(
             pixc_flavor = cfg['main']['pixc_flavor']
             river_flavor = cfg['main']['river_flavor']
             basedir = cfg['main']['data_path']
+            # get pass and continent from the config granule name
+            pas, continent = cfg['main']['granule'].split('_')
             glob_str = os.path.join(
                 basedir,
-                '???_*/*/SWOT_L1B_HR_SLC_*/{}'.format(slc_flavor),
+                '{}_*/*/SWOT_L1B_HR_SLC_*/{}'.format(pas, slc_flavor),
                 'SWOT_L2_HR_PIXC_*',
                 '{}'.format(pixc_flavor),
                 'SWOT_L2_HR_RiverTile_*',
@@ -170,9 +180,11 @@ def get_swot_data(
                 'SWOT_L2_HR_RiverTile*.nc')
             print(glob_str)
             rivertiles = glob.glob(glob_str)
-            df = rivertiles_to_node_dataframe(rivertiles)
+            df = rivertiles_to_dataframe(rivertiles, group=group,
+                    continent=continent)
             # write out the csv file
             df.to_csv(node_csv_file, index=False)
+        #breakpoint()
         # filter out reaches we want to keep
         df = df[df['reach_id'].isin(stretch_reaches)]
     elif cfg[section]['method'] == 'reach':
@@ -220,6 +232,7 @@ def get_swot_data(
     #dark_thresh = float(cfg['data']['dark_thresh'])
     # don't filter on dark frac here...only on qual
     #df = manage_fields(df, use_wse_sm=use_wse_sm)#, dark_thresh=dark_thresh)
+    #breakpoint()
     df = manage_fields(
         df,
         use_wse_sm=cfg[section]['use_wse_sm'],

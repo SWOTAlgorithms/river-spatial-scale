@@ -215,8 +215,8 @@ def filter_qual(
     # compute all the various masks for wse and area
     ###
     # filter out ice
-    ice = df['ice_clim_f']==0
-    
+    #ice = df['ice_clim_f']==0
+    ice = df['ice_clim_f']<=0 # ignore ice flag if it is negative/fill_value
     # filter out bad qual
     bad  = df[qual_key] < 3
     # drop xovr_cal_q == 2
@@ -245,7 +245,7 @@ def filter_qual(
     area_keep = np.logical_and.reduce([ice, bad, xover, area_fill, dark])
     
     if 'OB' in kind:
-        # filter out swath edges fo both wse and area
+        # filter out swath edges of both wse and area
         wse_keep = np.logical_and.reduce([wse_keep, near, far])
         area_keep = np.logical_and.reduce([area_keep, near, far])
         # drop degraded wse and wse outliers

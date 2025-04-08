@@ -188,6 +188,25 @@ def plot_single_stretch(files, outdir=None, cfg=None):
     #if outdir is None:
     #    plt.show()
 
+def get_stretch_list(stretch_list_in, dir_in, kind='stretch_stack'):
+    stretch_files = []
+    for stretch in stretch_list_in:
+        # get all reaches in basins smaller than stretch
+        kind2 = kind
+        if kind=='reach_avg':
+            kind2='reach_average'
+        glob_str = os.path.join(
+            dir_in,'{}*'.format(stretch),
+            '{}_*'.format(kind), '{}*_{}.nc'.format(stretch, kind2))
+        print(glob_str)
+        this_files = glob.glob(glob_str)
+        stretch_files = stretch_files + this_files
+    stretch_list = []
+    for fle in stretch_files:
+        head, tail = os.path.split(fle)
+        stretch_list.append(tail.split('_')[0])
+    return stretch_list
+
 def setup_from_cfg(cfg):
     """
 
@@ -196,12 +215,23 @@ def setup_from_cfg(cfg):
         '{}'.format(t) for t in '{}'.format(
             cfg['main']['stretch_subset']).split()]
     # make the output dir if needed
-    stretch_dir0 = os.path.join(
-        cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
-    pekel_dir0 = os.path.join(
-        cfg['main']['pekel_in_path'],cfg['main']['orbit'])
+    try:
+        stretch_dir0 = os.path.join(
+            cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
+    except KeyError:
+        # use the output path (assuming a stretch_stack.cfg or reach_avg.cfg)
+        stretch_dir0 = os.path.join(
+            cfg['main']['out_path'],cfg['main']['orbit'])
+    try:
+        pekel_dir0 = os.path.join(
+            cfg['main']['pekel_in_path'],cfg['main']['orbit'])
+    except KeyError:
+        # use the output dir (assuming a stretch_stack.cfg or reach_avg.cfg)
+        pekel_dir0 = os.path.join(
+            cfg['main']['out_path'],cfg['main']['orbit'])
     outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
     #outdir = os.path.join(outdir0, cfg['main']['flavor'])
+    """
     stretch_files = []
     for stretch in stretch_list0:
         # get all reaches in basins smaller than stretch
@@ -213,6 +243,10 @@ def setup_from_cfg(cfg):
     for fle in stretch_files:
         head, tail = os.path.split(fle)
         stretch_list.append(tail.split('_')[0])
+    """
+    stretch_list1 = get_stretch_list(stretch_list0, stretch_dir0, kind='stretch_stack')
+    stretch_list2 = get_stretch_list(stretch_list0, stretch_dir0, kind='reach_avg')
+    stretch_list = np.unique(list(set(stretch_list1).union(set(stretch_list2))))
     df_stretches = pd.read_csv(
         cfg['main']['stretch_file'],
         usecols=stretch_list)
@@ -224,7 +258,7 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=EXAMPLE)
     parser.add_argument('-c','--config', default=None,
-        help='output directory to save plots')
+        help='processing.cfg or river_avg.cfg')
     parser.add_argument('--infile', nargs='+', help='input file(s)')
     #parser.add_argument('-t','--filetype', type=str, default='StretchData',
     #    help='StreachData, AlongStretchStats')
@@ -246,15 +280,23 @@ def main():
         all_stretches = list(args.stretch_name)
     for i,key in enumerate(all_stretches):
         print('plotting stretch: {}'.format(key))
+        try:
+            flavor = cfg['main']['stretch_stack_flavor']
+        except KeyError:
+            flavor = cfg['main']['flavor']
+        try:
+            pekel_flavor = cfg['main']['pekel_flavor']
+        except KeyError:
+            pekel_flavor = cfg['main']['flavor']
         stretch_dir = os.path.join(
             stretch_dir0, key, 'stretch_stack_{}'.format(
-                cfg['main']['stretch_stack_flavor']))
+                flavor))
         reach_dir = os.path.join(# guess this one
             stretch_dir0, key, 'reach_avg_{}'.format(
-                cfg['main']['stretch_stack_flavor']))
+                flavor))
         pekel_dir = os.path.join(
             pekel_dir0, key, 'pekel_{}'.format(
-                cfg['main']['pekel_flavor']))
+                pekel_flavor))
         outdir = os.path.join(outdir0, key, cfg['main']['flavor'])
 
         file_stretch = os.path.join(
