@@ -11,7 +11,6 @@ Author(s): Brent Williams
 #import pandas as pd
 import numpy as np
 #import rivscale.plot
-import rivscale.products
 import matplotlib.pyplot as plt
 import argparse
 import configparser
@@ -20,6 +19,12 @@ import glob
 import pandas as pd
 import rivscale.reconstruct
 import rivscale.plot
+
+import rivscale.products.stretch_stack
+import rivscale.products.along_stretch
+import rivscale.products.stretch_average
+import rivscale.products.bayes_data
+import rivscale.products.height_width
 
 EXAMPLE = ''
 
@@ -30,35 +35,35 @@ def plot_single_stretch(files, outdir=None, cfg=None):
         base, fle = os.path.split(f)
         if 'stretch_stack' in fle:
             dic['stretch_stack'] = \
-                    rivscale.products.StretchStack.from_ncfile(f)
+                    rivscale.products.stretch_stack.StretchStack.from_ncfile(f)
         if 'wse_stats' in fle:
             dic['wse_stats'] = \
-                    rivscale.products.AlongStretchStats.from_ncfile(f)
+                    rivscale.products.along_stretch.AlongStretchStats.from_ncfile(f)
         if 'width_stats' in fle:
             dic['width_stats'] = \
-                    rivscale.products.AlongStretchStats.from_ncfile(f)
+                    rivscale.products.along_stretch.AlongStretchStats.from_ncfile(f)
         if 'dark_stats' in fle:
             dic['dark_stats'] = \
-                    rivscale.products.AlongStretchStats.from_ncfile(f)
+                    rivscale.products.along_stretch.AlongStretchStats.from_ncfile(f)
         if 'pekel_stats' in fle:
             dic['pekel_stats'] = \
-                    rivscale.products.AlongStretchStats.from_ncfile(f)
+                    rivscale.products.along_stretch.AlongStretchStats.from_ncfile(f)
         if 'wse_stretch_average' in fle:
             dic['wse_stretch_average'] = \
-                    rivscale.products.StretchAverageStats.from_ncfile(f)
+                    rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
         if 'width_stretch_average' in fle:
             dic['width_stretch_average'] = \
-                    rivscale.products.StretchAverageStats.from_ncfile(f)
+                    rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
         if 'wse_reach_average' in fle:
             dic['wse_reach_average'] = \
-                    rivscale.products.StretchAverageStats.from_ncfile(f)
+                    rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
         if 'width_reach_average' in fle:
             if 'height_width' in fle:
                 dic['height_width_reach_average'] = \
-                    rivscale.products.HeightWidthModel.from_ncfile(f)
+                    rivscale.products.height_width.HeightWidthModel.from_ncfile(f)
             else:
                 dic['width_reach_average'] = \
-                    rivscale.products.StretchAverageStats.from_ncfile(f)
+                    rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
         if 'height_width' in fle:
             if 'reach_average' in fle:
                 pass
@@ -66,10 +71,10 @@ def plot_single_stretch(files, outdir=None, cfg=None):
                 #    rivscale.products.HeightWidthModel.from_ncfile(f)
             else:
                 dic['height_width'] = \
-                    rivscale.products.HeightWidthModel.from_ncfile(f)
+                    rivscale.products.height_width.HeightWidthModel.from_ncfile(f)
         if 'bayes' in fle:
             dic['bayes'] = \
-                    rivscale.products.BayesData.from_ncfile(f)
+                    rivscale.products.bayes_data.BayesData.from_ncfile(f)
     for key in dic.keys():
         # plot each individual plot
         if key=='height_width':

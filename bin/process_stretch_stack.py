@@ -23,7 +23,10 @@ import rivscale.plot
 import rivscale.data
 import rivscale.reconstruct
 import rivscale.filter
-import rivscale.products
+import rivscale.products.stretch_stack
+import rivscale.products.along_stretch
+import rivscale.products.stretch_average
+import rivscale.products.height_width
 
 import scipy.signal
 
@@ -132,7 +135,7 @@ def main():
         ####
         # read the stretch data
         ####
-        stretch_stack = rivscale.products.StretchStack.from_ncfile(
+        stretch_stack = rivscale.products.stretch_stack.StretchStack.from_ncfile(
             infile_stretch)
         ####
         # first process along stats
@@ -147,11 +150,11 @@ def main():
         if (os.path.exists(outfile_width_stats) and (not args.force)):
             print("  This along_stretch already processed")
             # read in the ones already run
-            wse_stats = rivscale.products.AlongStretchStats.from_ncfile(
+            wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
                 outfile_wse_stats)
-            width_stats = rivscale.products.AlongStretchStats.from_ncfile(
+            width_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
                 outfile_width_stats)
-            dark_stats = rivscale.products.AlongStretchStats.from_ncfile(
+            dark_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
                 outfile_dark_stats)
         else:
             print("  Processing along_stretch")
@@ -190,7 +193,7 @@ def main():
                 print("  The input pekel file has not been created")
                 continue
             else:
-                pekel_stats = rivscale.products.AlongStretchStats.from_ncfile(
+                pekel_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
                     infile_pekel)
         ####
         # now process stretch_average
@@ -198,9 +201,9 @@ def main():
         # check if output file exists, if it does skip, unless --force set
         if (os.path.exists(outfile_width_avg) and (not args.force)):
             print("  This stretch_average already processed")
-            wse_avg = rivscale.products.StretchAverageStats.from_ncfile(
+            wse_avg = rivscale.products.stretch_average.StretchAverageStats.from_ncfile(
                 outfile_wse_avg)
-            width_avg = rivscale.products.StretchAverageStats.from_ncfile(
+            width_avg = rivscale.products.stretch_average.StretchAverageStats.from_ncfile(
                 outfile_width_avg)
         else:
             print("  Processing stretch_average")
@@ -220,7 +223,7 @@ def main():
         # check if output file exists, if it does skip, unless --force set
         if (os.path.exists(outfile_height_width) and (not args.force)):
             print("  This height_width already processed")
-            height_width = rivscale.products.HeightWidthModel.from_ncfile(
+            height_width = rivscale.products.height_width.HeightWidthModel.from_ncfile(
                 outfile_height_width)
         else:
             print("  Processing height_width")
@@ -228,7 +231,7 @@ def main():
                 this_width_stats = pekel_stats
             else:
                 this_width_stats = width_stats.copy()
-            height_width = rivscale.products.HeightWidthModel.from_objects(
+            height_width = rivscale.products.height_width.HeightWidthModel.from_objects(
                 cfg['height_width'],
                 wse_avg,
                 width_avg,

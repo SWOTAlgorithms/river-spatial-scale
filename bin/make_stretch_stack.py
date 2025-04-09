@@ -23,7 +23,6 @@ import rivscale.plot
 import rivscale.data
 import rivscale.reconstruct
 import rivscale.filter
-import rivscale.products
 
 import scipy.signal
 

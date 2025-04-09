@@ -8,10 +8,16 @@ Author: Brent Williams
 '''
 import numpy as np
 import scipy.ndimage
-
 from configparser import ConfigParser
-
 import SWOTRiver.products.rivertile
+import textwrap
+
+def textjoin(text):
+    """Dedent join and strip text"""
+    text = textwrap.dedent(text)
+    text = text.replace('\n', ' ')
+    text = text.strip()
+    return text
 
 def decode_bitflag(flag_meanings, flag_masks, qual=None):
     out = {}

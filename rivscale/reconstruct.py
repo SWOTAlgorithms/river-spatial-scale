@@ -10,7 +10,7 @@ import numpy as np
 from scipy import odr
 from scipy.linalg import pinv
 import rivscale.filter
-import rivscale.products
+import rivscale.products.bayes_data
 
 def process_bayes_reconstruction(
         cfg,
@@ -50,7 +50,7 @@ def process_bayes_reconstruction(
         width_stats,
         plot=False)
     # now do the reconstruction
-    joint_bayes = rivscale.products.BayesData.joint(
+    joint_bayes = rivscale.products.bayes_data.BayesData.joint(
         stretch_stack,
         wse_stats,
         width_stats,

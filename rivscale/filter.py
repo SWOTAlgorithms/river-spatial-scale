@@ -9,6 +9,7 @@ Author: Brent Williams
 import numpy as np
 import matplotlib.pyplot as plt
 import rivscale.data
+import rivscale.products.stretch_stack
 
 def filter_stretch_stack(
         cfg,
@@ -269,7 +270,7 @@ def drop_stretch_nans(stretch_stack, min_nodes=10, reach_id=None):
     # TODO make this a class method?
     #create a new container instance
     #data_out = rivscale.products.RiverStretchData()
-    data_out = rivscale.products.StretchStack()
+    data_out = rivscale.products.stretch_stack.StretchStack()
     # copy the attributes
     data_out.stretch_name = stretch_stack.stretch_name
     wse = stretch_stack['wse']

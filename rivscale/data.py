@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import rivscale.filter
 import rivscale.misc
+import rivscale.products.stretch_stack
 import xarray as xr
 
 try:
@@ -249,9 +250,7 @@ def make_stretch_stack(
     sword_node_df, d_up, d_down   = SWORD info as output by io.read_SWORD()
     """
     # Init the potentially multireach stretch stack 
-    #data = rivscale.products.RiverStretchData()
-    #data['stretch_reaches'] = stretch_reaches
-    data = rivscale.products.StretchStack()
+    data = rivscale.products.stretch_stack.StretchStack()
     data['reaches'] = stretch_reaches
     data['stretch_name'] = stretch_name
     # check that stretch_reaches list is a connected stretch

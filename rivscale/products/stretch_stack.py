@@ -1,0 +1,397 @@
+'''
+Copyright 2024, by the California Institute of Technology. ALL RIGHTS RESERVED. United States Government Sponsorship acknowledged. Any commercial use must be negotiated with the Office of Technology Transfer at the California Institute of Technology.
+ 
+This software may be subject to U.S. export control laws. By accepting this software, the user agrees to comply with all applicable U.S. export laws and regulations. User has the responsibility to obtain export licenses, or other export authority as may be required before exporting such information to foreign countries or providing access to foreign persons.
+
+Author (s): Brent Williams
+
+Container for stretch stack, a 2D object in time and along river of ordered
+node-level river measurements (e.g., from SWOT RiverSP data), with methods
+to filter manipulate, and plot the data.
+
+Mimics the product class from RiverObs and the SWOT project "python" repo
+'''
+from collections import OrderedDict as odict
+from rivscale.misc import textjoin
+from rivscale.products.constants import (
+        DIMENSIONS_NTR,  DIMENSIONS_2D)
+
+from swot.product import Product, ProductTesterMixIn
+from SWOTWater.products.constants import FILL_VALUES
+from swot.lr.base_classes import AttrFillerMixIn
+
+import rivscale.estimate
+import rivscale.plot
+import matplotlib.pyplot as plt
+import scipy.interpolate
+import pandas as pd
+import os.path
+import numpy as np
+
+class StretchStack(Product):
+    ATTRIBUTES = odict([
+        ['description',{'dtype':'str', 'value': textjoin("""
+            Container for potentially multireach sections of rivers
+            holding 2D multitemporal data
+            """)}],
+        ['stretch_name',{'dtype':'str', 'value': textjoin("""
+            Name given to this stretch instance (e.g., center reach
+            or river name)
+            """)}],
+        ])
+    DIMENSIONS = DIMENSIONS_NTR
+    VARIABLES = odict([
+        ['reaches', odict([['dimensions', odict([['num_reaches', 0]])]])],
+        ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['granule_id', odict([['dimensions', odict([['num_times', 0]])]])],
+        #['swot_time', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['date_hour', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['wse', odict([['dimensions', DIMENSIONS_2D]])],
+        ['width', odict([['dimensions', DIMENSIONS_2D]])],
+        ['area_total', odict([['dimensions', DIMENSIONS_2D]])],
+        ['wse_u', odict([['dimensions', DIMENSIONS_2D]])],
+        ['width_u', odict([['dimensions', DIMENSIONS_2D]])],
+        ['area_tot_u', odict([['dimensions', DIMENSIONS_2D]])],
+        ['node_q_b', odict([['dimensions', DIMENSIONS_2D]])],
+        ['dark_frac', odict([['dimensions', DIMENSIONS_2D]])],
+        ['sig0 (dB)', odict([['dimensions', DIMENSIONS_2D]])],
+        ['flow_angle', odict([['dimensions', DIMENSIONS_2D]])],
+        ['layovr_val', odict([['dimensions', DIMENSIONS_2D]])],
+        ['n_good_pix', odict([['dimensions', DIMENSIONS_2D]])],
+    ])
+    # TODO: should we also keep ice flag, etc...?
+
+    def plot(
+            self,
+            wse_reference=None,
+            width_reference=None,
+            x_key='dist_out', # or 'time_id'
+            outdir=None,
+            show=False,
+            title_tag=None,
+            bits_to_plot=[]
+            #bits_to_plot=[0,1,2,3,4,7,9,10,11,18,19,22]
+            #bits_to_plot=[0,1,2,3,4,7,9,10,11,13,14,18,19,22,23,24,25,26,27,28]
+            ):
+        if title_tag is None:
+            title_tag = 'stretch stack data'
+        if wse_reference is not None:
+            # plot the wse and wse_anom together
+            rivscale.plot.plot_stretch_stack(
+                self,
+                x_key=x_key,
+                y_keys=['wse','wse'],
+                y_reference=[wse_reference, wse_reference],
+                y_anom=[False, True],
+                outdir=outdir,
+                title_tag=title_tag)
+            # plot the 2D wse and wse_anom
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='wse',
+                y_reference=wse_reference,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='wse',
+                y_reference=wse_reference,
+                y_anom=True,
+                outdir=outdir,
+                title_tag=title_tag)
+        if width_reference is not None:
+            # plot the width and width_anom together
+            rivscale.plot.plot_stretch_stack(
+                self,
+                x_key=x_key,
+                y_keys=['width','width'],
+                y_reference=[width_reference, width_reference],
+                y_anom=[False, True],
+                outdir=outdir,
+                title_tag=title_tag)
+            # plot the 2D width and width anom
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='width',
+                y_reference=width_reference,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='width',
+                y_reference=width_reference,
+                y_anom=True,
+                outdir=outdir,
+                title_tag=title_tag)
+        if (wse_reference is None) and (width_reference is None):
+            # plot the height and width together
+            rivscale.plot.plot_stretch_stack(
+                self,
+                x_key=x_key,
+                y_keys=['wse','width'],
+                y_reference=[None, None],
+                y_anom=[False, False],
+                outdir=outdir,
+                title_tag=title_tag)
+            # plot the 2D height and width
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='wse',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='width',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        if np.nansum(self['dark_frac'])>0:
+            # also plot the dark frac 1D and 2D
+            """
+            rivscale.plot.plot_stretch_stack(
+                self,
+                x_key=x_key,
+                y_keys=['dark_frac',],
+                y_reference=[None,],
+                y_anom=[False,],
+                outdir=outdir,
+                title_tag=title_tag)
+            """
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='dark_frac',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        if np.nansum(np.isfinite(self['sig0 (dB)']))>0:
+            # also plot the sig0 2D
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='sig0 (dB)',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        if np.nansum(np.isfinite(self['flow_angle']))>0:
+            # also plot the flow_dir 2D
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='flow_angle',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        if np.nansum(np.isfinite(self['layovr_val']))>0:
+            # also plot the flow_dir 2D
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='layovr_val',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        if np.nansum(np.isfinite(self['n_good_pix']))>0:
+            # also plot the flow_dir 2D
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='n_good_pix',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
+        # make a 2D plot for commanded qual bits?
+        for bit in bits_to_plot:
+            rivscale.plot.plot_2D_stretch_stack(
+                self,
+                y_key='node_q_b',
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag,
+                bit=bit)
+        if show:
+            plt.show()
+
+    def smooth_widths(self, size=11):
+        self.width = rivscale.estimate.smooth_widths(self.width, size=size)
+        # TODO: maybe should also update width_u?
+        # TODO: maybe should take into account dark water
+
+    def filter_dark_water(self, key='wse', dark_thresh=0.8):
+        """
+        filter out dark water in variable 'key' by setting to nan
+        """
+        self[key][self.dark_frac>dark_thresh] = np.nan
+
+    def filter_node_outliers(
+            self,
+            along_stats=None,
+            key='wse',# or width etc
+            Delta2=False,
+            use_ptiles=False,
+            IQR_scale=5.0,
+            plot=False,
+            title_tag='',
+            outdir=None):
+        """
+        This method filters the StretchStack object for the 'key'
+        variable by replacing the values with nans. The method applies
+        an Inter-Quartile Range (IQR) filter on the data for each node
+        using the multitemproal stack statistics.  Two IQR filters are
+        applied, one based on the statistics for each node and one based
+        on the statistics over the entire stretch. There are a few
+        options depending on the optional inputs:
+
+        Inputs
+            along_stats: an AlongSStretchStats object.  If input the
+                         'reference' field is used instead of computing
+                         it using hte median of the data over time.
+
+            key:         'wse' or 'width' (i.e., which variable to filter)
+
+            Delta2:      if True, estimate a stretch average for each
+                         time to also subtract off to produce an the
+                         anomaly-anomaly (Delta2) before computing the
+                         IQR stats.
+
+            use_ptiles:  use the 25th and 75th percentile from the
+                         along_stats object instead of computing them.
+
+            IQR_scale:   postive float value indicating how many IQRs to
+                         set rejection threshold
+
+            plot:        make plots for debugging purposes
+
+        TODO: should probably use masked arrays everywhere instead of
+              relying on nans.
+        TODO: probably should set a lower limit on the IQR based on the
+              known uncertainty of the 'key' variable
+        """
+        # handle data
+        arr0 = self[key].copy()
+        if along_stats is None:
+            # use the median over time as ref
+            ref = np.nanmedian(arr0, axis=1)
+        else:
+            # use ref from along_stats
+            ref = along_stats.reference
+        ref2 = np.broadcast_to(ref, np.shape(arr0.T)).T
+        delta = arr0 - ref2
+        delta_tag='$\Delta$'
+        if Delta2:
+            # get the anomaly-anomaly
+            delta_bar = np.nanmean(delta, axis=0)
+            delta_bar = np.nanmedian(delta, axis=0)
+            delta_bar2 = np.broadcast_to(delta_bar, np.shape(arr0))
+            ref2 = ref2 + delta_bar2
+            use_ptiles=False
+            delta_tag = '$\Delta^2$'
+            #delta2 = arr0 - dmean2
+            #arr0 = delta2
+        #breakpoint()
+        if use_ptiles:
+            p = along_stats.percentile_list
+            p25 = along_stats.percentiles[:, p==25].squeeze()
+            p75 = along_stats.percentiles[:, p==75].squeeze()
+        else:
+            # compute the percentiles
+            p25 = np.nanpercentile(arr0-ref2, 25, axis=1)
+            p75 = np.nanpercentile(arr0-ref2, 75, axis=1)
+        #p = along_stats.percentile_list
+        #p25 = along_stats.percentiles[:,p==25].squeeze()
+        #p75 = along_stats.percentiles[:,p==75].squeeze()
+        IQR = p75 - p25
+        IQR2 = np.broadcast_to(IQR, np.shape(arr0.T)).T
+        # first filter global
+        #p25_g = np.median(p25 - ref)
+        #p75_g = np.median(p75 - ref)
+        #IQR_g = (p75_g - p25_g) + np.zeros_like(ref)
+        IQR_g0 = np.nanmean(IQR[IQR>0])
+        IQR_g = IQR_g0 + np.zeros_like(ref2)
+        # for some reason Pekel sometimes give negative IQR? so hande it
+        IQR[IQR<0] = IQR_g0
+        #breakpoint()
+        arr1 = rivscale.filter.scaled_spread_outlier_rejector(
+            arr0, ref2, IQR_g, IQR_scale)
+        # now filter per-node
+        arr = rivscale.filter.scaled_spread_outlier_rejector(
+            arr1, ref2, IQR2, IQR_scale)
+        self[key] = arr
+        #breakpoint()
+        if plot:
+            outlier_mask = np.logical_and(
+                np.isfinite(arr0),
+                np.isnan(arr))
+            dist_out = np.broadcast_to(
+                self.dist_out,
+                np.shape(arr0.T)).T
+            plt.figure(figsize=(10,10))
+            plt.subplot(2,1,1)
+            plt.plot(dist_out, arr0-ref2)
+            plt.plot(
+                dist_out[outlier_mask],
+                arr0[outlier_mask]-ref2[outlier_mask],'x')
+            plt.plot(
+                self.dist_out, #ref + \
+                IQR_scale*IQR,'k', linewidth=2)
+            plt.plot(
+                self.dist_out,
+                -IQR_scale*IQR,'k', linewidth=2)
+            plt.plot(
+                self.dist_out,
+                IQR_scale*IQR_g,'g', linewidth=2)
+            plt.plot(
+                self.dist_out,
+                -IQR_scale*IQR_g,'g', linewidth=2)
+            plt.grid()
+            plt.xlabel('dist_out (m)')
+            plt.ylabel(rivscale.plot.label_units(delta_tag+' '+key))
+            yscale = IQR_scale*IQR_g[0,0]*2
+            plt.ylim((-yscale, yscale))
+            #
+            # Also plot 2D plots
+            #
+            darr = arr0-ref2
+            darr_out = np.zeros(np.shape(darr))
+            lim = np.median(IQR_g * IQR_scale)
+            darr_out[outlier_mask] = 1
+            #plt.figure()
+            plt.subplot(2,1,2)
+            plt.imshow(darr_out.T,
+                interpolation='none', aspect='auto', cmap='gray_r', clim=(0,1.1))
+            plt.imshow(darr.T,
+                interpolation='none', aspect='auto', cmap='jet', alpha=0.5,
+                clim=(-lim,lim))
+            plt.colorbar(label=rivscale.plot.label_units(delta_tag+' '+key))
+            #plt.title(delta_tag+' '+key)
+            plt.xlabel('node index')
+            plt.ylabel('time index')
+            #breakpoint()
+            if title_tag != '':
+                title_tag = title_tag + ' '
+            subtitle = '(x and dark hue flagged as outliers)'
+            title = '{} {} {} {}outliers'.format(
+                self.stretch_name, delta_tag, key, title_tag)
+            plt.suptitle(title+'\n'+subtitle)
+            #plt.tight_layout()
+            #breakpoint()
+            if outdir is not None:
+                # create output dir if not exist
+                if not os.path.exists(outdir):
+                    os.makedirs(outdir)
+                #breakpoint()
+                fname = title.replace(' ','_').replace(
+                    '$\Delta$','delta').replace('$\Delta^2$','delta2')
+                plt.savefig(os.path.join(outdir, fname), dpi=300)
+                plt.close()
+
+

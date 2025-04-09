@@ -10,6 +10,8 @@ Author: Brent Williams
 import numpy as np
 import scipy.ndimage
 import rivscale.filter
+import rivscale.products.along_stretch
+import rivscale.products.stretch_average
 
 def smooth_widths(widths_in, size=11):
     #widths = stretch_stack['width'].copy()
@@ -40,7 +42,7 @@ def process_along_stats(cfg, stretch_stack_in):
         cfg['crop'] = 'False'
     stretch_stack = stretch_stack_in.copy()
     # create the dark stats before any filtering
-    dark_stats = rivscale.products.AlongStretchStats.from_StretchStack(
+    dark_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
         stretch_stack, signal_key='dark_frac', kernel_size=None)
     # filter the data
     stretch_stack, _ = rivscale.filter.filter_stretch_stack(
@@ -56,9 +58,9 @@ def process_along_stats(cfg, stretch_stack_in):
     #if cfg['width_smooth_size'] is not None:
     #    stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
     # compute multitemporal statistics
-    wse_stats = rivscale.products.AlongStretchStats.from_StretchStack(
+    wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
         stretch_stack, signal_key='wse', kernel_size=cfg['wse_ref_kernel_size'])
-    width_stats = rivscale.products.AlongStretchStats.from_StretchStack(
+    width_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
         stretch_stack, signal_key='width', kernel_size=cfg['width_ref_kernel_size'])
     if cfg['crop']:
         # crop to reach
@@ -116,12 +118,12 @@ def process_stretch_average(
     width_stats.prior_unc_alpha=cfg['width_prior_unc_alpha']
 
     # get stretch average stats
-    wse_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
+    wse_stretch_avg = rivscale.products.stretch_average.StretchAverageStats.from_StretchStack(
         stretch_stack, signal_key='wse', along_stats=wse_stats,
         average_method='bayes_simple',#'bayes_weighted',
         slope_method='bayes',
         reach_id=reach_id)
-    width_stretch_avg = rivscale.products.StretchAverageStats.from_StretchStack(
+    width_stretch_avg = rivscale.products.stretch_average.StretchAverageStats.from_StretchStack(
         stretch_stack, signal_key='width', along_stats=width_stats,
         average_method='bayes_simple',#'bayes_weighted',
         slope_method='bayes',
