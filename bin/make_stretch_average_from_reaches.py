@@ -23,7 +23,8 @@ import rivscale.plot
 import rivscale.data
 import rivscale.reconstruct
 import rivscale.filter
-import rivscale.products
+import rivscale.products.stretch_average
+import rivscale.products.height_width
 
 import scipy.signal
 
@@ -128,16 +129,16 @@ def main():
         #    key, stretch_reaches, swot_node_df, sword_node_df, d_up, d_down)
         #
         # create the wse_stretch_avg and width_stretch_avg objects
-        wse_reach_avg = rivscale.products.StretchAverageStats.from_reach_df(
+        wse_reach_avg = rivscale.products.stretch_average.StretchAverageStats.from_reach_df(
             swot_reach_df, key, 'wse')
-        width_reach_avg = rivscale.products.StretchAverageStats.from_reach_df(
+        width_reach_avg = rivscale.products.stretch_average.StretchAverageStats.from_reach_df(
             swot_reach_df, key, 'width')
         #breakpoint()
         # also create the height_width object from the reaches
         height_width = None
         if (len(wse_reach_avg.percentiles)>0) and \
                 (len(width_reach_avg.percentiles)>0):
-            height_width = rivscale.products.HeightWidthModel.from_objects(
+            height_width = rivscale.products.height_width.HeightWidthModel.from_objects(
                 {},wse_reach_avg, width_reach_avg)
         #
         """

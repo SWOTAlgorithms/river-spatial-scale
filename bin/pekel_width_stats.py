@@ -23,7 +23,7 @@ import rivscale.plot
 import rivscale.data
 import rivscale.reconstruct
 import rivscale.filter
-import rivscale.products
+import rivscale.products.along_stretch
 
 import scipy.signal
 
@@ -123,9 +123,9 @@ def main():
         if len(df_list)!=len(stretch_reaches):
             print( "cannot create this stretch {}, no Pekel data".format(key))
             continue
-        input_width_stats = rivscale.products.AlongStretchStats.from_ncfile(
+        input_width_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
             infile_width_stats)
-        width_stats = rivscale.products.AlongStretchStats.from_pekel_df(
+        width_stats = rivscale.products.along_stretch.AlongStretchStats.from_pekel_df(
             cfg['pekel'],df_list, stretch_reaches, key, input_width_stats)
 
         if width_stats is not None:
