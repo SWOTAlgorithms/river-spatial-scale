@@ -333,29 +333,31 @@ class StretchStack(Product):
             outlier_mask = np.logical_and(
                 np.isfinite(arr0),
                 np.isnan(arr))
-            dist_out = np.broadcast_to(
-                self.dist_out,
+            x_label = 'along_dist (m)'#'dist_out (m)'
+            x_data = self.along_dist#self.dist_out
+            x_data2 = np.broadcast_to(
+                x_data,
                 np.shape(arr0.T)).T
             plt.figure(figsize=(10,10))
             plt.subplot(2,1,1)
-            plt.plot(dist_out, arr0-ref2)
+            plt.plot(x_data2, arr0-ref2)
             plt.plot(
-                dist_out[outlier_mask],
+                x_data2[outlier_mask],
                 arr0[outlier_mask]-ref2[outlier_mask],'x')
             plt.plot(
-                self.dist_out, #ref + \
+                x_data, #ref + \
                 IQR_scale*IQR,'k', linewidth=2)
             plt.plot(
-                self.dist_out,
+                x_data,
                 -IQR_scale*IQR,'k', linewidth=2)
             plt.plot(
-                self.dist_out,
+                x_data,
                 IQR_scale*IQR_g,'g', linewidth=2)
             plt.plot(
-                self.dist_out,
+                x_data,
                 -IQR_scale*IQR_g,'g', linewidth=2)
             plt.grid()
-            plt.xlabel('dist_out (m)')
+            plt.xlabel(x_label)
             plt.ylabel(rivscale.plot.label_units(delta_tag+' '+key))
             yscale = IQR_scale*IQR_g[0,0]*2
             plt.ylim((-yscale, yscale))
