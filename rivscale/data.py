@@ -107,10 +107,10 @@ def get_swot_data(
         df = pd.read_csv(cfg['main']['data_path'])
         # TODO: filter out orbit and granules we want
     if cfg[section]['method'] == 'ingest':
-        node_csv_file = cfg['main']['node_csv_file']
-        if (os.path.isfile(node_csv_file)) and (not force):
+        ingest_csv_file = cfg['main']['ingest_csv_file']
+        if (os.path.isfile(ingest_csv_file)) and (not force):
             # just read the already-made input file
-            df = pd.read_csv(node_csv_file)
+            df = pd.read_csv(ingest_csv_file)
         else:
             basin_ids = cfg['main']['stretch_subset']
             if isinstance(basin_ids, int):
@@ -129,14 +129,15 @@ def get_swot_data(
             print("ingesting basins:", basin_ids)
             df = rivscale.ingest.basin_loop(
                 basin_ids,
-                out_csv_name=node_csv_file)
+                out_csv_name=ingest_csv_file,
+                kind=kind)
         # filter out reaches we want to keep
         df = df[df['reach_id'].isin(stretch_reaches)]
     elif cfg[section]['method'] == 'offline':
-        node_csv_file = cfg['main']['node_csv_file']
-        if (os.path.isfile(node_csv_file)) and (not force):
+        ingest_csv_file = cfg['main']['ingest_csv_file']
+        if (os.path.isfile(ingest_csv_file)) and (not force):
             # just read the already-made input file
-            df = pd.read_csv(node_csv_file)
+            df = pd.read_csv(ingest_csv_file)
         else:
             #read in and create the csv file on the fly
             slc_flavor = cfg['main']['slc_flavor']
@@ -160,7 +161,7 @@ def get_swot_data(
             df = rivertiles_to_dataframe(rivertiles, group=group,
                     continent=continent)
             # write out the csv file
-            df.to_csv(node_csv_file, index=False)
+            df.to_csv(ingest_csv_file, index=False)
         #breakpoint()
         # filter out reaches we want to keep
         df = df[df['reach_id'].isin(stretch_reaches)]
