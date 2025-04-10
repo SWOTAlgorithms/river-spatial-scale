@@ -19,6 +19,7 @@ This software may be subject to U.S. export control laws. By accepting this soft
 Repo for code to estimate river spatial scale parameters (e.g., along-river wse covariance/spectra etc) and apply them in a Bayes reconstruction approach to optimize noise-versus-resolution trade-offs using the multitemporal stack of information from SWOT.
 
 # how to run
+## defining a stretch
 A "stretch" represents the node-level measurements from ordered consecutive reaches defined by the SWOT prior river database, SWORD (i.e., SWORD defines the reaches and the up- and down-stream connectivity).  In general, a stretch can be any collection of nodes from a subreach to many connected reaches.  The processing starts with the user first defining the stretches to be processed (i.e., the list of ordered, connected reaches and a stretch "name").  To gerenate 3-reach multireach stretches around each reach with the stretch name being the reach name you can call the script:
 
 `$ multireaches_from_sword.py <sword_netcdf_file> <outdir>`
@@ -27,6 +28,7 @@ This produces and output named
 
 `<sword_netcdf_file>_multireach.csv`
 
+## making a stretch stack
 The process of creating the stretch objects and processing them runs in a few steps based on config files (an example is in the config subdir).  The first script that generates the StretchStack object of the SWOT SP node data is (you can stage the RiverSP data locally or have it be ingested using the hydrochron script):
 
 `$ make_stretch_stack.py <config.cfg>`
@@ -39,6 +41,7 @@ If the option to ingest the RiverSP data using hte hydrochron tools is commanded
 
 For the stretches defined by multireach\_from\_sword.py the stretch\_name is the reach\_id.
 
+## making reach products (optional)
 The stack of reach data can be optionally created for a given reach by calling:
 
 `$ make_stretch_average_from_reaches.py <reach_avg.cfg>`
@@ -51,6 +54,7 @@ This creates product(s)/file(s) called:
 
 `<reach_id>_height_width_reach_average.nc`
 
+## making pekel products (optional)
 The pekel-derived along-river width statistics can also be optionally created from special 'truth' river processing outputs of the Pekel occurrence maps thresholded at different water occurrence rates.
 
 `$ pekel_width_stats.py <stretch_stack.cfg>`
@@ -59,6 +63,7 @@ which produces a product with file-name:
 
 `<stretch_name>_pekel_stats.nc`
 
+## processing the stretch_stack
 Now all the stretch_stack processing steps can be run from the stretch stack (and optionally the pekel width stats):
 
 `$ process_stretch_stack.py <process.cfg>`
@@ -79,6 +84,7 @@ This outputs several products/files in the output directory:
 
 `<stretch_name>_bayes.nc`
 
+## plotting
 The results/products can be plotted using:
 
 `$ plot_stretch_products.py -c <process.cfg>`
