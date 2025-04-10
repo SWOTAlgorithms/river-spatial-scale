@@ -19,7 +19,7 @@ from errtools.misc import swot_time_to_field_time
 def label_units(label):
     if 'slope' in label:
         label = label + ' (m/m)'
-    elif ('wse' in label) or ('width' in label) or ('dist_out' in label):
+    elif ('wse' in label) or ('width' in label) or ('dist' in label):
         label = label + ' (m)'
     elif ('flow' in label):
         label = label + ' (deg.)'
@@ -117,7 +117,7 @@ def plot_spectra(
 
 def plot_stretch_stats(
         stats,
-        x_key='dist_out',
+        x_key='along_dist',#'dist_out',
         outdir=None,
         show=False,
         figsize=(10,5),
@@ -356,7 +356,7 @@ def plot_2D_stretch_stack(
 
 def plot_stretch_stack(
         stretch_stack,
-        x_key='dist_out',
+        x_key='along_dist',#,'dist_out',
         y_keys=['wse','width'],
         y_reference=[None, None],
         y_anom=[False, False],

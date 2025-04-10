@@ -67,7 +67,8 @@ def generate_cov_matrix(
     signal_cov = []
     for j,cycl in enumerate(stretch_stack[time_key]):
         R = exponential_cov(
-            stretch_stack['dist_out'], # should probably use the actual node distances?
+            #stretch_stack['dist_out'], # should probably use the actual node distances?
+            stretch_stack['along_dist'],
             char_length_tau=char_length_tau,
             prior_unc_alpha=prior_unc_alpha)
         signal_cov.append(R)

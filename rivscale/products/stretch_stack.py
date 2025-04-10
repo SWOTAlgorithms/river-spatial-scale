@@ -43,6 +43,8 @@ class StretchStack(Product):
     VARIABLES = odict([
         ['reaches', odict([['dimensions', odict([['num_reaches', 0]])]])],
         ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['node_length', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
@@ -68,7 +70,7 @@ class StretchStack(Product):
             self,
             wse_reference=None,
             width_reference=None,
-            x_key='dist_out', # or 'time_id'
+            x_key='along_dist',#'dist_out', # or 'time_id'
             outdir=None,
             show=False,
             title_tag=None,

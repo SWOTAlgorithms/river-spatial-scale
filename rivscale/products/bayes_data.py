@@ -48,6 +48,8 @@ class BayesData(Product):
     VARIABLES = odict([
         ['reaches', odict([['dimensions', odict([['num_reaches', 0]])]])],
         ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['node_length', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['signal', odict([['dimensions', DIMENSIONS_2D]])],
         ['signal_u', odict([['dimensions', DIMENSIONS_2D]])],
@@ -65,7 +67,7 @@ class BayesData(Product):
 
     def plot(
             self,
-            x_key='dist_out', # or 'time_id'
+            x_key='along_dist',#'dist_out', # or 'time_id'
             outdir=None,
             show=False,
             title_tag=''):
@@ -78,6 +80,7 @@ class BayesData(Product):
         stretch_stack.stretch_name = self.stretch_name
         if 'joint' not in self.signal_key:
             stretch_stack.dist_out = self.dist_out
+            stretch_stack.along_dist = self.along_dist
         stretch_stack.time_id = self.time_id
         if self.signal_key == 'wse':
             title_tag = title_tag + ' wse'
@@ -94,6 +97,7 @@ class BayesData(Product):
             wse_b, width_b, post_cov_b = self.unpack_joint()
             N = len(wse_b.signal_mean)
             stretch_stack.dist_out = self.dist_out[0:N]
+            stretch_stack.along_dist = self.along_dist[0:N]
             stretch_stack.wse = wse_b.signal
             stretch_stack.wse_u = wse_b.signal_u
             stretch_stack.width = width_b.signal
@@ -122,6 +126,8 @@ class BayesData(Product):
         bayes.stretch_name = stretch_stack.stretch_name
         bayes.reaches = stretch_stack.reaches
         bayes.dist_out = stretch_stack.dist_out
+        bayes.dist_out = stretch_stack.along_dist
+        bayes.dist_out = stretch_stack.node_length
         bayes.time_id = stretch_stack.time_id
         bayes.signal_key = signal_key
         bayes.signal_mean = stats.reference.copy()
@@ -163,6 +169,12 @@ class BayesData(Product):
         bayes.dist_out = np.concatenate([
             stretch_stack.dist_out,
             stretch_stack.dist_out])
+        bayes.along_dist = np.concatenate([
+            stretch_stack.along_dist,
+            stretch_stack.along_dist])
+        bayes.node_length = np.concatenate([
+            stretch_stack.node_length,
+            stretch_stack.node_length])
         bayes.time_id = stretch_stack.time_id
         # get the mean and cov of the stacked wse and width
         #N = len(wse_along_stats.reference)
@@ -171,11 +183,11 @@ class BayesData(Product):
             wse_along_stats.reference, width_along_stats.reference
             ])
         wse_cov = rivscale.reconstruct.exponential_cov(
-            stretch_stack['dist_out'],
+            stretch_stack['along_dist'],#stretch_stack['dist_out'],
             char_length_tau=wse_along_stats.char_length_tau,
             prior_unc_alpha=wse_along_stats.prior_unc_alpha)
         width_cov = rivscale.reconstruct.exponential_cov(
-            stretch_stack['dist_out'],
+            stretch_stack['along_dist'],#stretch_stack['dist_out'],
             char_length_tau=width_along_stats.char_length_tau,
             prior_unc_alpha=width_along_stats.prior_unc_alpha)
         bayes.signal_mean = mn

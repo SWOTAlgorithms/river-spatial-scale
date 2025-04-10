@@ -136,6 +136,7 @@ def read_SWORD(fle):
         'reach_id':[],
         'node_id':[],
         'dist_out':[],
+        'node_length':[],
         'river_name':[],
         }
     with nc.Dataset(fle) as f:

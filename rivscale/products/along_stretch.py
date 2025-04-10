@@ -47,6 +47,8 @@ class AlongStretchStats(Product):
     VARIABLES = odict([
         ['reaches', odict([['dimensions', odict([['num_reaches', 0]])]])],
         ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['node_length', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['reference', odict([['dimensions', odict([['num_nodes', 0]])]])],
@@ -62,7 +64,7 @@ class AlongStretchStats(Product):
     def plot(self, outdir=None, show=False, title_tag=''):
         rivscale.plot.plot_stretch_stats(
             self,
-            x_key='dist_out',
+            x_key='along_dist',#'dist_out',
             outdir=outdir,
             show=show,
             title_tag=title_tag)
@@ -82,12 +84,14 @@ class AlongStretchStats(Product):
         stats.stretch_name = stretch_stack.stretch_name
         stats.reaches = stretch_stack.reaches.copy()
         stats.dist_out = stretch_stack.dist_out.copy()
+        stats.along_dist = stretch_stack.along_dist.copy()
+        stats.node_length = stretch_stack.node_length.copy()
         stats.node_id = stretch_stack.node_id.copy()
         stats.local_node_id = stretch_stack.local_node_id.copy()
         # get the reference profile
         stats.reference = rivscale.estimate.get_med_profile(
             stretch_stack[signal_key],
-            stretch_stack['dist_out'],
+            stretch_stack['dist_out'],#stretch_stack['along_dist'],
             kernel_size = kernel_size)
         # TODO: get the spatial covariance estimate from data
         if char_length_tau is not None:

@@ -72,6 +72,7 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
             df['node_id'])
     df['wse_u'] = df['wse_r_u']
     df['dist_out'] = df['p_dist_out']
+    df['node_length'] = df['p_length']
     # put sig0 in dB
     if 'rdr_sig0' in df.keys():
         df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
@@ -273,8 +274,8 @@ def make_stretch_stack(
     keys = list(set(swot_keys) & set(keys_2D))
     #breakpoint()
     # get separate list of the 1D keys
-    sword_keys = ['dist_out', 'node_id','local_node_id']
-    extra_keys = sword_keys + ['time_id','granule_id']
+    sword_keys = ['node_length', 'dist_out', 'node_id', 'local_node_id']
+    extra_keys = sword_keys + ['time_id', 'granule_id']
     time_ids = np.sort(np.unique(np.floor(swot_node_df['time']/60/60)))
     stretch_data = init_dict_from_keys(keys + extra_keys)
     # go through each reach and stack the various items
@@ -341,5 +342,8 @@ def make_stretch_stack(
         this_g = stretch_data['granule_id'][k].copy()
         out_g[out_g=='000_000_00'] = this_g[out_g=='000_000_00']
     data['granule_id'] = out_g
+    # make along dist from node lengths
+    dst = np.cumsum(np.array(data['node_length']))
+    data['along_dist'] = np.max(dst) - dst # downstream dist
     return data
 

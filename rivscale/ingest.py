@@ -133,7 +133,7 @@ def query_main(BASIN_IDENTIFIER, start_time = "2023-07-28T00:00:00Z", end_time =
     # Create queries that return Pandas.DataFrame objects
     #start_time = "2023-07-28T00:00:00Z"
     #end_time = "2024-07-24T00:00:00Z"
-    fields = "reach_id,node_id,river_name,time,time_str,crid,pass_id,cycle_id,continent_id,node_q,node_q_b,xovr_cal_q,dark_frac,ice_clim_f,wse,wse_r_u,area_total,area_tot_u,area_detct,area_det_u,area_wse,width,p_dist_out,xtrk_dist,rdr_sig0,node_dist,flow_angle,n_good_pix,lat,lon"
+    fields = "reach_id,node_id,river_name,time,time_str,crid,pass_id,cycle_id,continent_id,node_q,node_q_b,xovr_cal_q,dark_frac,ice_clim_f,wse,wse_r_u,area_total,area_tot_u,area_detct,area_det_u,area_wse,width,p_dist_out,p_length,xtrk_dist,rdr_sig0,node_dist,flow_angle,n_good_pix,lat,lon"
     results = []
     for node in node_ids:
         # Create an empty dataframe for cases where no data is returned for a reach identifier
@@ -161,6 +161,7 @@ def query_main(BASIN_IDENTIFIER, start_time = "2023-07-28T00:00:00Z", end_time =
             "area_wse": -999999999999.0,
             "width": -999999999999.0,
             "p_dist_out": -999999999999.0,
+            "p_length": -999999999999.0,
             "xtrk_dist": -999999999999.0,
             "rdr_sig0": -999999999999.0,
             "node_dist": -999999999999.0,
@@ -181,6 +182,7 @@ def query_main(BASIN_IDENTIFIER, start_time = "2023-07-28T00:00:00Z", end_time =
             "area_wse_units": "m^2",
             "width_units": "m",
             "p_dist_out_units": "m",
+            "p_length_units": "m",
             "xtrk_dist_units": "m",
             "rdr_sig0_units":np.int64(1),
             "node_dist_units": "m",
