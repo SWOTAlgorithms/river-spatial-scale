@@ -16,37 +16,66 @@ This software may be subject to U.S. export control laws. By accepting this soft
    limitations under the License.
 
 # river-spatial-scale
-Repo for code to estimate river spatial scale parameters (e.g., along-river wse covariance/spectra etc) and apply them in a Bayes reconstruction approach to optimize noise-versus-resolution trade-offs using hte multitemporal stack of information from SWOT.
+Repo for code to estimate river spatial scale parameters (e.g., along-river wse covariance/spectra etc) and apply them in a Bayes reconstruction approach to optimize noise-versus-resolution trade-offs using the multitemporal stack of information from SWOT.
 
 # how to run
-The process runs in a few steps based on a config file (an example is in te config subdir).  The first script that generates the StretchStack object of the SWOT SP node data is (you can stage the RiverSP data locally or have it be ingested using hte hydrochron script):
+A "stretch" represents the node-level measurements from ordered consecutive reaches defined by the SWOT prior river database, SWORD (i.e., SWORD defines the reaches and the up- and down-stream connectivity).  In general, a stretch can be any collection of nodes from a subreach to many connected reaches.  The processing starts with the user first defining the stretches to be processed (i.e., the list of ordered, connected reaches and a stretch "name").  To gerenate 3-reach multireach stretches around each reach with the stretch name being the reach name you can call the script:
 
-`$ make_stretch_stack.py <config.cfg>`
+`$ multireaches_from_sword.py <sword_netcdf_file> <outdir>`
 
-This creates  files called
+This produces and output named
 
-`<reach_id>_stretch_stack.nc`
+`<sword_netcdf_file>_multireach.csv`
 
-and the stretch is defined as the reach with the up and downstream reaches attached.
+The process of creating the stretch objects and processing them runs in a few steps based on config files (an example is in the config subdir).  The first script that generates the StretchStack object of the SWOT SP node data is (you can stage the RiverSP data locally or have it be ingested using the hydrochron script):
 
-The stack of reach data can be optioanlly created as well by calling:
+`$ make\_stretch\_stack.py <config.cfg>`
 
-`$ make\_stretch\_average\_from\_reaches.py <config.cfg>`
+This creates products/files for each commanded stretch called
 
+`<stretch_name>_stretch_stack.nc`
 
-The pekel-derived along-river width statistics can also be created from special 'truth' river processing outputs of the Pekel occurrence maps thresholded at different water occurrence rates.
+If the option to ingest the RiverSP data using hte hydrochron tools is commanded in the config file, a csv file with the node data will also be output.
 
-`$ pekel_width_stats.py <config.cfg>`
+For the stretches defined by multireach\_from\_sword.py the stretch\_name is the reach\_id.
 
-Now all the other steps can be run from the stretch stack (and optionally the pekel widht stats):
+The stack of reach data can be optionally created for a given reach by calling:
 
-`$ process_stretch_stack.py <config.cfg>`
+`$ make_stretch_average_from_reaches.py <reach_avg.cfg>`
 
-This outputs several files in the output directory.
+This creates product(s)/file(s) called:
+ 
+`<reach_id>_width_reach_average.nc`
+`<reach_id>_wse_reach_average.nc`
+`<reach_id>_height_width_reach_average.nc`
 
-The results can be plotted using:
+The pekel-derived along-river width statistics can also be optionally created from special 'truth' river processing outputs of the Pekel occurrence maps thresholded at different water occurrence rates.
 
-`$ plot_river_stretch.py /path/to/files/<reach\_id>\*`
+`$ pekel_width_stats.py <stretch_stack.cfg>`
+
+which produces a product with file-name:
+
+`<stretch_name>_pekel_stats.nc`
+
+Now all the stretch_stack processing steps can be run from the stretch stack (and optionally the pekel width stats):
+
+`$ process_stretch_stack.py <process.cfg>`
+
+This outputs several products/files in the output directory:
+`<stretch_name>_wse_stats.nc`
+`<stretch_name>_width_stats.nc`
+`<stretch_name>_dark_stats.nc`
+`<stretch_name>_wse_stretch_average.nc`
+`<stretch_name>_width_stretch_average.nc`
+`<stretch_name>_height_width.nc`
+`<stretch_name>_bayes.nc`
+
+The results/products can be plotted using:
+
+`$ plot_stretch_products.py -c <process.cfg>`
+
+If the -s option is given with a particular stretch name, the interactive plots are displayed for the given stretch, otherwise the plots are written to files in the corresponding subdirs.
+
 
 # info for older code
 The hydrochron.py script grabs data for the Ocmulgee, Colorado, and Yellowstone rivers and puts them in a pandas dataframe
