@@ -69,8 +69,10 @@ def main():
     # make the output dir if needed
     stretch_dir0 = os.path.join(
         cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
-    pekel_dir0 = os.path.join(
-        cfg['main']['pekel_in_path'],cfg['main']['orbit'])
+    pekel_dir0 = None
+    if 'pekel_in_path' in cfg['main'].keys():
+        pekel_dir0 = os.path.join(
+            cfg['main']['pekel_in_path'],cfg['main']['orbit'])
     outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
     #outdir = os.path.join(outdir0, cfg['main']['flavor'])
     stretch_files = []
@@ -99,9 +101,11 @@ def main():
         stretch_dir = os.path.join(
             stretch_dir0, key, 'stretch_stack_{}'.format(
                 cfg['main']['stretch_stack_flavor']))
-        pekel_dir = os.path.join(
-            pekel_dir0, key, 'pekel_{}'.format(
-                cfg['main']['pekel_flavor']))
+        pekel_dir = None
+        if pekel_dir0 is not None:
+            pekel_dir = os.path.join(
+                pekel_dir0, key, 'pekel_{}'.format(
+                    cfg['main']['pekel_flavor']))
         outdir = os.path.join(outdir0, key, cfg['main']['flavor'])
         if not os.path.exists(outdir):
             os.makedirs(outdir)
@@ -116,8 +120,10 @@ def main():
         ####
         infile_stretch = os.path.join(
             stretch_dir, '{}_stretch_stack.nc'.format(key))
-        infile_pekel = os.path.join(
-            pekel_dir, '{}_pekel_stats.nc'.format(key))
+        infile_pekel = None
+        if pekel_dir  is not None:
+            infile_pekel = os.path.join(
+                pekel_dir, '{}_pekel_stats.nc'.format(key))
         outfile_wse_stats = os.path.join(
             outdir, '{}_wse_stats.nc'.format(key))
         outfile_width_stats = os.path.join(
@@ -189,7 +195,10 @@ def main():
             bayes_cfg['use_pekel'] = 'False'
         if (sa_cfg['use_pekel']) or (hw_cfg['use_pekel']) or (
                 bayes_cfg['use_pekel']):
-            if not(os.path.exists(infile_pekel)):
+            if infile_pekel is None:
+                print("  The input pekel file has not been given")
+                continue
+            elif not(os.path.exists(infile_pekel)):
                 print("  The input pekel file has not been created")
                 continue
             else:
