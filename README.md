@@ -29,7 +29,7 @@ This produces and output named
 
 The process of creating the stretch objects and processing them runs in a few steps based on config files (an example is in the config subdir).  The first script that generates the StretchStack object of the SWOT SP node data is (you can stage the RiverSP data locally or have it be ingested using the hydrochron script):
 
-`$ make\_stretch\_stack.py <config.cfg>`
+`$ make_stretch_stack.py <config.cfg>`
 
 This creates products/files for each commanded stretch called
 
@@ -62,12 +62,19 @@ Now all the stretch_stack processing steps can be run from the stretch stack (an
 `$ process_stretch_stack.py <process.cfg>`
 
 This outputs several products/files in the output directory:
+
 `<stretch_name>_wse_stats.nc`
+
 `<stretch_name>_width_stats.nc`
+
 `<stretch_name>_dark_stats.nc`
+
 `<stretch_name>_wse_stretch_average.nc`
+
 `<stretch_name>_width_stretch_average.nc`
+
 `<stretch_name>_height_width.nc`
+
 `<stretch_name>_bayes.nc`
 
 The results/products can be plotted using:
