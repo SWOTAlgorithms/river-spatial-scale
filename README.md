@@ -45,9 +45,9 @@ The stack of reach data can be optionally created for a given reach by calling:
 
 This creates product(s)/file(s) called:
  
-`<reach_id>_width_reach_average.nc`
-`<reach_id>_wse_reach_average.nc`
-`<reach_id>_height_width_reach_average.nc`
+`<reach_id>_width_reach_average.nc
+<reach_id>_wse_reach_average.nc
+<reach_id>_height_width_reach_average.nc`
 
 The pekel-derived along-river width statistics can also be optionally created from special 'truth' river processing outputs of the Pekel occurrence maps thresholded at different water occurrence rates.
 
@@ -63,19 +63,13 @@ Now all the stretch_stack processing steps can be run from the stretch stack (an
 
 This outputs several products/files in the output directory:
 
-`<stretch_name>_wse_stats.nc`
-
-`<stretch_name>_width_stats.nc`
-
-`<stretch_name>_dark_stats.nc`
-
-`<stretch_name>_wse_stretch_average.nc`
-
-`<stretch_name>_width_stretch_average.nc`
-
-`<stretch_name>_height_width.nc`
-
-`<stretch_name>_bayes.nc`
+`<stretch_name>_wse_stats.nc
+<stretch_name>_width_stats.nc
+<stretch_name>_dark_stats.nc
+<stretch_name>_wse_stretch_average.nc
+<stretch_name>_width_stretch_average.nc
+<stretch_name>_height_width.nc
+<stretch_name>_bayes.nc
 
 The results/products can be plotted using:
 
