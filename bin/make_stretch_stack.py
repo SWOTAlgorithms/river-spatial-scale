@@ -67,13 +67,16 @@ def main():
             cfg['main']['stretch_subset']).split()]
     stretch_list = []
     for stretch in stretch_list0:
-        # get all reaches in basins smaller than stretch
-        st = '{}'.format(stretch)
-        tmp = [
-            '{}'.format(r).startswith(st) for r in sword_df['reach_id']]
-        reaches = np.array(sword_df['reach_id'][tmp])
-        for r in reaches:
-            stretch_list.append('{}'.format(r))
+        if stretch.isnumeric():
+            # get all reaches in basins smaller than stretch
+            st = '{}'.format(stretch)
+            tmp = [
+                '{}'.format(r).startswith(st) for r in sword_df['reach_id']]
+            reaches = np.array(sword_df['reach_id'][tmp])
+            for r in reaches:
+                stretch_list.append('{}'.format(r))
+        else:
+            stretch_list.append('{}'.format(stretch))
     df_stretches = pd.read_csv(
         cfg['main']['stretch_file'],
         usecols=stretch_list)
@@ -83,7 +86,16 @@ def main():
     #    os.makedirs(outdir)
     # go through each stretch and process it
     N = len(df_stretches.keys())
+    if N <=0:
+        print("no stretches to process?")
     #breakpoint()
+    # get list of all reaches in case we need to download them all
+    all_reaches = []
+    for i,key in enumerate(df_stretches.keys()):
+        stretch_reaches = np.array(
+            df_stretches[df_stretches[key]>0][key]).astype(int)
+        all_reaches = all_reaches + list(stretch_reaches)
+    all_reaches = np.unique(all_reaches) 
     stretch_list = []
     for i,key in enumerate(df_stretches.keys()):
         outdir = os.path.join(
@@ -107,6 +119,7 @@ def main():
         swot_node_df = rivscale.data.get_swot_data(
             cfg,
             stretch_reaches,#sword_node_df,
+            all_reaches,
             kind='Node',
             force=args.force)
         #breakpoint()

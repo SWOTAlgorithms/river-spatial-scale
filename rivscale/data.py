@@ -83,6 +83,7 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
 def get_swot_data(
         cfg,
         stretch_reaches,#sword_node_df,
+        all_reaches,
         kind='Node',
         force=False):
     """
@@ -112,10 +113,21 @@ def get_swot_data(
             # just read the already-made input file
             df = pd.read_csv(ingest_csv_file)
         else:
+            """
             basin_ids = cfg['main']['stretch_subset']
             if isinstance(basin_ids, int):
-                basin_ids = [basin_ids,] 
-            basin_ids0 = list(set(basin_ids).union(set(stretch_reaches)))
+                basin_ids = [basin_ids,]
+            elif isinstance(basin_ids, str):
+                basin_ids = [item for item in basin_ids.split()]
+            # drop non-numeric basin ids (generic stretch_names)
+            basin_ids0 = []
+            for item in basin_ids:
+                if item.isnumeric():
+                    basin_ids0.append(item)
+            basin_ids0 = list(set(basin_ids0).union(set(stretch_reaches)))
+            """
+            # ingest all reaches used in all stretches for this run
+            basin_ids0 = all_reaches
             # take off the last number if it is a full reach_id
             # TODO: maybe should ingest more than one reach since
             #       (it is faster to grab a bunch than one at a time)
@@ -126,6 +138,7 @@ def get_swot_data(
                    bid = int(id_str[0:10])
                 basin_ids.append(bid)
             basin_ids = np.unique(basin_ids)
+            #breakpoint()
             print("ingesting basins:", basin_ids)
             df = rivscale.ingest.basin_loop(
                 basin_ids,

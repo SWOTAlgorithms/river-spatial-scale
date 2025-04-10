@@ -85,6 +85,13 @@ def main():
     # go through each stretch and process it
     N = len(df_stretches.keys())
     #breakpoint()
+    # get list of all reaches in case we need to download them all
+    all_reaches = []
+    for i,key in enumerate(df_stretches.keys()):
+        stretch_reaches = np.array(
+            df_stretches[df_stretches[key]>0][key]).astype(int)
+        all_reaches = all_reaches + list(stretch_reaches)
+    all_reaches = np.unique(all_reaches)
     stretch_list = []
     for i,key in enumerate(df_stretches.keys()):
         outdir = os.path.join(outdir0, key, 'reach_avg_{}'.format(
@@ -114,6 +121,7 @@ def main():
         swot_reach_df = rivscale.data.get_swot_data(
             cfg,
             stretch_reaches,#sword_node_df,
+            all_reaches,
             kind='Reach')
         #breakpoint()
         if swot_reach_df is None:
