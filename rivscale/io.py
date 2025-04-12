@@ -138,6 +138,8 @@ def read_SWORD(fle):
         'dist_out':[],
         'node_length':[],
         'river_name':[],
+        'y':[],
+        'x':[]
         }
     with nc.Dataset(fle) as f:
         for var in d.keys():
@@ -145,6 +147,8 @@ def read_SWORD(fle):
     for var in d.keys():
         d[var] = np.array(d[var])
     node_df = pd.DataFrame(d)
+    node_df['p_lat'] = node_df['y']
+    node_df['p_lon'] = node_df['x']
     return df, node_df, d_up, d_down
 
 def load_field_data(fles, sword_file):

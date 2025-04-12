@@ -47,6 +47,8 @@ class StretchStack(Product):
         ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['p_lat', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['p_lon', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['granule_id', odict([['dimensions', odict([['num_times', 0]])]])],
         #['swot_time', odict([['dimensions', odict([['num_times', 0]])]])],

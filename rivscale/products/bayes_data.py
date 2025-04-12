@@ -50,6 +50,10 @@ class BayesData(Product):
         ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_length', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['p_lat', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['p_lon', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['signal', odict([['dimensions', DIMENSIONS_2D]])],
         ['signal_u', odict([['dimensions', DIMENSIONS_2D]])],
@@ -81,6 +85,8 @@ class BayesData(Product):
         if 'joint' not in self.signal_key:
             stretch_stack.dist_out = self.dist_out
             stretch_stack.along_dist = self.along_dist
+            stretch_stack.p_lon = self.p_lat
+            stretch_stack.p_lat = self.p_lon
         stretch_stack.time_id = self.time_id
         if self.signal_key == 'wse':
             title_tag = title_tag + ' wse'
@@ -98,6 +104,8 @@ class BayesData(Product):
             N = len(wse_b.signal_mean)
             stretch_stack.dist_out = self.dist_out[0:N]
             stretch_stack.along_dist = self.along_dist[0:N]
+            stretch_stack.p_lon = self.p_lat[0:N]
+            stretch_stack.p_lat = self.p_lon[0:N]
             stretch_stack.wse = wse_b.signal
             stretch_stack.wse_u = wse_b.signal_u
             stretch_stack.width = width_b.signal
@@ -571,6 +579,7 @@ class BayesData(Product):
             np.array(width_post_covs), 0, -1)
         bayes_wse_width_post_cov = np.moveaxis(
             np.array(wse_width_post_covs), 0, -1)
+        # TODO: handle the node_id, p_lat vars etc...
         return bayes_wse, bayes_width, bayes_wse_width_post_cov
 
 

@@ -288,7 +288,7 @@ def make_stretch_stack(
     keys = list(set(swot_keys) & set(keys_2D))
     #breakpoint()
     # get separate list of the 1D keys
-    sword_keys = ['node_length', 'dist_out', 'node_id', 'local_node_id']
+    sword_keys = ['node_length', 'dist_out', 'node_id', 'local_node_id','p_lat','p_lon']
     extra_keys = sword_keys + ['time_id', 'granule_id']
     time_ids = np.sort(np.unique(np.floor(swot_node_df['time']/60/60)))
     stretch_data = init_dict_from_keys(keys + extra_keys)

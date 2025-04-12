@@ -51,6 +51,8 @@ class AlongStretchStats(Product):
         ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['p_lat', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['p_lon', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['reference', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         ['mean', odict([['dimensions', odict([['num_nodes', 0]])]])],
@@ -82,12 +84,19 @@ class AlongStretchStats(Product):
         stats.signal_key = signal_key
         # copy over common items
         stats.stretch_name = stretch_stack.stretch_name
-        stats.reaches = stretch_stack.reaches.copy()
-        stats.dist_out = stretch_stack.dist_out.copy()
-        stats.along_dist = stretch_stack.along_dist.copy()
-        stats.node_length = stretch_stack.node_length.copy()
-        stats.node_id = stretch_stack.node_id.copy()
-        stats.local_node_id = stretch_stack.local_node_id.copy()
+        in_keys = stretch_stack.variables.keys()
+        this_keys = stats.VARIABLES.keys()
+        common_keys = list(set(in_keys) & set(this_keys))
+        for key in common_keys:
+            stats[key] = stretch_stack[key].copy()
+        #breakpoint()
+        #stats.reaches = stretch_stack.reaches.copy()
+        #stats.dist_out = stretch_stack.dist_out.copy()
+        #stats.along_dist = stretch_stack.along_dist.copy()
+        #stats.node_length = stretch_stack.node_length.copy()
+        #stats.node_id = stretch_stack.node_id.copy()
+        #stats.local_node_id = stretch_stack.local_node_id.copy()
+        
         # get the reference profile
         stats.reference = rivscale.estimate.get_med_profile(
             stretch_stack[signal_key],
@@ -244,8 +253,13 @@ class AlongStretchStats(Product):
         mask = np.where(reach_ids==reach_id)[0]
         stats.reaches = np.array([int(reach_id),])
         stats.signal_key = self.signal_key
-        for key in set(self.variables.keys()) - set(['reaches',]):
+        stats.percentile_list = self.percentile_list
+        keys = set(self.variables.keys()) - set(
+            ['reaches', 'percentiles','percentile_list'])
+        for key in keys:
             stats[key] = self[key][mask[0]:mask[-1]]
+        #breakpoint()
+        stats['percentiles'] = self['percentiles'][mask[0]:mask[-1],:]
         return stats
 
 

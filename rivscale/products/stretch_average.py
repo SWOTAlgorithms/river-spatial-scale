@@ -180,10 +180,16 @@ class StretchAverageStats(Product):
         # copy common things
         stats.stretch_name = stretch_stack.stretch_name
         stats.signal_key = signal_key
-        stats.reaches = stretch_stack.reaches.copy()
-        stats.time_id = stretch_stack.time_id.copy()
+        in_keys = stretch_stack.variables.keys()
+        this_keys = stats.VARIABLES.keys()
+        common_keys = list(set(in_keys) & set(this_keys))
+        for key in common_keys:
+            if key != 'dist_out':
+                stats[key] = stretch_stack[key].copy()
+        #stats.reaches = stretch_stack.reaches.copy()
+        #stats.time_id = stretch_stack.time_id.copy()
         #stats.cycle_id = stretch_stack.cycle_id.copy()
-        stats.granule_id = stretch_stack.granule_id.copy()
+        #stats.granule_id = stretch_stack.granule_id.copy()
         # get stats
         signal = stretch_stack[signal_key]
         signal_u = stretch_stack[signal_key+'_u']
