@@ -10,7 +10,7 @@ This code plots the stretch data overlaid on google-map images
 '''
 
 import matplotlib.pyplot as plt
-
+from matplotlib_scalebar.scalebar import ScaleBar
 import cartopy.crs as ccrs
 from cartopy.io.img_tiles import GoogleTiles
 
@@ -20,39 +20,38 @@ import rivscale.products.along_stretch
 import geopandas as gpd
 import numpy as np
 import argparse
-import glob
 
 EXAMPLE = ''
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Plot along-river stretch on map over google-image',
-        formatter_class=argparse.RawTextHelpFormatter,
-        epilog=EXAMPLE)
-    parser.add_argument('along_stretch_file', default=None,
-        help='filename of AlongStretchStats netcdf file')
-    parser.add_argument('--sword_node_file', default=None,
-        help='SWORD gpkg file')
-    parser.add_argument('--bbox', default=[-124, -122, 44, 45],
-        help='bbox for SWORD so we dont rty to load in everything')
-    parser.add_argument('--crop_reach',default=False, action='store_true')
-    args = parser.parse_args()
+"""
+def plot_map(along_file, crop_reach=False, clabel='width IQR (m)', figsize=(12,10)):
     # read in the along-stats
-    #sword_node_file = '/u/swot-fn-r0/swot/sim_proc_inputs/river_database/20230802/v16/gpkg/na_sword_nodes_v16.gpkg'
-    #reach_id = '78220000151'
-    #basedir = '/u/franka-z/bawillia/working/flow_waves/PxC0/PNW/outputs/both_orbits/{}/v1'.format(reach_id)
-    #fle = os.path.join(basedir, '{}_wse_stats.nc'.format(reach_id))
-    #glob_str = os.path.join(args['along_stretch_dir'], '*_width_stats.nc')
-
     along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
-            args.along_stretch_file)
-    if args.crop_reach:
+        along_file)
+    # crop to center reach if commanded
+    if crop_reach:
         along_stats = along_stats.crop_to_reach()
-    #breakpoint()
+    title = along_stats.stretch_name
+    M = len(along_stats.reaches)
+    if M>1:
+        title = title + '\n reaches: ['
+        #title = title+' {}'.format(along_stats.reaches)
+        cnt=0
+        max_cnt=3
+        for k,reach in enumerate(along_stats.reaches):
+            if cnt==max_cnt:
+                cnt=0
+                title = title + "\n"
+            if k == M-1:
+                title = title+'{}]'.format(reach)
+            else:
+                title = title+'{}, '.format(reach)
+            cnt = cnt + 1
+         
     p25 = along_stats.percentiles[:,along_stats.percentile_list == 25].squeeze()
     p75 = along_stats.percentiles[:,along_stats.percentile_list == 75].squeeze()
-    iqr = p75-p25
-    #breakpoint()
+    IQR = p75-p25
+    
     # define the bounding box
     buff = 0.01 #
     bbox = [
@@ -60,48 +59,105 @@ def main():
         np.nanmax(along_stats.p_lon) + buff,
         np.nanmin(along_stats.p_lat) - buff,
         np.nanmax(along_stats.p_lat) + buff]
-    """
-    #breakpoint()
-    if args.sword_node_file is not None
-        # read in SWORD as a geopandas
-        sword = gpd.read_file(args.sword_node_file, args.bbox)
-        this_sword  = sword[sword['node_id'].isin(np.array(along_stats.node_id))]
-        
-        #bbox = [np.min(this_sword.x) - buff, np.max(this_sword.x) + buff,
-        #    np.min(this_sword.y) - buff, np.max(this_sword.y) + buff]
-    # make new array from along_stats data ordered like sword
-    #along_stats.percentiles
-    #breakpoint()
-    reference = np.array(this_sword['width']) * np.nan
-    IQR = np.array(this_sword['width']) * np.nan
-    for node_id, ref, q in zip(along_stats.node_id, along_stats.reference, iqr):
-        reference[this_sword['node_id'] == node_id] = ref
-        IQR[this_sword['node_id'] == node_id] = q
-    """
-    #breakpoint()
-    # plot it
+"""
+def plot_map(lat, lon, c=None, s=None, title='', clabel=None,
+        alpha=0.7, zoom=14, figsize=(12,10), cmap='jet'):
+    # define the bounding box
+    buff = 0.01 #
+    bbox = [
+        np.nanmin(lon) - buff,
+        np.nanmax(lon) + buff,
+        np.nanmin(lat) - buff,
+        np.nanmax(lat) + buff]
+    # plot the google image
     tiler = GoogleTiles(style="satellite")
     mercator = tiler.crs
-    #that_sword = this_sword.to_crs(mercator)
-    #breakpoint()
-    fig = plt.figure()
+    fig = plt.figure(figsize=figsize)
     #ax = fig.add_subplot(1, 1, 1, projection=mercator)
     ax = plt.axes(projection=mercator)
     ax.set_extent(bbox, crs=ccrs.Geodetic())#ccrs.PlateCarree())
-
-    zoom = 14
     ax.add_image(tiler, zoom)
     #ax.coastlines('10m')
-    #
-    #scat = ax.scatter(that_sword.geometry.x, that_sword.geometry.y,
-    #        c = IQR, s=reference, alpha=0.7,cmap='jet')
-    scat = ax.scatter(along_stats.p_lon, along_stats.p_lat,
-        c = iqr, s=along_stats.reference,
-        alpha=0.7,cmap='jet', transform=ccrs.Geodetic())
+    # plot the node scatterplot data
+    scat = ax.scatter(lon, lat, c=c, s=s,
+        alpha=alpha, cmap=cmap, transform=ccrs.Geodetic())
     
-    fig.colorbar(scat, label='width IQR (m)')
+    fig.colorbar(scat, label=clabel)
+    ax.add_artist(ScaleBar(1, location='lower right'))
+    plt.title(title)
+    plt.tight_layout()
     plt.show()
 
+
+def main():
+    """
+    parser = argparse.ArgumentParser(
+        description='Plot river stretch, reach, or multireach',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=EXAMPLE)
+    parser.add_argument('-c','--config', default=None,
+        help='processing.cfg or river_avg.cfg')
+    parser.add_argument('--infile', nargs='+', help='input file(s)')
+    parser.add_argument('-s','--stretch_name', nargs='+', default=None,
+        help='stretch_name(s) to plot')
+    args = parser.parse_args()
+    cfg = rivscale.misc.CfgParser()
+    cfg.read(args.config)
+    df_stretches, stretch_dir0, pekel_dir0, outdir0 = setup_from_cfg(cfg)
+    if len(df_stretches.keys())==0:
+        print('no files to process')
+    all_stretches = list(df_stretches.keys())
+    if args.stretch_name is not None:
+        all_stretches = list(args.stretch_name)
+    
+    """
+    parser = argparse.ArgumentParser(
+        description='Plot along-river stretch on map over google-image',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=EXAMPLE)
+    parser.add_argument('infile', default=None,
+        help='processing config')
+    parser.add_argument('--crop_reach',default=False, action='store_true')
+    args = parser.parse_args()
+   
+    # read in the along-stats
+    along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
+        args.infile)
+    # crop to center reach if commanded
+    if args.crop_reach:
+        along_stats = along_stats.crop_to_reach()
+    title = along_stats.stretch_name
+    M = len(along_stats.reaches)
+    if M>1:
+        title = title + '\n reaches: ['
+        #title = title+' {}'.format(along_stats.reaches)
+        cnt=0
+        max_cnt=3
+        for k,reach in enumerate(along_stats.reaches):
+            if cnt==max_cnt:
+                cnt=0
+                title = title + "\n"
+            if k == M-1:
+                title = title+'{}]'.format(reach)
+            else:
+                title = title+'{}, '.format(reach)
+            cnt = cnt + 1
+         
+    p25 = along_stats.percentiles[:,along_stats.percentile_list == 25].squeeze()
+    p75 = along_stats.percentiles[:,along_stats.percentile_list == 75].squeeze()
+    IQR = p75-p25
+    clabel='width IQR (m)'
+    zoom = 14
+    if M >3:
+        zoom = 12
+    if M > 5:
+        zoom = 10
+    # now plot it
+    plot_map(
+        along_stats.p_lat, along_stats.p_lon,
+        c=IQR, clabel=clabel,
+        s=along_stats.reference,
+        title=title, zoom=zoom)
 
 if __name__ == '__main__':
     main()

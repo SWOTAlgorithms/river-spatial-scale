@@ -251,6 +251,7 @@ class AlongStretchStats(Product):
         # now get the mask
         reach_ids = np.array([str(n)[0:10]+str(n)[-1] for n in self.node_id])
         mask = np.where(reach_ids==reach_id)[0]
+        stats.stretch_name = self.stretch_name
         stats.reaches = np.array([int(reach_id),])
         stats.signal_key = self.signal_key
         stats.percentile_list = self.percentile_list
