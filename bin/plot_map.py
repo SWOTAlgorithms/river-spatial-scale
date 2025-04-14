@@ -22,11 +22,36 @@ import numpy as np
 import argparse
 
 from errtools.misc import swot_time_to_field_time
+from rivscale.plot import label_units
+
+import glob
+
 
 EXAMPLE = ''
 
+
+def make_movie_from_images(image_file_list, video_file):
+    import cv2
+    video = None
+    for image_file in image_file_list:
+        if video is None:
+            frame = cv2.imread(image_file)
+            # setting the frame width, height width
+            # the width, height of first image
+            height, width, layers = frame.shape
+            #fourcc = cv2.VideoWriter_fourcc(*'XVID')
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            video = cv2.VideoWriter(video_file, fourcc, 1.5, (width, height))
+
+        # Appending the images to the video one by one
+        video.write(cv2.imread(image_file))
+    # Deallocating memories taken for window creation
+    cv2.destroyAllWindows()
+    video.release()  # releasing the video generated
+
 def plot_map(lat, lon, c=None, s=None, title='', clabel=None,
-        clim=None, alpha=0.7, zoom=14, figsize=(12,10), cmap='jet'):
+        clim=None, alpha=0.7, zoom=14, figsize=(12,10), cmap='jet',
+        outdir=None, show=False):
     # define the bounding box
     buff = 0.01 #
     bbox = [
@@ -52,8 +77,18 @@ def plot_map(lat, lon, c=None, s=None, title='', clabel=None,
     ax.add_artist(ScaleBar(1, location='lower right'))
     plt.title(title)
     plt.tight_layout()
-    #plt.show()
-
+    if outdir is not None:
+        # create output dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        fname = '{}.png'.format(
+            title.replace(',','').replace(' ', '_').replace(':','').replace(
+                '-','_').replace('$\Delta$','delta'))
+        plt.savefig(os.path.join(outdir, fname), dpi=300)
+        plt.close()
+    else:
+        if show:
+            plt.show()
 
 def main():
     """
@@ -140,22 +175,29 @@ def main():
     lat = stretch_stack.p_lat
     lon = stretch_stack.p_lon
     s = width_along_stats.reference
-    clabel = '$\Delta$ wse (m)'
+    clabel = '$\Delta$ wse'
     clim = (-3,3)
-    for k in range(5):
+    outdir='plots_to_delete'
+    for k in range(len(stretch_stack.time_id)):
         c = stretch_stack.wse[:,k] - wse_along_stats.reference
         cyc, pas, _ = stretch_stack.granule_id[k].split('_')
         time_id = stretch_stack.time_id[k]*60.0*60.0
         #breakpoint()
-        title = title0 + ' pass: {}, date: {}'.format(
-            pas, swot_time_to_field_time([time_id,])[0].date())
+        title = title0+ ' '+ clabel + ', date: {}, pass: {}'.format(
+            swot_time_to_field_time([time_id,])[0].date(), pas)
         # now plot it
         plot_map(
             lat, lon,
-            c=c, clabel=clabel, clim=clim,
+            c=c, clabel=label_units(clabel), clim=clim,
             s=s,
-            title=title, zoom=zoom)
-    plt.show()
+            title=title, zoom=zoom,
+            outdir=outdir)
+    # make the movie
+    image_file_list = np.sort(glob.glob(os.path.join(outdir,'*.png')))
+    pth, fle = os.path.split(image_file_list[0])
+    mp4_file = fle.split('_date')[0]+'.mp4'
+    video_file = os.path.join(outdir,mp4_file)
+    make_movie_from_images(image_file_list, video_file)
 
 if __name__ == '__main__':
     main()
