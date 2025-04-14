@@ -21,47 +21,12 @@ import geopandas as gpd
 import numpy as np
 import argparse
 
+from errtools.misc import swot_time_to_field_time
+
 EXAMPLE = ''
 
-"""
-def plot_map(along_file, crop_reach=False, clabel='width IQR (m)', figsize=(12,10)):
-    # read in the along-stats
-    along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
-        along_file)
-    # crop to center reach if commanded
-    if crop_reach:
-        along_stats = along_stats.crop_to_reach()
-    title = along_stats.stretch_name
-    M = len(along_stats.reaches)
-    if M>1:
-        title = title + '\n reaches: ['
-        #title = title+' {}'.format(along_stats.reaches)
-        cnt=0
-        max_cnt=3
-        for k,reach in enumerate(along_stats.reaches):
-            if cnt==max_cnt:
-                cnt=0
-                title = title + "\n"
-            if k == M-1:
-                title = title+'{}]'.format(reach)
-            else:
-                title = title+'{}, '.format(reach)
-            cnt = cnt + 1
-         
-    p25 = along_stats.percentiles[:,along_stats.percentile_list == 25].squeeze()
-    p75 = along_stats.percentiles[:,along_stats.percentile_list == 75].squeeze()
-    IQR = p75-p25
-    
-    # define the bounding box
-    buff = 0.01 #
-    bbox = [
-        np.nanmin(along_stats.p_lon) - buff,
-        np.nanmax(along_stats.p_lon) + buff,
-        np.nanmin(along_stats.p_lat) - buff,
-        np.nanmax(along_stats.p_lat) + buff]
-"""
 def plot_map(lat, lon, c=None, s=None, title='', clabel=None,
-        alpha=0.7, zoom=14, figsize=(12,10), cmap='jet'):
+        clim=None, alpha=0.7, zoom=14, figsize=(12,10), cmap='jet'):
     # define the bounding box
     buff = 0.01 #
     bbox = [
@@ -80,13 +45,14 @@ def plot_map(lat, lon, c=None, s=None, title='', clabel=None,
     #ax.coastlines('10m')
     # plot the node scatterplot data
     scat = ax.scatter(lon, lat, c=c, s=s,
-        alpha=alpha, cmap=cmap, transform=ccrs.Geodetic())
+        alpha=alpha, cmap=cmap, clim=clim,
+        transform=ccrs.Geodetic())
     
     fig.colorbar(scat, label=clabel)
     ax.add_artist(ScaleBar(1, location='lower right'))
     plt.title(title)
     plt.tight_layout()
-    plt.show()
+    #plt.show()
 
 
 def main():
@@ -115,25 +81,40 @@ def main():
         description='Plot along-river stretch on map over google-image',
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=EXAMPLE)
-    parser.add_argument('infile', default=None,
+    parser.add_argument('stretch_stack_file', default=None,
+        help='processing config')
+    parser.add_argument('wse_along_stats_file', default=None,
+        help='processing config')
+    parser.add_argument('width_along_stats_file', default=None,
         help='processing config')
     parser.add_argument('--crop_reach',default=False, action='store_true')
     args = parser.parse_args()
    
-    # read in the along-stats
-    along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
-        args.infile)
+    # read in the files
+    stretch_stack = rivscale.products.stretch_stack.StretchStack.from_ncfile(
+        args.stretch_stack_file)
+    wse_along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
+        args.wse_along_stats_file)
+    width_along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
+        args.width_along_stats_file)
+    #breakpoint()
     # crop to center reach if commanded
     if args.crop_reach:
-        along_stats = along_stats.crop_to_reach()
-    title = along_stats.stretch_name
-    M = len(along_stats.reaches)
+        wse_along_stats = wse_along_stats.crop_to_reach()
+        width_along_stats = width_along_stats.crop_to_reach()
+        stretch_stack = stretch_stack.crop_to_reach()
+    #breakpoint()
+    title0 = wse_along_stats.stretch_name
+    M = len(wse_along_stats.reaches)
+    #title = title + 'pass: {}, date: {}'.format()
+    """
+    # print all reaches in title?
     if M>1:
         title = title + '\n reaches: ['
         #title = title+' {}'.format(along_stats.reaches)
         cnt=0
         max_cnt=3
-        for k,reach in enumerate(along_stats.reaches):
+        for k,reach in enumerate(wse_along_stats.reaches):
             if cnt==max_cnt:
                 cnt=0
                 title = title + "\n"
@@ -142,22 +123,39 @@ def main():
             else:
                 title = title+'{}, '.format(reach)
             cnt = cnt + 1
-         
-    p25 = along_stats.percentiles[:,along_stats.percentile_list == 25].squeeze()
-    p75 = along_stats.percentiles[:,along_stats.percentile_list == 75].squeeze()
+    
+    # get teh IQR     
+    p25 = wse_along_stats.percentiles[:,wse_along_stats.percentile_list == 25].squeeze()
+    p75 = wse_along_stats.percentiles[:,wse_along_stats.percentile_list == 75].squeeze()
     IQR = p75-p25
     clabel='width IQR (m)'
+    """
+    # determine zoom
     zoom = 14
     if M >3:
         zoom = 12
     if M > 5:
         zoom = 10
-    # now plot it
-    plot_map(
-        along_stats.p_lat, along_stats.p_lon,
-        c=IQR, clabel=clabel,
-        s=along_stats.reference,
-        title=title, zoom=zoom)
+    # set the variables
+    lat = stretch_stack.p_lat
+    lon = stretch_stack.p_lon
+    s = width_along_stats.reference
+    clabel = '$\Delta$ wse (m)'
+    clim = (-3,3)
+    for k in range(5):
+        c = stretch_stack.wse[:,k] - wse_along_stats.reference
+        cyc, pas, _ = stretch_stack.granule_id[k].split('_')
+        time_id = stretch_stack.time_id[k]*60.0*60.0
+        #breakpoint()
+        title = title0 + ' pass: {}, date: {}'.format(
+            pas, swot_time_to_field_time([time_id,])[0].date())
+        # now plot it
+        plot_map(
+            lat, lon,
+            c=c, clabel=clabel, clim=clim,
+            s=s,
+            title=title, zoom=zoom)
+    plt.show()
 
 if __name__ == '__main__':
     main()
