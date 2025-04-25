@@ -14,7 +14,7 @@ import scipy.ndimage
 import netCDF4 as nc
 import rivscale.misc
 import rivscale.reconstruct
-from errtools.misc import swot_time_to_field_time
+from rivscale.misc import swot_time_to_field_time
 
 def label_units(label):
     if 'slope' in label:

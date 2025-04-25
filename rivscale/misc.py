@@ -48,6 +48,36 @@ def node_id_to_local_node_id(node_ids):
         node_id in node_ids]
     return np.array(local_node_ids)
 
+def swot_time_to_field_time(swot_times, swot_filenames=None):
+    """
+    convert swot total-second time to utc datetime
+    copied from reproc repo    
+    """
+    utc_time = []
+    time_start = datetime.datetime(2000, 1, 1, 0,
+                                   0, 0,
+                                   tzinfo=datetime.timezone.utc)
+    for index, this_time in enumerate(swot_times):
+        if this_time == MISSING_VALUE_FLT:
+            if swot_filenames is None:
+                # stuff in Jan 1, 2023
+                this_time = datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc).second
+            else:
+                # grab date time from nearby node on same cycle
+                print('One of the features in', swot_filenames[index],
+                    'is missing a time value. This is off-nominal. Filling '
+                    'with nearby time...')
+                indices = np.logical_and(swot_filenames == swot_filenames[index],  
+                                     swot_times != MISSING_VALUE_FLT)
+                close_times = swot_times[indices]
+                closest_index = close_times.index[0] + np.abs(
+                    index - close_times.index).argmin()
+                this_time = close_times[closest_index]
+        time_start.timestamp()
+        time = time_start + datetime.timedelta(seconds=this_time)
+        utc_time.append(datetime.datetime.utcfromtimestamp(time.timestamp()))
+    return utc_time
+
 def compute_anomaly(full_profile_data, bayes_data=None, sword_node_df=None):
     full_profile_data2 = full_profile_data.copy()
     if 'wse_stack_detrend' not in full_profile_data2.keys():
