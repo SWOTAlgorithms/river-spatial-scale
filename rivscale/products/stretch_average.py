@@ -53,6 +53,7 @@ class StretchAverageStats(Product):
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
         #['cycle_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['granule_id', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['cross_track', odict([['dimensions', odict([['num_times', 0]])]])],#(km)
         ['mean', odict([['dimensions', odict([['num_times', 0]])]])],
         ['mean_reference', odict([['dimensions', odict([['num_times', 0]])]])],
         ['std', odict([['dimensions', odict([['num_times', 0]])]])],
@@ -90,14 +91,18 @@ class StretchAverageStats(Product):
         stats.reaches = [reach,]
         stats.stretch_name = '{}'.format(reach)
         #
-        df = df_in.copy()
+        df = df_in.drop_duplicates().copy()
         df[df[signal_key]<-1e5] = np.nan
         # crop out all reaches except those in the reach list
         #df = df[~df['reach_id'].isin(reaches)]
         df = df[df['reach_id']==int(reach)]
         #
+        # return None is not at least 2 time observations
+        if len(df)<2:
+            return None
         dist_out = []
         time_id = []
+        cross_track = []
         mean = []
         std = []
         other = []
@@ -112,13 +117,14 @@ class StretchAverageStats(Product):
             times_id = np.floor(df['time']/60/60).astype(int)
             this_df = df[times_id==time_i]
             # TODO handle window over desired reach
-            dist_out.append(this_df['dist_out'])
-            mean.append(this_df[signal_key])
-            other.append(this_df[other_key])
-            std.append(this_df[signal_key+'_u'])
-            time_id.append(time_i)
+            dist_out.append(np.array(this_df['dist_out']))
+            cross_track.append(np.array(this_df['xtrk_dist'])/1000.0) # (km)
+            mean.append(np.array(this_df[signal_key]))
+            other.append(np.array(this_df[other_key]))
+            std.append(np.array(this_df[signal_key+'_u']))
+            time_id.append(np.array(time_i))
             if signal_key=='wse':
-                slope.append(this_df['slope'])
+                slope.append(np.array(this_df['slope']))
             ####
             g_ids = []
             for cyc, pas, cont in zip(
@@ -132,11 +138,13 @@ class StretchAverageStats(Product):
                 ugid = ugids[0]
             granule_id.append(ugid)
             ####
-        #breakpoint()
+        #if reach=='81247300101':
+        #    breakpoint()
         Other = np.array(other).squeeze()
         stats.time_id = np.array(time_id).squeeze()
         stats.granule_id = np.array(granule_id).squeeze()
         stats.dist_out = np.array(dist_out).squeeze()
+        stats.cross_track = np.array(cross_track).squeeze()
         stats.mean = np.array(mean).squeeze()
         stats.std = np.array(std).squeeze()
         # need to make reference use the same samples for  wse and width
@@ -184,7 +192,8 @@ class StretchAverageStats(Product):
         this_keys = stats.VARIABLES.keys()
         common_keys = list(set(in_keys) & set(this_keys))
         for key in common_keys:
-            if key != 'dist_out':
+            if (key != 'dist_out') and (key != 'cross_track'):
+                #print('key:',key)
                 stats[key] = stretch_stack[key].copy()
         #stats.reaches = stretch_stack.reaches.copy()
         #stats.time_id = stretch_stack.time_id.copy()
@@ -235,6 +244,7 @@ class StretchAverageStats(Product):
         sum_window = np.nansum(window, axis=0)
         #
         stats.dist_out = np.nanmean(stretch_stack.dist_out, axis=0)
+        stats.cross_track = np.nanmean(stretch_stack.cross_track, axis=0)
         if along_stats is None:
             ref = np.zeros_like(signal[:,0])
         elif isinstance(along_stats, rivscale.products.along_stretch.AlongStretchStats):

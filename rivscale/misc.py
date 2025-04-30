@@ -11,6 +11,11 @@ import scipy.ndimage
 from configparser import ConfigParser
 import SWOTRiver.products.rivertile
 import textwrap
+import os.path
+import pandas as pd
+import datetime
+
+MISSING_VALUE_FLT = -999999999999
 
 def textjoin(text):
     """Dedent join and strip text"""
@@ -47,6 +52,41 @@ def node_id_to_local_node_id(node_ids):
     local_node_ids = [int(str(node_id)[-4:-1]) for
         node_id in node_ids]
     return np.array(local_node_ids)
+
+def get_stretch_list_from_subset_cfg(cfg, sword_df):
+    # get the list of stretches (or multireaches)
+    stretch_list0 = [
+        '{}'.format(t) for t in '{}'.format(
+            cfg['main']['stretch_subset']).split()]
+    stretch_list = []
+    for stretch in stretch_list0:
+        if stretch.isnumeric():
+            if sword_df is None:
+                # just append the potentially-partial reach
+                stretch_list.append('{}'.format(stretch))
+            else:
+                # get all reaches in basins smaller than stretch
+                st = '{}'.format(stretch)
+                tmp = [
+                    '{}'.format(r).startswith(st) for r in sword_df['reach_id']]
+                reaches = np.array(sword_df['reach_id'][tmp])
+                for r in reaches:
+                    stretch_list.append('{}'.format(r))
+        else:
+            # check if it is a file, if so read it
+            if stretch.endswith('.csv') and os.path.isfile(stretch):
+                tmp_df = pd.read_csv(stretch)
+                s_list = []
+                if 'stretch_name' in tmp_df.keys():
+                    s_list = tmp_df['stretch_name']
+                elif 'reach_id' in tmp_df.keys():
+                    s_list = tmp_df['reach_id']
+                for s in s_list:
+                    stretch_list.append('{}'.format(s))
+            else:
+                # assume it is a non-numeric stretch name
+                stretch_list.append('{}'.format(stretch))
+    return stretch_list
 
 def swot_time_to_field_time(swot_times, swot_filenames=None):
     """

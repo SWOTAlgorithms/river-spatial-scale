@@ -50,6 +50,7 @@ class BayesData(Product):
         ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_length', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['cross_track', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['p_lat', odict([['dimensions', odict([['num_nodes', 0]])]])],

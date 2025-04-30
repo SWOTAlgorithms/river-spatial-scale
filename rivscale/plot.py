@@ -204,7 +204,7 @@ def plot_stretch_stats(
         if show:
             plt.show()
 
-def plot_the_per_pass(gid, x, y, y_u, marker):
+def plot_the_per_pass(gid, x, y, y_u, marker, cross_track=None):
     pid = np.array([g.split('_')[1] for g in gid])
     upid = np.unique(pid)
     for p in upid:
@@ -212,8 +212,13 @@ def plot_the_per_pass(gid, x, y, y_u, marker):
         this_x = x[pid==p].flatten()
         this_x = swot_time_to_field_time(this_x*60.0*60.0)
         this_y_u = y_u[pid==p].flatten()
+        label = 'pass {}'.format(p)
+        if cross_track is not None:
+            xtrk = cross_track[pid==p].flatten()
+            label = label + ', xtrk {:2.1f} (km)'.format(
+                np.median(xtrk)) # keep sign
         plt.errorbar(this_x, this_y, yerr=this_y_u,
-            marker=marker, label='pass {}'.format(p))
+            marker=marker, label=label)
         #plt.plot(this_x, this_y, marker=marker, label='pass {}'.format(p))
     plt.grid()
     plt.legend()
@@ -240,6 +245,9 @@ def plot_per_pass_time_series(
     #file_tag = 'stretch_avg'
     y_key = stats.signal_key
     y_mean = stats.mean
+    cross_track=None
+    if 'cross_track' in stats.variables.keys():
+        cross_track = stats.cross_track
     if err_type=='node_std':
         y_u = stats.std
     elif err_type=='stretch_std':
@@ -252,7 +260,7 @@ def plot_per_pass_time_series(
         nplots=2
     plt.figure(figsize=figsize)
     plt.subplot(nplots,1,1)
-    plot_the_per_pass(gid, x, y_mean, y_u, marker)
+    plot_the_per_pass(gid, x, y_mean, y_u, marker, cross_track)
     plt.xlabel(label_units(x_label))
     plt.ylabel(label_units(y_key))
     if stats2 is not None:

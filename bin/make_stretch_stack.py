@@ -23,6 +23,7 @@ import rivscale.plot
 import rivscale.data
 import rivscale.reconstruct
 import rivscale.filter
+import rivscale.misc
 
 import scipy.signal
 
@@ -62,6 +63,10 @@ def main():
     sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(
         cfg['main']['sword_file'])
     # get the list of stretches (or multireaches)
+    stretch_list = rivscale.misc.get_stretch_list_from_subset_cfg(
+        cfg, sword_df)
+    #breakpoint()
+    """
     stretch_list0 = [
         '{}'.format(t) for t in '{}'.format(
             cfg['main']['stretch_subset']).split()]
@@ -76,7 +81,20 @@ def main():
             for r in reaches:
                 stretch_list.append('{}'.format(r))
         else:
-            stretch_list.append('{}'.format(stretch))
+            # check if it is a file, if so read it
+            if stretch.endwith('.csv') and os.path.isfile(stretch):
+                tmp_df = pd.read_csv(stretch)
+                s_list = []
+                if 'stretch_name' in tmp_df.keys():
+                    s_list = tmp_df['stretch_name']
+                elif 'stretch_name' in tmp_df.keys():
+                    s_list = tmp_df['stretch_name']
+                for s in s_list:
+                    stretch_list.append('{}'.format(s))
+            else:
+                # assume it is a non-numeric stretch name
+                stretch_list.append('{}'.format(stretch))
+    """
     df_stretches = pd.read_csv(
         cfg['main']['stretch_file'],
         usecols=stretch_list)

@@ -76,6 +76,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     # put sig0 in dB
     if 'rdr_sig0' in df.keys():
         df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
+    if 'xtrk_dist' in df.keys():
+        df['cross_track'] = df['xtrk_dist'] / 1000.0 #(km)
     #if 'continent' not in df.keys():
     #    df['continent'] = 'NA' # TODO: un-hard-code this one
     return df

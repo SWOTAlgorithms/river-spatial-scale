@@ -227,8 +227,11 @@ def filter_qual(
         # filter out swath edges of both wse and area
         wse_keep = np.logical_and.reduce([wse_keep, near, far])
         area_keep = np.logical_and.reduce([area_keep, near, far])
+        # drop wse outliers
+        wse_keep = np.logical_and.reduce([wse_keep, wse_outlier])
+    if 'no_degraded' in kind:
         # drop degraded wse and wse outliers
-        wse_keep = np.logical_and.reduce([wse_keep, geoloc_deg, wse_outlier])
+        wse_keep = np.logical_and.reduce([wse_keep, geoloc_deg])
         # drop classification_qual_degraded
         area_keep = np.logical_and.reduce([area_keep, class_q_deg])
     # TODO: handle OBIM etc
