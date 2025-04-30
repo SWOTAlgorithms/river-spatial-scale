@@ -53,6 +53,7 @@ class StretchStack(Product):
         ['granule_id', odict([['dimensions', odict([['num_times', 0]])]])],
         #['swot_time', odict([['dimensions', odict([['num_times', 0]])]])],
         ['date_hour', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['cross_track', odict([['dimensions', DIMENSIONS_2D]])],
         ['wse', odict([['dimensions', DIMENSIONS_2D]])],
         ['width', odict([['dimensions', DIMENSIONS_2D]])],
         ['area_total', odict([['dimensions', DIMENSIONS_2D]])],

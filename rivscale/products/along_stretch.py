@@ -49,6 +49,7 @@ class AlongStretchStats(Product):
         ['dist_out', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_length', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['cross_track', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['local_node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['p_lat', odict([['dimensions', odict([['num_nodes', 0]])]])],
@@ -88,7 +89,8 @@ class AlongStretchStats(Product):
         this_keys = stats.VARIABLES.keys()
         common_keys = list(set(in_keys) & set(this_keys))
         for key in common_keys:
-            stats[key] = stretch_stack[key].copy()
+            if key != 'cross_track':
+                stats[key] = stretch_stack[key].copy()
         #breakpoint()
         #stats.reaches = stretch_stack.reaches.copy()
         #stats.dist_out = stretch_stack.dist_out.copy()
@@ -108,6 +110,7 @@ class AlongStretchStats(Product):
         if prior_unc_alpha is not None:
             stats.prior_unc_alpha = prior_unc_alpha
         # get the stats
+        stats.cross_track = np.nanmean(stretch_stack['cross_track'], axis=1)
         stats.mean = np.nanmean(stretch_stack[signal_key], axis=1)
         stats.std = np.nanstd(stretch_stack[signal_key], axis=1)
         mask = np.zeros(np.shape(stretch_stack[signal_key]))
@@ -119,7 +122,8 @@ class AlongStretchStats(Product):
             len(percentiles),
             )) + np.nan
         for k, ptile in enumerate(percentiles):
-            ptiles[:,k] = np.nanpercentile(stretch_stack[signal_key], ptile, axis=1)
+            ptiles[:,k] = np.nanpercentile(
+                stretch_stack[signal_key], ptile, axis=1)
         stats.percentiles = np.array(ptiles)
         stats.percentile_list = np.array(percentiles)
         return stats

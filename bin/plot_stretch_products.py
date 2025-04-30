@@ -25,6 +25,7 @@ import rivscale.products.along_stretch
 import rivscale.products.stretch_average
 import rivscale.products.bayes_data
 import rivscale.products.height_width
+import rivscale.misc
 
 EXAMPLE = ''
 
@@ -216,9 +217,13 @@ def setup_from_cfg(cfg):
     """
 
     """
+    stretch_list0 = rivscale.misc.get_stretch_list_from_subset_cfg(
+        cfg, None)
+    """
     stretch_list0 = [
         '{}'.format(t) for t in '{}'.format(
             cfg['main']['stretch_subset']).split()]
+    """
     # make the output dir if needed
     try:
         stretch_dir0 = os.path.join(

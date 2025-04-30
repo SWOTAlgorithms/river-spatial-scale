@@ -25,6 +25,7 @@ import rivscale.reconstruct
 import rivscale.filter
 import rivscale.products.stretch_average
 import rivscale.products.height_width
+import rivscale.misc
 
 import scipy.signal
 
@@ -63,6 +64,10 @@ def main():
     sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(
         cfg['main']['sword_file'])
     # get the list of stretches (or multireaches)
+    stretch_list = rivscale.misc.get_stretch_list_from_subset_cfg(
+        cfg, sword_df)
+    #breakpoint()
+    """
     stretch_list0 = [
         '{}'.format(t) for t in '{}'.format(
             cfg['main']['stretch_subset']).split()]
@@ -75,6 +80,7 @@ def main():
         reaches = np.array(sword_df['reach_id'][tmp])
         for r in reaches:
             stretch_list.append('{}'.format(r))
+    """
     df_stretches = pd.read_csv(
         cfg['main']['stretch_file'],
         usecols=stretch_list)
@@ -144,10 +150,11 @@ def main():
         #breakpoint()
         # also create the height_width object from the reaches
         height_width = None
-        if (len(wse_reach_avg.percentiles)>0) and \
-                (len(width_reach_avg.percentiles)>0):
-            height_width = rivscale.products.height_width.HeightWidthModel.from_objects(
-                {},wse_reach_avg, width_reach_avg)
+        if (wse_reach_avg is not None) and (width_reach_avg is not None):
+            if (len(wse_reach_avg.percentiles)>0) and \
+                    (len(width_reach_avg.percentiles)>0):
+                height_width = rivscale.products.height_width.HeightWidthModel.from_objects(
+                    {},wse_reach_avg, width_reach_avg)
         #
         """
         plt.figure()

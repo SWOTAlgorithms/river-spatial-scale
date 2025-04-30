@@ -27,6 +27,7 @@ import rivscale.products.stretch_stack
 import rivscale.products.along_stretch
 import rivscale.products.stretch_average
 import rivscale.products.height_width
+import rivscale.misc
 
 import scipy.signal
 
@@ -63,9 +64,13 @@ def main():
     cfg.read(args.config)
     # handle non-strings for stretch_subset
     #cfg['main']['stretch_subset'] = '{}'.format(cfg['main']['stretch_subset'])
+    stretch_list0 = rivscale.misc.get_stretch_list_from_subset_cfg(
+        cfg, None)
+    """
     stretch_list0 = [
         '{}'.format(t) for t in '{}'.format(
             cfg['main']['stretch_subset']).split()]
+    """
     # make the output dir if needed
     stretch_dir0 = os.path.join(
         cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
