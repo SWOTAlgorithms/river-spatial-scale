@@ -424,7 +424,7 @@ class StretchStack(Product):
             #print(key)
             dims = self.VARIABLES[key]['dimensions']
             if 'num_nodes' in dims.keys():
-                stack[key] = self[key][mask[0]:mask[-1]]
+                stack[key] = self[key][mask]#mask[0]:mask[-1]]
             else:
                 stack[key] = self[key]
         return stack

@@ -258,9 +258,9 @@ class AlongStretchStats(Product):
         keys = set(self.variables.keys()) - set(
             ['reaches', 'percentiles','percentile_list'])
         for key in keys:
-            stats[key] = self[key][mask[0]:mask[-1]]
+            stats[key] = self[key][mask]#mask[0]:mask[-1]]
         #breakpoint()
-        stats['percentiles'] = self['percentiles'][mask[0]:mask[-1],:]
+        stats['percentiles'] = self['percentiles'][mask,:]#mask[0]:mask[-1],:]
         return stats
 
 
