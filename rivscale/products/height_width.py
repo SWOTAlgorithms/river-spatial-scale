@@ -207,7 +207,8 @@ class HeightWidthModel(Product):
             granule_id=None,
             outdir=None,
             show=False,
-            title_tag=None):
+            title_tag=None,
+            cfg=None):
         plt.figure()
         if (wse_data is not None) and (
                 width_data is not None):
@@ -217,8 +218,8 @@ class HeightWidthModel(Product):
                 d_width = width_data.copy()
                 d_wse = wse_data.copy()
                 # make them anomalies
-                d_wse = d_wse - np.nanmedian(d_wse)
-                d_width = d_width - np.nanmedian(d_width)
+                #d_wse = d_wse - np.nanmedian(d_wse)
+                #d_width = d_width - np.nanmedian(d_width)
                 if granule_id is not None:
                     gid=granule_id.copy()
             else:
@@ -241,10 +242,21 @@ class HeightWidthModel(Product):
                     width0 = d_width[pid==p].flatten()
                     # also compute spearman
                     res = scipy.stats.spearmanr(width0, wse0)
-                    #breakpoint()
-                    this_label = 'pass {}, $\gamma_s$={:1.2f}'.format(
-                        p, res.correlation)
+                    # now plot do a height/width model for each pass
+                    if cfg is None:
+                        cfg = {'sigma_n':50.0, 'use_pekel':False}
+                    # add reference that is taken off inside constructor
+                    this_hw = self.from_objects(cfg, wse0, width0,
+                        wse_anom=False, width_anom=False)
+                    width_bias = this_hw.sample(
+                        np.array([0.0,]), x_key='wse')[0]
+                    # now plot it
+                    this_label = 'pass {}, $\gamma_s$={:1.2f}, offset {:1.2f}'.format(
+                        p, res.correlation, width_bias)
                     plt.plot(width0, wse0, 'o', label=this_label)
+                    color = plt.gca().lines[-1].get_color()
+                    plt.plot(this_hw.width_coords, this_hw.wse_coords,
+                        '-',color=color, linewidth=2)
         msk = np.logical_and(np.isfinite(d_width), np.isfinite(d_wse))
         res = scipy.stats.spearmanr(d_width[msk], d_wse[msk])
         this_label = 'model fit, tot $\gamma_s$={:1.2f}'.format(res.correlation)

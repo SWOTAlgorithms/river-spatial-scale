@@ -29,7 +29,7 @@ import rivscale.misc
 
 EXAMPLE = ''
 
-def plot_single_stretch(files, outdir=None, cfg=None):
+def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
     dic = {}
     # plot each individual file
     for f in files:
@@ -76,6 +76,24 @@ def plot_single_stretch(files, outdir=None, cfg=None):
         if 'bayes' in fle:
             dic['bayes'] = \
                     rivscale.products.bayes_data.BayesData.from_ncfile(f)
+    if width_correction is not None:
+        # apply the width correction to the width stretch_avg and reach_avg data
+        wc_df = pd.read_csv(width_correction)
+        # do stretch correction
+        if dic['width_stretch_average'] is not None:
+            ct = dic['width_stretch_average'].cross_track
+            w_corr = np.interp(np.abs(ct),
+                wc_df['cross_track'], wc_df['width_correction'])
+            dic['width_stretch_average'].mean = \
+                dic['width_stretch_average'].mean - w_corr 
+        # do rech correction
+        if dic['width_reach_average'] is not None:
+            ct = dic['width_reach_average'].cross_track
+            w_corr = np.interp(np.abs(ct),
+                wc_df['cross_track'], wc_df['width_correction'])
+            dic['width_reach_average'].mean = \
+                dic['width_reach_average'].mean - w_corr
+        #breakpoint()
     for key in dic.keys():
         # plot each individual plot
         if key=='height_width':
@@ -276,6 +294,8 @@ def main():
     #    help='output directory to save plots')
     parser.add_argument('-s','--stretch_name', nargs='+', default=None,
         help='stretch_name(s) to plot')
+    parser.add_argument('--width_correction', default=None,
+        help='csv input file with width vs cross-track correction to apply')
     args = parser.parse_args()
     #cfg = configparser.ConfigParser()
     #cfg.read(args.config)
@@ -372,7 +392,8 @@ def main():
             if not os.path.exists(plotdir):
                 os.makedirs(plotdir)
         # now plot the rest
-        plot_single_stretch(files, outdir=plotdir, cfg=cfg)
+        plot_single_stretch(files, outdir=plotdir, cfg=cfg,
+            width_correction=args.width_correction)
         if plotdir is None:
             plt.show()
         plt.close('all')
