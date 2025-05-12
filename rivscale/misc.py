@@ -118,6 +118,48 @@ def swot_time_to_field_time(swot_times, swot_filenames=None):
         utc_time.append(datetime.datetime.utcfromtimestamp(time.timestamp()))
     return utc_time
 
+def split_utc_time(utc_times):
+    """split time strings, copied from reproc"""
+    year = pd.DatetimeIndex(utc_times).year
+    month = pd.DatetimeIndex(utc_times).month
+    day = pd.DatetimeIndex(utc_times).day
+    hour = pd.DatetimeIndex(utc_times).hour
+    minute = pd.DatetimeIndex(utc_times).minute
+    return year, month, day, hour, minute
+
+def field_time_to_swot_time(utc_times):
+    """convert utc datetime to swot total-second time, copied from reproc"""
+    time_sec = []
+    for this_time in utc_times:
+        if isinstance(this_time, str):
+            time_diff = (datetime.datetime.strptime(
+                this_time,'%Y-%m-%d %H:%M:%S') -
+                         datetime.datetime(2000, 1, 1))
+        else:
+            time_diff = (pd.to_datetime(this_time) - datetime.datetime(2000, 1, 1)) 
+        time_sec.append(time_diff.total_seconds())
+    return time_sec
+
+def get_dist_to_outlet_from_node_id(node_ids, reach_db_file):
+    """
+    turns an array of node ID's into distance-to-outlet x values using the
+    SWORD database
+    copied from reproc repo
+    """
+
+    if os.path.isdir(reach_db_file):
+        reach_db = None
+        for db_file in glob.glob(os.path.join(reach_db_file, '*.nc')):
+            if reach_db is None:
+                reach_db = RiverObs.ReachDatabase.ReachDatabase.from_ncfile(db_file)
+            else:
+                reach_db = reach_db + RiverObs.ReachDatabase.ReachDatabase.from_ncfile(db_file)
+    elif os.path.isfile(reach_db_file):
+        reach_db = RiverObs.ReachDatabase.ReachDatabase.from_ncfile(
+            reach_db_file)
+    sword_map = dict(zip(reach_db.nodes.node_id, reach_db.nodes.dist_out))
+    return np.array([sword_map.get(n_id, np.nan) for n_id in node_ids])
+
 def compute_anomaly(full_profile_data, bayes_data=None, sword_node_df=None):
     full_profile_data2 = full_profile_data.copy()
     if 'wse_stack_detrend' not in full_profile_data2.keys():

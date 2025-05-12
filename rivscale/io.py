@@ -12,7 +12,7 @@ import pandas as pd
 import netCDF4 as nc
 import geopandas as gpd
 
-from errtools.misc import (split_utc_time, field_time_to_swot_time,
+from rivscale.misc import (split_utc_time, field_time_to_swot_time,
     swot_time_to_field_time, get_dist_to_outlet_from_node_id)
 
 import rivscale.data

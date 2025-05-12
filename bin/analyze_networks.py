@@ -18,16 +18,13 @@ import argparse
 import numpy as np
 import pandas as pd
 
-import errtools.plots
 import matplotlib.pyplot as plt
 
 import scipy.ndimage
 from scipy.linalg import pinv, svd, eigh, norm
 
-from errtools.misc import (split_utc_time, field_time_to_swot_time,
+from rivscale.misc import (split_utc_time, field_time_to_swot_time,
     swot_time_to_field_time, get_dist_to_outlet_from_node_id)
-
-from errtools.plots import plot_cdf
 
 import netCDF4 as nc
 

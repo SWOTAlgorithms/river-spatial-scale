@@ -31,8 +31,6 @@ import scipy.signal
 
 import rivscale.filter
 
-from errtools.misc import swot_time_to_field_time
-import errtools.plots
 import os.path
 import configparser
 import argparse
