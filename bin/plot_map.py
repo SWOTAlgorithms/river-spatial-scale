@@ -21,7 +21,7 @@ import geopandas as gpd
 import numpy as np
 import argparse
 
-from errtools.misc import swot_time_to_field_time
+from rivscale.misc import swot_time_to_field_time
 from rivscale.plot import label_units
 
 import glob
