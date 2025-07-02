@@ -297,6 +297,13 @@ def main():
     parser.add_argument('--width_correction', default=None,
         help='csv input file with width vs cross-track correction to apply')
     args = parser.parse_args()
+    #breakpoint()
+    if args.infile is not None:
+        # just plot the specific file, and show it (not saving it)
+        plot_single_stretch(args.infile, outdir=None, cfg=None,
+            width_correction=None)
+        plt.show()
+        return
     #cfg = configparser.ConfigParser()
     #cfg.read(args.config)
     cfg = rivscale.misc.CfgParser()
