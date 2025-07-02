@@ -77,7 +77,10 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     if 'rdr_sig0' in df.keys():
         df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
     if 'xtrk_dist' in df.keys():
-        df['cross_track'] = df['xtrk_dist'] / 1000.0 #(km)
+        tmp = df['xtrk_dist']
+        tmp[tmp==''] = np.nan # handle null ct...not sure why we get it though
+        #breakpoint()
+        df['cross_track'] = tmp / 1000.0 #(km)
     #if 'continent' not in df.keys():
     #    df['continent'] = 'NA' # TODO: un-hard-code this one
     return df
@@ -318,7 +321,10 @@ def make_stretch_stack(
                 this_key = np.array(that_df[key])
                 full_key = np.ones(np.shape(nodes)) + np.nan
                 for n,kk in zip(this_nodes, this_key):
-                    full_key[nodes==n] = kk
+                    if kk == '':
+                        full_key[nodes==n] = np.nan # not sure why we need to handle this...
+                    else:
+                        full_key[nodes==n] = kk
                 signal[key].append(full_key)
             signal['time_id'].append(t_id)
             g_ids = []

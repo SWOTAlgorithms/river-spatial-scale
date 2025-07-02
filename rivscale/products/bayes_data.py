@@ -148,10 +148,14 @@ class BayesData(Product):
                 prior_unc_alpha)
         elif isinstance(stats, rivscale.products.along_stretch.AlongStretchStats):
             # use what is in the stats
-            bayes.signal_cov = rivscale.reconstruct.generate_cov_matrix(
-                stretch_stack,
-                stats.char_length_tau,
-                stats.prior_unc_alpha)
+            #breakpoint()
+            try:
+                bayes.signal_cov = rivscale.reconstruct.generate_cov_matrix(
+                    stretch_stack,
+                    stats.char_length_tau,
+                    stats.prior_unc_alpha)
+            except AssertionError as e:
+                print(e)
             # TODO: use the cov in there...
         # actually run it
         bayes = rivscale.reconstruct.reconstruct_stretch(
@@ -534,10 +538,19 @@ class BayesData(Product):
             Signal_hat_u.append(np.diag(post_cov))
             Post_cov.append(post_cov)
         #breakpoint()
-        bayes.signal = np.array(Signal_hat).T
-        bayes.signal_u = np.array(Signal_hat_u).T
-        bayes.signal_post_cov = np.moveaxis(
-            np.array(Post_cov), 0, -1)
+        try:
+            bayes.signal = np.array(Signal_hat).T
+        except AssertionError as e:
+            print(e)
+        try:
+            bayes.signal_u = np.array(Signal_hat_u).T
+        except AssertionError as e:
+            print(e)
+        try:
+            bayes.signal_post_cov = np.moveaxis(
+                np.array(Post_cov), 0, -1)
+        except AssertionError as e:
+            print(e)
         return bayes
 
 

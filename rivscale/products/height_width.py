@@ -107,6 +107,8 @@ class HeightWidthModel(Product):
             width = width - width_reference
         # check that wse and width are all valid over the same places
         good_msk = np.logical_and(np.isfinite(wse), np.isfinite(width))
+        if np.sum(good_msk)==0:
+            return height_width
         wse = wse[good_msk]
         width = width[good_msk]
         Ph = np.nanpercentile(wse, ptile_list)
@@ -124,6 +126,7 @@ class HeightWidthModel(Product):
             if (50 in ptile_list):
                 # get the mean of the prior and measured width distribution
                 ind = np.where(ptile_list==50)
+                #breakpoint()
                 mu_g = Pg[ind]
                 mu_m = Pm[ind]
             else:
@@ -158,6 +161,11 @@ class HeightWidthModel(Product):
         dw = w_hat - width
         dh = h_hat - wse
         # use RMSE from fit curve for errors
+        # handle length 1 cases
+        if len(dw)==1:
+            dw = np.array([dw,])
+        if len(dh)==1:
+            dh = np.array([dh,])
         height_width.width_err = np.sqrt(np.nanmean(dw**2))
         height_width.wse_err = np.sqrt(np.nanmean(dh**2))
         height_width.count = np.sum(good_msk)
