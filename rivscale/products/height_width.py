@@ -28,6 +28,7 @@ import os.path
 import numpy as np
 
 import rivscale.products.stretch_average
+from scipy.stats import spearmanr
 
 class HeightWidthModel(Product):
     ATTRIBUTES = odict([
@@ -43,7 +44,8 @@ class HeightWidthModel(Product):
         ['width_err',{'dtype':'float', 'value':-1}],
         ['wse_err',{'dtype':'float', 'value':-1}],
         ['count',{'dtype':'int', 'value':0}],
-
+        ['spearman_r',{'dtype':'float', 'value':-2}],
+        ['spearman_p_value',{'dtype':'float', 'value':-1}],
         ])
     DIMENSIONS = odict([['num_hw_params',0],])
     VARIABLES = odict([
@@ -172,6 +174,12 @@ class HeightWidthModel(Product):
         height_width.width_err = np.sqrt(np.nanmean(dw**2))
         height_width.wse_err = np.sqrt(np.nanmean(dh**2))
         height_width.count = np.sum(good_msk)
+        #
+        msk = np.logical_and(np.isfinite(dw), np.isfinite(dh))
+        if np.sum(msk)>0:
+            sp, p_val = spearmanr(dh[msk], dw[msk])
+            height_width.spearman_r = sp
+            height_width.spearman_p_value = p_val
         # TODO: bias adjust so mean(dw)=0, mean(dh)=0, and RMSE=STD etc
         #breakpoint()
         return height_width
