@@ -63,7 +63,9 @@ class HeightWidthModel(Product):
             width_along_stats=None,
             wse_anom=True,
             width_anom=True,
-            stretch_name=None):
+            stretch_name=None,
+            ptile_list = [5, 25, 32, 50, 68, 75, 95]
+            ):
         if 'sigma_n' not in cfg.keys():
             cfg['sigma_n'] = 50
         sigma_n = cfg['sigma_n']
@@ -79,9 +81,10 @@ class HeightWidthModel(Product):
                 height_width.stretch_name = width_stretch_avg.stretch_name
             else:
                 height_width.stretch_name = 'arrays'
-        if width_along_stats is None:
-            ptile_list = [5, 25, 32, 50, 68, 75, 95]
-        else:
+        #if width_along_stats is None:
+            #ptile_list = [5, 25, 32, 50, 68, 75, 95]
+        #else:
+        if width_along_stats is not None:
             ptile_list = width_along_stats.percentile_list
         # get percntiles of measured reach data
         #Pm = np.nanpercentile(width_stretch_avg.mean, ptile_list)
