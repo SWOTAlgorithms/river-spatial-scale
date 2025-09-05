@@ -175,9 +175,9 @@ class HeightWidthModel(Product):
         height_width.wse_err = np.sqrt(np.nanmean(dh**2))
         height_width.count = np.sum(good_msk)
         #
-        msk = np.logical_and(np.isfinite(dw), np.isfinite(dh))
+        msk = np.logical_and(np.isfinite(wse), np.isfinite(width))
         if np.sum(msk)>0:
-            sp, p_val = spearmanr(dh[msk], dw[msk])
+            sp, p_val = spearmanr(wse[msk], width[msk])
             height_width.spearman_r = sp
             height_width.spearman_p_value = p_val
         # TODO: bias adjust so mean(dw)=0, mean(dh)=0, and RMSE=STD etc
