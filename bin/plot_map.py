@@ -90,81 +90,11 @@ def plot_map(lat, lon, c=None, s=None, title='', clabel=None,
         if show:
             plt.show()
 
-def main():
-    """
-    parser = argparse.ArgumentParser(
-        description='Plot river stretch, reach, or multireach',
-        formatter_class=argparse.RawTextHelpFormatter,
-        epilog=EXAMPLE)
-    parser.add_argument('-c','--config', default=None,
-        help='processing.cfg or river_avg.cfg')
-    parser.add_argument('--infile', nargs='+', help='input file(s)')
-    parser.add_argument('-s','--stretch_name', nargs='+', default=None,
-        help='stretch_name(s) to plot')
-    args = parser.parse_args()
-    cfg = rivscale.misc.CfgParser()
-    cfg.read(args.config)
-    df_stretches, stretch_dir0, pekel_dir0, outdir0 = setup_from_cfg(cfg)
-    if len(df_stretches.keys())==0:
-        print('no files to process')
-    all_stretches = list(df_stretches.keys())
-    if args.stretch_name is not None:
-        all_stretches = list(args.stretch_name)
-    
-    """
-    parser = argparse.ArgumentParser(
-        description='Plot along-river stretch on map over google-image',
-        formatter_class=argparse.RawTextHelpFormatter,
-        epilog=EXAMPLE)
-    parser.add_argument('stretch_stack_file', default=None,
-        help='processing config')
-    parser.add_argument('wse_along_stats_file', default=None,
-        help='processing config')
-    parser.add_argument('width_along_stats_file', default=None,
-        help='processing config')
-    parser.add_argument('--crop_reach',default=False, action='store_true')
-    args = parser.parse_args()
-   
-    # read in the files
-    stretch_stack = rivscale.products.stretch_stack.StretchStack.from_ncfile(
-        args.stretch_stack_file)
-    wse_along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
-        args.wse_along_stats_file)
-    width_along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
-        args.width_along_stats_file)
-    #breakpoint()
-    # crop to center reach if commanded
-    if args.crop_reach:
-        wse_along_stats = wse_along_stats.crop_to_reach()
-        width_along_stats = width_along_stats.crop_to_reach()
-        stretch_stack = stretch_stack.crop_to_reach()
-    #breakpoint()
+def plot_multitemporal(stretch_stack, wse_along_stats, width_along_stats,
+        clim = (-3,3), outdir='plots_to_delete'):
     title0 = wse_along_stats.stretch_name
     M = len(wse_along_stats.reaches)
     #title = title + 'pass: {}, date: {}'.format()
-    """
-    # print all reaches in title?
-    if M>1:
-        title = title + '\n reaches: ['
-        #title = title+' {}'.format(along_stats.reaches)
-        cnt=0
-        max_cnt=3
-        for k,reach in enumerate(wse_along_stats.reaches):
-            if cnt==max_cnt:
-                cnt=0
-                title = title + "\n"
-            if k == M-1:
-                title = title+'{}]'.format(reach)
-            else:
-                title = title+'{}, '.format(reach)
-            cnt = cnt + 1
-    
-    # get teh IQR     
-    p25 = wse_along_stats.percentiles[:,wse_along_stats.percentile_list == 25].squeeze()
-    p75 = wse_along_stats.percentiles[:,wse_along_stats.percentile_list == 75].squeeze()
-    IQR = p75-p25
-    clabel='width IQR (m)'
-    """
     # determine zoom
     zoom = 14
     if M >3:
@@ -172,12 +102,13 @@ def main():
     if M > 5:
         zoom = 10
     # set the variables
+    #breakpoint()
     lat = stretch_stack.p_lat
     lon = stretch_stack.p_lon
     s = width_along_stats.reference
     clabel = '$\Delta$ wse'
-    clim = (-3,3)
-    outdir='plots_to_delete'
+    #clim = (-3,3)
+    #outdir='plots_to_delete'
     for k in range(len(stretch_stack.time_id)):
         c = stretch_stack.wse[:,k] - wse_along_stats.reference
         cyc, pas, _ = stretch_stack.granule_id[k].split('_')
@@ -198,6 +129,137 @@ def main():
     mp4_file = fle.split('_date')[0]+'.mp4'
     video_file = os.path.join(outdir,mp4_file)
     make_movie_from_images(image_file_list, video_file)
+
+
+def plot_along_stats(along_stats, width_along_stats=None,
+        clim=None, outdir=None, stat='reference'):
+    title0 = along_stats.stretch_name
+    M = len(along_stats.reaches)
+    #title = title + 'pass: {}, date: {}'.format()
+    # determine zoom
+    zoom = 14
+    if M >3:
+        zoom = 12
+    if M > 5:
+        zoom = 10
+    # set the variables
+    lat = along_stats.p_lat
+    lon = along_stats.p_lon
+    if width_along_stats is not None:
+        s = width_along_stats.reference
+    else:
+        s = 100 
+    clabel = along_stats.signal_key#'$\Delta$ wse'
+    #clim = (-3,3)
+    #outdir='along_stats_map_plots'
+    
+    #c = along_stats.reference
+    if isinstance(stat, float):
+        # assume it is a particular percentile
+        # find index of closest
+        ind = np.argmin(np.abs(along_stats.percentile_list - stat))
+        c = along_stats.percentiles[:,ind].squeeze()
+        this_stat = along_stats.percentile_list[ind]
+        clabel = clabel + ' ({} %ile)'.format(this_stat)
+        #breakpoint()
+    else:
+        c = along_stats[stat]
+        clabel = clabel + ' ({})'.format(stat)
+    #cyc, pas, _ = stretch_stack.granule_id[k].split('_')
+    title = title0+ ' '+ clabel
+    #breakpoint()
+    plot_map(
+            lat, lon,
+            c=c, clabel=label_units(clabel), clim=clim,
+            s=s,
+            title=title, zoom=zoom,
+            outdir=outdir)
+   
+    #plt.show()
+    #breakpoint()
+
+def main():
+    """
+    plot multitemporal objects over satellite maps to produce QGIS-like figures
+    """
+    parser = argparse.ArgumentParser(
+        description='Plot along-river stretch on map over google-image',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=EXAMPLE)
+    parser.add_argument('along_stats_file', nargs='+', default=None,
+        help='along-river multitemproal stats file(s)')
+    parser.add_argument('--stretch_stack_file', default=None,
+        help='in input this will make a movie of plots for each time step')
+    """
+    parser.add_argument('--wse_along_stats_file', default=None,
+        help='processing config')
+    parser.add_argument('--width_along_stats_file', default=None,
+        help='processing config')
+    parser.add_argument('--dark_along_stats_file', default=None,
+        help='processing config')
+    """
+    parser.add_argument('--crop_reach',default=False, action='store_true')
+    #parser.add_argument('--movie',default=False, action='store_true',
+    #        help='option to make movie (e.g., a plot for every time step) this option requires the stretch stack option be set')
+    args = parser.parse_args()
+    
+    # read in the files
+    stretch_stack = None
+    wse_along_stats = None
+    width_along_stats = None
+    #dark_along_stats = None
+    #breakpoint()
+    along_stats = []
+    for fle in args.along_stats_file:
+        this_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(fle)
+        along_stats.append(this_stats)
+    if args.stretch_stack_file is not None:
+        stretch_stack = rivscale.products.stretch_stack.StretchStack.from_ncfile(
+            args.stretch_stack_file)
+    """
+    if args.wse_along_stats_file is not None:
+        wse_along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
+            args.wse_along_stats_file)
+    
+    if args.width_along_stats_file is not None:
+        width_along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
+            args.width_along_stats_file)
+    if args.dark_along_stats_file is not None:
+        dark_along_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
+            args.dark_along_stats_file)
+    """
+    #
+    #breakpoint()
+    # crop to center reach if commanded
+    if args.crop_reach:
+        #wse_along_stats = wse_along_stats.crop_to_reach()
+        #width_along_stats = width_along_stats.crop_to_reach()
+        for k,this_stats in enumerate(along_stats):
+            along_stats[k] = this_stats.crop_to_reach()
+        if stretch_stack is not None:
+            stretch_stack = stretch_stack.crop_to_reach()
+    #breakpoint()
+    outdir='along_stats_map_plots'
+    # plot each along-stats
+    for this_stats in along_stats:
+        stat = 'reference'
+        if this_stats.signal_key == 'dark_frac':
+            # plot the ~80 #ile
+            stat = 80.0
+        plot_along_stats(this_stats, stat=stat, outdir=outdir)
+    if outdir is not None:
+        plt.show()
+    # plot the movie if commanded
+    if stretch_stack is not None:
+
+        # make sure that the wse and width along stats are also input
+        for k,this_stats in enumerate(along_stats):
+            if this_stats.signal_key=='wse':
+                wse_along_stats = this_stats
+            if this_stats.signal_key=='width':
+                width_along_stats = this_stats
+        plot_multitemporal(stretch_stack, wse_along_stats, width_along_stats)
+    #
 
 if __name__ == '__main__':
     main()
