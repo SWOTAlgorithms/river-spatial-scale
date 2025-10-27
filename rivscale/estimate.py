@@ -149,6 +149,9 @@ def get_med_profile(signal, dist_out, kernel_size=35):
     """
     med = np.nanmedian(signal, axis=1)
     msk = np.isfinite(med)
+    if np.sum(msk)==0:
+        # TODO: print warning?
+        return med # med is all nonfinite, but return anyways
     # interplate over holes (but don't extrapolate. e.g., nan-fill outside)
     #med_interp = np.interp(
     #    dist_out, dist_out[msk], med[msk], left=np.nan, right=np.nan)

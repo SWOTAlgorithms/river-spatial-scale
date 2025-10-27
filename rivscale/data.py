@@ -13,6 +13,7 @@ import rivscale.filter
 import rivscale.misc
 import rivscale.products.stretch_stack
 import xarray as xr
+import datetime
 
 try:
     import rivscale.ingest
@@ -49,9 +50,18 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
         df['wse_q'] = np.array(df['wse_sm_q']).copy()
         df['wse_q_b'] = np.array(df['wse_sm_q_b']).copy()
     # drop elements with no_data times
-    df = df[df['time_str']!='no_data']
-    df['time_str'] = pd.to_datetime(df['time_str'])
-    df['date'] = [ dt.date() for dt in df['time_str']]
+    #breakpoint()
+    if 'time_str' not in df.keys():
+        # map the time variable to datetime
+        df['time_str'] = rivscale.misc.swot_time_to_field_time(df['time'])
+        # drop dates that are too early
+        df['date'] = [ dt.date() for dt in df['time_str']]
+        min_date = datetime.date(2023,1,1)
+        df = df[df['date']>min_date]
+    else:
+        df = df[df['time_str']!='no_data']
+        df['time_str'] = pd.to_datetime(df['time_str'])
+        df['date'] = [ dt.date() for dt in df['time_str']]
     #
     # dont qual filter at this stage...only later
     # drop bad data
@@ -184,7 +194,8 @@ def get_swot_data(
         # filter out reaches we want to keep
         df = df[df['reach_id'].isin(stretch_reaches)]
     elif cfg[section]['method'] == 'reach':
-        # go through all the RiverSP data for the desired granules/orbit
+        # go through all the reach-centric RiverSP dataframes (csv format)
+        #
         orbit = cfg['main']['orbit']
         pass_cont = cfg['main']['granule']
         df = None
@@ -218,6 +229,43 @@ def get_swot_data(
                     df = pd.concat(
                         [df,pd.read_csv(fle, keep_default_na=False)],
                         ignore_index=True)
+    elif cfg[section]['method'] == 'reach_nc':
+        # go through all the reach-centric RiverSP dataframes (nc format)
+        #
+        orbit = cfg['main']['orbit']
+        pass_cont = cfg['main']['granule']
+        df = None
+        for reach in stretch_reaches:#df_stretches.keys():
+            if 'both' in orbit:
+                orbits = ['cal', 'science']
+            else:
+                orbits = [orbit,]
+            r_str = '{}'.format(reach)
+            cont_num = r_str[0]
+            sub_basin_num = r_str[1:6]
+            fles = []
+            for this_orbit in orbits:
+                fle_str = os.path.join(cfg['main']['data_path'],
+                    '{}/{}/{}/{}_{}.nc'.format(
+                        this_orbit,
+                        cont_num,
+                        sub_basin_num,
+                        reach,
+                        kind.lower()))
+                this_fles = glob.glob(fle_str)
+                fles = fles + this_fles
+            #breakpoint()
+            for fle in fles:
+                print('  ',fle)
+                # TODO: should catch if file doesnt exist or cant read it?
+                if df is None:
+                    ds = xr.open_dataset(fle, decode_cf=False)
+                    df = ds.to_dataframe()
+                    #breakpoint()
+                else:
+                    ds = xr.open_dataset(fle, decode_cf=False)
+                    this_df = ds.to_dataframe()
+                    df = pd.concat([df,this_df],ignore_index=True)
     #
     df = manage_fields(
         df,
