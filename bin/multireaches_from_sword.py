@@ -10,6 +10,7 @@ Author(s): Brent Williams
 import numpy as np
 import pandas as pd
 import argparse
+import os
 import os.path
 import rivscale.io
 EXAMPLE=''
@@ -23,8 +24,12 @@ def main():
     parser.add_argument('outdir', help='output directory')
     args = parser.parse_args()
     print(args.sword_file)
+    # create outdir if it doesnt exist
+    if not os.path.exists(args.outdir):
+        os.makedirs(args.outdir)
     # read SWORD input granule
-    sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(args.sword_file)
+    sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(
+        args.sword_file)
     # make multireach stretch for each reach
     # skip (disconnected lake, dam, unrealizable topology) reaches
     skip_types = [3, 4, 5]
@@ -59,12 +64,13 @@ def main():
     outname = tail.replace('.nc', '_multireach.csv')
     outfile = os.path.join(args.outdir, outname)
     stretch_df.to_csv(outfile, index=False)
-    # write out the SWORD dataframe with selecetd up and downstream for each reach
+    # write out the SWORD dataframe with selecetd up and
+    #     downstream for each reach
     outname = tail.replace('.nc', '.csv')
     outfile2 = os.path.join(args.outdir, outname)
     # TODO: make dirs if not exist
     sword_df.to_csv(outfile2, index=False)
-    breakpoint()
+    #breakpoint()
 
 if __name__ == '__main__':
     main()
