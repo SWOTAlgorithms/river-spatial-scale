@@ -235,6 +235,8 @@ def query_main(
     #client
 
     # Assign URLs to Variables for the APIs we use, FTS and Hydrocron
+    #FTS_URL = "https://fts.podaac.earthdata.nasa.gov/v2"
+    #HYDROCRON_URL = "https://soto.podaac.earthdatacloud.nasa.gov/hydrocron/v2/timeseries" 
     FTS_URL = "https://fts.podaac.earthdata.nasa.gov/v1"
     HYDROCRON_URL = "https://soto.podaac.earthdatacloud.nasa.gov/hydrocron/v1/timeseries"
 
