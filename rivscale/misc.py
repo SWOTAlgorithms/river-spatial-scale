@@ -134,9 +134,11 @@ def field_time_to_swot_time(utc_times):
         if isinstance(this_time, str):
             time_diff = (datetime.datetime.strptime(
                 this_time,'%Y-%m-%d %H:%M:%S') -
-                         datetime.datetime(2000, 1, 1))
+                         datetime.datetime(2000, 1, 1,
+                             tzinfo=datetime.timezone.utc))
         else:
-            time_diff = (pd.to_datetime(this_time) - datetime.datetime(2000, 1, 1)) 
+            time_diff = (pd.to_datetime(this_time) - datetime.datetime(
+                2000, 1, 1,tzinfo=datetime.timezone.utc)) 
         time_sec.append(time_diff.total_seconds())
     return time_sec
 

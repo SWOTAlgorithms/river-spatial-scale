@@ -28,6 +28,7 @@ import os.path
 import numpy as np
 
 import rivscale.products.stretch_average
+from scipy.stats import spearmanr
 
 class HeightWidthModel(Product):
     ATTRIBUTES = odict([
@@ -42,8 +43,10 @@ class HeightWidthModel(Product):
             """)}],
         ['width_err',{'dtype':'float', 'value':-1}],
         ['wse_err',{'dtype':'float', 'value':-1}],
+        ['tot_err',{'dtype':'float', 'value':-1}],
         ['count',{'dtype':'int', 'value':0}],
-
+        ['spearman_r',{'dtype':'float', 'value':-2}],
+        ['spearman_p_value',{'dtype':'float', 'value':-1}],
         ])
     DIMENSIONS = odict([['num_hw_params',0],])
     VARIABLES = odict([
@@ -63,7 +66,10 @@ class HeightWidthModel(Product):
             width_along_stats=None,
             wse_anom=True,
             width_anom=True,
-            stretch_name=None):
+            stretch_name=None,
+            ptile_list = [5, 25, 32, 50, 68, 75, 95],
+            snapit=True
+            ):#TODO: pass in uncertainty as well for snapping
         if 'sigma_n' not in cfg.keys():
             cfg['sigma_n'] = 50
         sigma_n = cfg['sigma_n']
@@ -79,9 +85,10 @@ class HeightWidthModel(Product):
                 height_width.stretch_name = width_stretch_avg.stretch_name
             else:
                 height_width.stretch_name = 'arrays'
-        if width_along_stats is None:
-            ptile_list = [5, 25, 32, 50, 68, 75, 95]
-        else:
+        #if width_along_stats is None:
+            #ptile_list = [5, 25, 32, 50, 68, 75, 95]
+        #else:
+        if width_along_stats is not None:
             ptile_list = width_along_stats.percentile_list
         # get percntiles of measured reach data
         #Pm = np.nanpercentile(width_stretch_avg.mean, ptile_list)
@@ -169,7 +176,31 @@ class HeightWidthModel(Product):
         height_width.width_err = np.sqrt(np.nanmean(dw**2))
         height_width.wse_err = np.sqrt(np.nanmean(dh**2))
         height_width.count = np.sum(good_msk)
-        # TODO: bias adjust so mean(dw)=0, mean(dh)=0, and RMSE=STD etc
+        #
+        msk = np.logical_and(np.isfinite(wse), np.isfinite(width))
+        if np.sum(msk)>0:
+            sp, p_val = spearmanr(wse[msk], width[msk])
+            height_width.spearman_r = sp
+            height_width.spearman_p_value = p_val
+        # TODO: compute average bank slope?
+        if snapit:
+            # TODO: find distance to "closest" point
+            sig_wse = height_width.wse_err
+            sig_width = height_width.width_err
+            wse_est, width_est, err = height_width.snap_to_curve(
+                wse, width, sig_wse, sig_width, wse)
+            height_width.tot_err = err
+            # reestimate the wse_err and width_err using the closest point
+            dw = width_est - width
+            dh = wse_est - wse
+            # use RMSE from fit curve for errors
+            # handle length 1 cases
+            if len(dw)==1:
+                dw = np.array([dw,])
+            if len(dh)==1:
+                dh = np.array([dh,])
+            height_width.width_err = np.sqrt(np.nanmean(dw**2))
+            height_width.wse_err = np.sqrt(np.nanmean(dh**2))
         #breakpoint()
         return height_width
 
@@ -207,6 +238,30 @@ class HeightWidthModel(Product):
         y_minus = self.sample(x - delta, x_key, kind)
         return (y_plus -y_minus) / (2 * delta)
 
+    def snap_to_curve(self, wse, width, sig_wse, sig_width, wse0):
+        """
+        find 'closest' point on the curve to each point with given covariance
+        (assuming each point is indep)
+        
+        Basically just do a non-linear max-liklihood estimate of the
+        observations given that the 'true' value lies on the curve
+        and the height/width measurements are uncorrelated.
+        """
+        from scipy.optimize import minimize
+        def ml_error(wse_t,
+                wse_m, width_m, sig_wse, sig_width, height_width): 
+            width_t = height_width.sample(wse_t, x_key='wse')
+            return np.sum((wse_m - wse_t)**2 / sig_wse**2 + (
+                width_m - width_t)**2 / sig_width**2)
+        #
+        res = minimize(ml_error, wse0, method='nelder-mead',
+                args=(wse, width, sig_wse, sig_width, self),
+                options={'xatol': 1e-8, 'disp': True})
+        #
+        wse_est = res.x
+        width_est = self.sample(wse_est, x_key='wse')
+        err = ml_error(wse_est, wse, width, sig_wse, sig_width, self)
+        return wse_est, width_est, np.sqrt(err)
 
     def plot(
             self,

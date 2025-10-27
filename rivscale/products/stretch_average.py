@@ -118,7 +118,8 @@ class StretchAverageStats(Product):
             this_df = df[times_id==time_i]
             # TODO handle window over desired reach
             dist_out.append(np.array(this_df['dist_out']))
-            cross_track.append(np.array(this_df['xtrk_dist'])/1000.0) # (km)
+            cross_track.append(
+                    np.array(this_df['xtrk_dist']).astype(float)/1000.0) # (km)
             mean.append(np.array(this_df[signal_key]))
             other.append(np.array(this_df[other_key]))
             std.append(np.array(this_df[signal_key+'_u']))
