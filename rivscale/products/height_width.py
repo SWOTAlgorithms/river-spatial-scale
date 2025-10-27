@@ -15,9 +15,8 @@ from rivscale.products.constants import (
         DIMENSIONS_ALL, DIMENSIONS_SAVG, DIMENSIONS_ALONG, DIMENSIONS_2D,
         DIMENSIONS_PCNT, DIMENSIONS_PCNT2, DIMENSIONS_COV, DIMENSIONS_POSTCOV)
 
-from swot.product import Product, ProductTesterMixIn
+from SWOTWater.products.product import Product, ProductTesterMixIn
 from SWOTWater.products.constants import FILL_VALUES
-from swot.lr.base_classes import AttrFillerMixIn
 
 import rivscale.estimate
 import rivscale.plot
