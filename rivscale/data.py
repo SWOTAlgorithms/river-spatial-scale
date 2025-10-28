@@ -120,7 +120,7 @@ def get_swot_data(
     if 'dark_thresh' not in cfg[section].keys():
         cfg[section]['dark_thresh'] = '1.0'
     if cfg[section]['method'] == 'csv':
-        df = pd.read_csv(cfg['main']['data_path'])
+        df = pd.read_csv(cfg['main']['data_path'], keep_default_na=False)
         # TODO: filter out orbit and granules we want
     if cfg[section]['method'] == 'ingest':
         ingest_csv_file = cfg['main']['ingest_csv_file']
