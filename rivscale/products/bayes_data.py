@@ -55,6 +55,7 @@ class BayesData(Product):
         ['p_lat', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['p_lon', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['time_id', odict([['dimensions', odict([['num_times', 0]])]])],
+        ['granule_id', odict([['dimensions', odict([['num_times', 0]])]])],
         ['signal', odict([['dimensions', DIMENSIONS_2D]])],
         ['signal_u', odict([['dimensions', DIMENSIONS_2D]])],
         ['signal_post_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
@@ -137,6 +138,7 @@ class BayesData(Product):
         bayes.dist_out = stretch_stack.along_dist
         bayes.dist_out = stretch_stack.node_length
         bayes.time_id = stretch_stack.time_id
+        bayes.granule_id = stretch_stack.granule_id
         bayes.signal_key = signal_key
         bayes.signal_mean = stats.reference.copy()
         time_key = 'time_id'
@@ -188,6 +190,7 @@ class BayesData(Product):
             stretch_stack.node_length,
             stretch_stack.node_length])
         bayes.time_id = stretch_stack.time_id
+        bayes.granule_id = stretch_stack.granule_id
         # get the mean and cov of the stacked wse and width
         #N = len(wse_along_stats.reference)
         # create the stacked mean

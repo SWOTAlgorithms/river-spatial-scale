@@ -270,8 +270,12 @@ class HeightWidthModel(Product):
             outdir=None,
             show=False,
             title_tag=None,
-            cfg=None):
-        plt.figure()
+            cfg=None,
+            newfig=True,
+            line_color='k',
+            label_prefix=''):
+        if newfig:
+            plt.figure()
         if (wse_data is not None) and (
                 width_data is not None):
             label = None
@@ -303,7 +307,8 @@ class HeightWidthModel(Product):
                     wse0 = d_wse[pid==p].flatten()
                     width0 = d_width[pid==p].flatten()
                     # also compute spearman
-                    res = scipy.stats.spearmanr(width0, wse0)
+                    msk0 = np.logical_and(np.isfinite(width0), np.isfinite(wse0))
+                    res = scipy.stats.spearmanr(width0[msk0], wse0[msk0])
                     # now plot do a height/width model for each pass
                     if cfg is None:
                         cfg = {'sigma_n':50.0, 'use_pekel':False}
@@ -321,8 +326,11 @@ class HeightWidthModel(Product):
                         '-',color=color, linewidth=2)
         msk = np.logical_and(np.isfinite(d_width), np.isfinite(d_wse))
         res = scipy.stats.spearmanr(d_width[msk], d_wse[msk])
-        this_label = 'model fit, tot $\gamma_s$={:1.2f}'.format(res.correlation)
-        plt.plot(self.width_coords, self.wse_coords,'-k', linewidth=2,
+        this_label = '{}model fit, tot $\gamma_s$={:1.2f}'.format(
+            label_prefix, res.correlation)
+        if line_color is None: 
+            line_color = plt.gca().lines[-1].get_color()
+        plt.plot(self.width_coords, self.wse_coords,'-',color=line_color, linewidth=2,
             label=this_label)
         plt.xlabel('$\Delta$ width (m)')
         plt.ylabel('$\Delta$ wse (m)')
