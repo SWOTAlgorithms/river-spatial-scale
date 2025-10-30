@@ -76,9 +76,10 @@ class StretchStack(Product):
             outdir=None,
             show=False,
             title_tag=None,
-            bits_to_plot=[]
+            bits_to_plot=[],
             #bits_to_plot=[0,1,2,3,4,7,9,10,11,18,19,22]
             #bits_to_plot=[0,1,2,3,4,7,9,10,11,13,14,18,19,22,23,24,25,26,27,28]
+            extra_vars=False
             ):
         if title_tag is None:
             title_tag = 'stretch stack data'
@@ -157,7 +158,7 @@ class StretchStack(Product):
                 y_anom=False,
                 outdir=outdir,
                 title_tag=title_tag)
-        if np.nansum(self['dark_frac'])>0:
+        if np.nansum(self['dark_frac'])>0 and extra_vars:
             # also plot the dark frac 1D and 2D
             """
             rivscale.plot.plot_stretch_stack(
@@ -176,7 +177,7 @@ class StretchStack(Product):
                 y_anom=False,
                 outdir=outdir,
                 title_tag=title_tag)
-        if np.nansum(np.isfinite(self['sig0 (dB)']))>0:
+        if np.nansum(np.isfinite(self['sig0 (dB)']))>0 and extra_vars:
             # also plot the sig0 2D
             rivscale.plot.plot_2D_stretch_stack(
                 self,
@@ -185,7 +186,7 @@ class StretchStack(Product):
                 y_anom=False,
                 outdir=outdir,
                 title_tag=title_tag)
-        if np.nansum(np.isfinite(self['flow_angle']))>0:
+        if np.nansum(np.isfinite(self['flow_angle']))>0 and extra_vars:
             # also plot the flow_dir 2D
             rivscale.plot.plot_2D_stretch_stack(
                 self,
@@ -194,7 +195,7 @@ class StretchStack(Product):
                 y_anom=False,
                 outdir=outdir,
                 title_tag=title_tag)
-        if np.nansum(np.isfinite(self['layovr_val']))>0:
+        if np.nansum(np.isfinite(self['layovr_val']))>0 and extra_vars:
             # also plot the flow_dir 2D
             rivscale.plot.plot_2D_stretch_stack(
                 self,
@@ -203,7 +204,7 @@ class StretchStack(Product):
                 y_anom=False,
                 outdir=outdir,
                 title_tag=title_tag)
-        if np.nansum(np.isfinite(self['n_good_pix']))>0:
+        if np.nansum(np.isfinite(self['n_good_pix']))>0 and extra_vars:
             # also plot the flow_dir 2D
             rivscale.plot.plot_2D_stretch_stack(
                 self,
@@ -429,3 +430,46 @@ class StretchStack(Product):
                 stack[key] = self[key]
         return stack
 
+    def split_per_pass(self):
+        gid = self.granule_id.copy()
+        pid = np.array([g.split('_')[1] for g in gid])
+        upid = np.unique(pid)
+        #
+        stacks = []
+        for p in upid:
+            this_stack = StretchStack()
+            # copy the attribute
+            this_stack.stretch_name = self.stretch_name
+            # copy the variables
+            for key in self.variables.keys():
+                dims = self.VARIABLES[key]['dimensions']
+                if 'num_times' in dims.keys():
+                    if len(dims)>1:
+                        this_stack[key] = self[key][:,pid==p]
+                    else:
+                        this_stack[key] = self[key][pid==p]
+                else:
+                    this_stack[key] = self[key]
+            stacks.append(this_stack)
+        return stacks
+
+    def plot_per_pass(self, y_key='wse', outdir=None):
+        title_tag = 'all passes'
+        rivscale.plot.plot_2D_stretch_stack(
+            self,
+            y_key=y_key,
+            y_reference=None,
+            y_anom=False,
+            outdir=outdir,
+            title_tag=title_tag)
+        stacks = self.split_per_pass()
+        for stack in stacks:
+            pid = stack.granule_id[0].split('_')[1]
+            title_tag = f' pass {pid}'
+            rivscale.plot.plot_2D_stretch_stack(
+                stack,
+                y_key=y_key,
+                y_reference=None,
+                y_anom=False,
+                outdir=outdir,
+                title_tag=title_tag)
