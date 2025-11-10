@@ -65,6 +65,7 @@ class StretchStack(Product):
         ['flow_angle', odict([['dimensions', DIMENSIONS_2D]])],
         ['layovr_val', odict([['dimensions', DIMENSIONS_2D]])],
         ['n_good_pix', odict([['dimensions', DIMENSIONS_2D]])],
+        ['width_correction', odict([['dimensions', DIMENSIONS_2D]])],
     ])
     # TODO: should we also keep ice flag, etc...?
 
@@ -473,3 +474,80 @@ class StretchStack(Product):
                 y_anom=False,
                 outdir=outdir,
                 title_tag=title_tag)
+
+    def bundle_adjust_per_pass_widths(self, cfg=None):
+        """
+        This method applies a width correction to each node in the stretch
+        that is computed from the 'refrence' width (from width_along_stats)
+        after splitting stretch_stack by pass
+        
+        Note that this does not actually modify the current object but creates
+        and outputs a modified copy
+        
+        The optional input 'cfg' has config parameters suitable for calling
+        the filter_stretch_stack and along_stats routines.
+        """
+        if cfg is None:
+            cfg = {
+            'wse_dark_thresh' : 0.8,
+            'width_dark_thresh' :  0.3,
+            'wse_outlier_scale' : 5.0,
+            'width_outlier_scale' : 10,#2.0,
+            'width_smooth_size' : None,
+            'wse_ref_kernel_size' : 35,
+            'width_ref_kernel_size' : None,
+            'crop' : False
+            }
+        # first filter the stretch_stack for quality
+        stack, _ = rivscale.filter.filter_stretch_stack(
+            cfg,
+            self.copy(),
+            wse_stats=None,
+            width_stats=None,
+            plot=False)
+        # now split int separate passes
+        stacks = stack.split_per_pass()
+        # now estimate the correction for each pass for all nodes 
+        wgt = []
+        w_ref = []
+        h_ref = []
+        pid = []
+        for this_stack in stacks:# loop over the pass-split stacks
+            # run alongstats
+            t_wse_stats, t_width_stats, t_dark_stats = \
+                rivscale.estimate.process_along_stats(
+                    cfg, this_stack)
+            #
+            ct = np.nanmedian(np.abs(this_stack.cross_track), axis=-1)
+            # compute a weighting to estimate the bulk width adjustment
+            # so that it favors the middle of the swath
+            w = np.exp(-((ct - 45)/10)**2)
+            wgt.append(w)
+            w_ref.append(t_width_stats.reference)
+            h_ref.append(t_wse_stats.reference)
+            # also append the pass_id
+            gid = this_stack.granule_id.copy()
+            pid0 = np.array([g.split('_')[1] for g in gid])
+            upid = np.unique(pid0)
+            if len(upid)>1:
+                print('Warning: multiple pass ids after spliting by pass???')
+            pid.append(upid[0])
+        # estimate the bulk/central width offset
+        wgt = np.array(wgt)
+        w_bulk = np.squeeze(
+            np.nansum(wgt * np.array(w_ref), axis=0) / np.nansum(wgt, axis=0))
+        # apply the buld offset and the correction for each pass
+        w_corr = np.broadcast_to(w_bulk, np.shape(w_ref)) - w_ref
+        # now expand correction to full stack
+        gid = self.granule_id.copy()
+        pid0 = np.array([g.split('_')[1] for g in gid])
+        width_correction = np.zeros_like(self.width)
+        for k,p in enumerate(pid): # loop over split-stack pid and populate 
+            width_correction[:,pid0==p] = np.broadcast_to(
+                w_corr[k,:], np.shape(width_correction[:,pid0==p].T)).T
+        # now create a copy of the stretch_stack and adjust the width
+        out_stack = self.copy()
+        out_stack.width_correction = width_correction
+        out_stack.width = out_stack.width + width_correction
+        return out_stack
+
