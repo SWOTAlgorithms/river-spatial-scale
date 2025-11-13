@@ -29,7 +29,10 @@ import numpy as np
 import rivscale.products.stretch_average
 from scipy.stats import spearmanr
 
-from scipy.optimize import minimize
+#from scipy.optimize import minimize
+
+from matplotlib.colors import LightSource
+from matplotlib import colormaps as cm
 
 class HeightWidthModelArray(Product):
     """
@@ -294,7 +297,7 @@ class HeightWidthModelArray(Product):
         observations given that the 'true' value lies on the curve
         and the height/width measurements are uncorrelated.
         """
-        #from scipy.optimize import minimize
+        from scipy.optimize import minimize
         def ml_error(wse_t,
                 wse_m, width_m, sig_wse, sig_width, height_width, row):
             width_t = height_width.sample_row(wse_t, row, x_key='wse')
@@ -364,14 +367,18 @@ class HeightWidthModelArray(Product):
         fig.colorbar(scat, ax=ax, label='percentile')
         if surface:
             width_bins = np.linspace(
-                np.nanpercentile(self.width_coords,5),
-                np.nanpercentile(self.width_coords,95),
+                np.nanpercentile(self.width_coords,1),
+                np.nanpercentile(self.width_coords,99),
                 100)
             # TODO: enable interpolating in along_dist1d (e.g., uneven node sampling)
             grid_y, grid_x = np.meshgrid(width_bins, along_dist1d)
             #breakpoint()
             grid_z = self.sample(grid_y,x_key='width')
-            ax.plot_surface(grid_x, grid_y, grid_z, alpha=0.5)
+            ls = LightSource(270, 45)
+            
+            rgb = ls.shade(grid_z, cmap=cm['gray'], vert_exag=0.1, blend_mode='soft')
+            ax.plot_surface(grid_x, grid_y, grid_z, alpha=0.3,
+                facecolors=rgb, shade=False,linewidth=0.1)
         ax.set_xlabel(xlabel)
         ax.set_ylabel('width (m)')
         ax.set_zlabel('wse (m)')
