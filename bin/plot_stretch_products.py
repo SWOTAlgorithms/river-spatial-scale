@@ -25,6 +25,7 @@ import rivscale.products.along_stretch
 import rivscale.products.stretch_average
 import rivscale.products.bayes_data
 import rivscale.products.height_width
+import rivscale.products.height_width_array
 import rivscale.misc
 
 EXAMPLE = ''
@@ -66,13 +67,18 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
                 dic['width_reach_average'] = \
                     rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
         if 'height_width' in fle:
-            if 'reach_average' in fle:
-                pass
-                #dic['height_width_reach_average'] = \
-                #    rivscale.products.HeightWidthModel.from_ncfile(f)
+            if 'array' in fle:
+                # plot the height_width_array object
+                dic['height_width_array'] = \
+                        rivscale.products.height_width_array.HeightWidthModelArray.from_ncfile(f)
             else:
-                dic['height_width'] = \
-                    rivscale.products.height_width.HeightWidthModel.from_ncfile(f)
+                if 'reach_average' in fle:
+                    pass
+                    #dic['height_width_reach_average'] = \
+                    #    rivscale.products.HeightWidthModel.from_ncfile(f)
+                else:
+                    dic['height_width'] = \
+                        rivscale.products.height_width.HeightWidthModel.from_ncfile(f)
         if 'bayes' in fle:
             dic['bayes'] = \
                     rivscale.products.bayes_data.BayesData.from_ncfile(f)
@@ -96,7 +102,12 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
         #breakpoint()
     for key in dic.keys():
         # plot each individual plot
-        if key=='height_width':
+        if key=='height_width_array':
+            # plot the 3d plot if we are interactove else don't
+            #breakpoint()
+            if outdir is None:
+                dic[key].plot()
+        elif key=='height_width':
             something_plotted=False
             # plot the stretch averages if they exist
             if ('wse_stretch_average' in dic.keys()) and (
@@ -358,6 +369,8 @@ def main():
             outdir, '{}_width_stretch_average.nc'.format(key))
         file_height_width = os.path.join(
             outdir, '{}_height_width.nc'.format(key))
+        file_height_width_array = os.path.join(
+            outdir, '{}_height_width_array.nc'.format(key))
         file_bayes = os.path.join(
             outdir, '{}_bayes.nc'.format(key))
         files = []
@@ -383,6 +396,8 @@ def main():
             files.append(file_width_avg)
         if os.path.exists(file_height_width):
             files.append(file_height_width)
+        if os.path.exists(file_height_width_array):
+            files.append(file_height_width_array)
         if os.path.exists(file_bayes):
             files.append(file_bayes)
         #breakpoint()

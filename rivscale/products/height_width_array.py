@@ -356,11 +356,12 @@ class HeightWidthModelArray(Product):
         along_dist0 = np.broadcast_to(
             along_dist1d, np.shape(self.width_coords.T)).T
         ptile = np.broadcast_to(self.ptile_list, np.shape(self.width_coords))
-        ax.scatter(
+        scat = ax.scatter(
             along_dist0,
             self.width_coords,
             self.wse_coords,
             c=ptile)
+        fig.colorbar(scat, ax=ax, label='percentile')
         if surface:
             width_bins = np.linspace(
                 np.nanpercentile(self.width_coords,5),
