@@ -91,10 +91,10 @@ The results/products can be plotted using:
 
 If the -s option is given with a particular stretch name, the interactive plots are displayed for the given stretch, otherwise the plots are written to files in the corresponding subdirs.
 
-## Processing the Stretch Stack to Estimate Height/Width relationships on a per-node basis
+## Estimating Height/Width Relationships on a Per-node Basis
 A separate workflow has been created to estimate the height/width relationships for every node in a stretch/reach.  This approach optionally applies a per-pass width correction up front, then does quality and outlier filtering after which height/width relationships are estimated using percentiles for height and width for each node using only wse and width node estimates where both are valid and pass the quality filters.  There is also an option to estimate the percentiles over a multinode window for each node, effectively smoothing/relgularizing in the along river dimension to improve the statistics/estimates at the expense of spatial resolution.  There is a config called height_width_array.cfg in the config dir that can be used to set the various parameters of each step.
 
-The now workflow can be called from the command-line like this:
+Instead of calling process_stretch_stack.py, this workflow can be called (after creating the stretch_stack) from the command-line like this:
 
 `$ make_height_width_array.py <height_width_array.cfg>`
 
