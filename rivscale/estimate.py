@@ -68,6 +68,111 @@ def process_along_stats(cfg, stretch_stack_in):
         width_stats = width_stats.crop_to_reach()
     return wse_stats, width_stats, dark_stats
 
+def process_width_correction(cfg, stretch_stack_in):
+    """
+    This function processes the original stack of multitemporal 
+    SWOT data node-level measurements over a multi-reach streach
+    to estimate the along-river statistics for WSE and width
+    as well as the height/width model fit for each node
+    """
+    # first handle optional config params
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_ref_kernel_size' not in cfg.keys():
+        cfg['wse_ref_kernel_size'] = '35'
+    if 'width_ref_kernel_size' not in cfg.keys():
+        cfg['width_ref_kernel_size'] = '11'
+    stretch_stack = stretch_stack_in.copy()
+    #breakpoint()
+    if cfg['method']=='bundle_adjust':
+        # TODO: enable potentially different config for bundle adjustment
+        stretch_stack = bundle_adjust_per_pass_widths(
+            apply_filter=False, cfg=cfg)
+    return stretch_stack
+
+def process_stack_filter(cfg, stretch_stack_in):
+    """
+    This function processes the original stack of multitemporal 
+    SWOT data node-level measurements over a multi-reach streach
+    to estimate the along-river statistics for WSE and width
+    as well as the height/width model fit for each node
+    """
+    # first handle optional config params
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_ref_kernel_size' not in cfg.keys():
+        cfg['wse_ref_kernel_size'] = '35'
+    if 'width_ref_kernel_size' not in cfg.keys():
+        cfg['width_ref_kernel_size'] = '11'
+    stretch_stack = stretch_stack_in.copy()
+    stretch_stack, _ = rivscale.filter.filter_stretch_stack(
+        cfg,
+        stretch_stack,
+        wse_stats=None,
+        width_stats=None,
+        plot=False)
+    if np.shape(stretch_stack.width)[1]==0:
+        print('  No SWOT data left after multitemporal filtering')
+        return None
+    return stretch_stack
+
+def process_height_width_array(cfg, stretch_stack_in):
+    """
+    This function processes the original stack of multitemporal 
+    SWOT data node-level measurements over a multi-reach streach
+    to estimate the along-river statistics for WSE and width
+    as well as the height/width model fit for each node
+    """
+    # first handle optional config params
+    
+    #if 'width_smooth_size' not in cfg.keys():
+    #    cfg['width_smooth_size'] = 'None'
+    if 'wse_ref_kernel_size' not in cfg.keys():
+        cfg['wse_ref_kernel_size'] = '35'
+    #if 'width_ref_kernel_size' not in cfg.keys():
+    #    cfg['width_ref_kernel_size'] = '11'
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = 'False'
+    if 'snapit' not in cfg.keys():
+        cfg['snapit'] = 'False'
+    if 'neighbor_win_len' not in cfg.keys():
+        cfg['neighbor_win_len'] = '0'
+    stretch_stack = stretch_stack_in.copy()
+    """
+    # create the dark stats before any filtering
+    dark_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
+        stretch_stack, signal_key='dark_frac', kernel_size=None)
+    """
+    # first filter the data (qual and outliers)
+    #stretch_stack, _ = rivscale.filter.filter_stretch_stack(
+    #    cfg,
+    #    stretch_stack,
+    #    wse_stats=None,
+    #    width_stats=None,
+    #    plot=False)
+    if np.shape(stretch_stack.width)[1]==0:
+        print('  No SWOT data left after multitemporal filtering')
+        return None, None, None
+    # compute multitemporal statistics
+    wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
+        stretch_stack, signal_key='wse', kernel_size=cfg['wse_ref_kernel_size'])
+    #width_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
+    #    stretch_stack, signal_key='width', kernel_size=cfg['width_ref_kernel_size'])
+    # now do the height_width_array
+    height_width_array = rivscale.products.height_width_array.HeightWidthModelArray.from_stretch_stack(
+        stretch_stack,
+        wse_reference=wse_stats.reference,
+        snapit=cfg['snapit'],
+        neighbor_win_len=cfg['neighbor_win_len']) 
+    # now optionally crop
+    if cfg['crop']:
+        # crop to reach
+        wse_stats = wse_stats.crop_to_reach()
+        #width_stats = width_stats.crop_to_reach()
+        #stretch_stack = stretch_stack.crop_to_reach()
+        height_width_array = height_width_array.crop_to_reach()
+    return wse_stats, height_width_array
+
 def process_stretch_average(
         cfg,
         stretch_stack_in,

@@ -475,7 +475,7 @@ class StretchStack(Product):
                 outdir=outdir,
                 title_tag=title_tag)
 
-    def bundle_adjust_per_pass_widths(self, cfg=None):
+    def bundle_adjust_per_pass_widths(self, apply_filter=True, cfg=None):
         """
         This method applies a width correction to each node in the stretch
         that is computed from the 'refrence' width (from width_along_stats)
@@ -499,13 +499,14 @@ class StretchStack(Product):
             'crop' : False
             }
         # first filter the stretch_stack for quality
-        stack, _ = rivscale.filter.filter_stretch_stack(
-            cfg,
-            self.copy(),
-            wse_stats=None,
-            width_stats=None,
-            plot=False)
-        # now split int separate passes
+        if apply_filter:
+            stack, _ = rivscale.filter.filter_stretch_stack(
+                cfg,
+                self.copy(),
+                wse_stats=None,
+                width_stats=None,
+                plot=False)
+        # now split into separate passes
         stacks = stack.split_per_pass()
         # now estimate the correction for each pass for all nodes 
         wgt = []
