@@ -154,6 +154,7 @@ class HeightWidthModelArray(Product):
             else:
                 # just use the same wse as the center node
                 wse = np.hstack((wse0, wse, wse0))
+        #breakpoint()
         # check that wse and width are all valid over the same places
         good_msk = np.logical_and(np.isfinite(wse), np.isfinite(width))
         bad_msk = np.logical_or(~np.isfinite(wse), ~np.isfinite(width))
@@ -197,7 +198,11 @@ class HeightWidthModelArray(Product):
                 sp, p_val = spearmanr(this_wse[msk], this_width[msk])
                 sp_r.append(sp)
                 sp_p.append(p_val)
+            else:
+                sp_r.append(np.nan)
+                sp_p.append(np.nan)
             #k = k + 1
+        #breakpoint()
         height_width.spearman_r = np.array(sp_r)
         height_width.spearman_p_value = np.array(sp_p)
         # TODO: compute average bank slope?

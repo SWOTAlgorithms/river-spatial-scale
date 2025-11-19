@@ -77,7 +77,7 @@ def empty_feature_dic(feature, kind='node_ids'):
             "crid":'PGC0',
             "pass_id": 0,
             "cycle_id": 0,
-            "continent_id":'NA',
+            "continent_id": 'NA',
             "node_q": 4,
             "node_q_b": 3,
             "xovr_cal_q": 20,
@@ -131,7 +131,7 @@ def empty_feature_dic(feature, kind='node_ids'):
             "crid":'PGC0',
             "pass_id": 0,
             "cycle_id": 0,
-            "continent_id":'NA',
+            "continent_id": 'NA',
             "reach_q": 4,
             "reach_q_b": 3,
             "xovr_cal_q": 20,
@@ -186,7 +186,7 @@ def empty_feature_dic(feature, kind='node_ids'):
 @dask.delayed
 def query_hydrocron(
         query_url, feature_id, start_time, end_time, fields, empty_df,
-        kind='node_ids'):
+        kind='node_ids', collection_name='SWOT_L2_HR_RiverSP_D'):
     """Query Hydrocron for reach-level time series data.
 
     Parameters
@@ -211,12 +211,13 @@ def query_hydrocron(
         "output": "csv",
         "start_time": start_time,
         "end_time": end_time,
-        "fields": fields
+        "fields": fields,
+        "collection_name": collection_name
     }
     results = requests.get(query_url, params=params)
     if "results" in results.json().keys():
         results_csv = results.json()["results"]["csv"]
-        df = pd.read_csv(StringIO(results_csv))
+        df = pd.read_csv(StringIO(results_csv), keep_default_na=False)
     else:
         df = empty_df
 
@@ -227,7 +228,9 @@ def query_main(
         BASIN_IDENTIFIER,
         start_time = "2023-07-28T00:00:00Z",
         end_time = "2024-07-24T00:00:00Z",
-        kind = 'node_ids'):
+        kind = 'node_ids',
+        collection_name='SWOT_L2_HR_RiverSP_D'
+        ):
     """
     kind = 'node_ids' or 'reach_ids'
     """
@@ -237,9 +240,9 @@ def query_main(
     # Assign URLs to Variables for the APIs we use, FTS and Hydrocron
     #FTS_URL = "https://fts.podaac.earthdata.nasa.gov/v2"
     #HYDROCRON_URL = "https://soto.podaac.earthdatacloud.nasa.gov/hydrocron/v2/timeseries" 
+    # get the Version C data (e.g., PGC0)
     FTS_URL = "https://fts.podaac.earthdata.nasa.gov/v1"
     HYDROCRON_URL = "https://soto.podaac.earthdatacloud.nasa.gov/hydrocron/v1/timeseries"
-
     # BASIN or RIVER to query FTS for
     #BASIN_IDENTIFIER = 74261#742610#732547#"732520" # to search via basin ID, find within SWORD database
     #RIVER_NAME = "Ocmulgee River" #"Rhine"# to search via river name
@@ -280,7 +283,16 @@ def query_main(
     for feature in feature_ids:
         # Create an empty dataframe for cases where no data is returned for a reach identifier
         empty_df = pd.DataFrame(empty_feature_dic(feature,kind=kind), index=[0])
-        results.append(query_hydrocron(HYDROCRON_URL, feature, start_time, end_time, fields, empty_df, kind=kind))
+        results.append(query_hydrocron(
+            HYDROCRON_URL,
+            feature,
+            start_time,
+            end_time,
+            fields,
+            empty_df,
+            kind=kind,
+            collection_name=collection_name
+            ))
     # Load DataFrame results into dask.dataframe
     ddf = dd.from_delayed(results)
     #ddf.head(n=20, npartitions=len(node_ids))
@@ -313,7 +325,10 @@ def basin_loop(
         end_time="2028-09-11T00:00:00Z",
         n_workers=4,
         out_csv_name=None,
-        kind='Node'):
+        kind='Node',
+        collection_name='SWOT_L2_HR_RiverSP_D'
+        #collection_name='SWOT_L2_HR_RiverSP_2.0' # Version C
+        ):
     this_kind = 'reach_ids'
     if 'node' in kind.lower():
         this_kind = 'node_ids'
@@ -325,11 +340,13 @@ def basin_loop(
     for i,basin_id in enumerate(basin_list):
         print("******* processing basin {} of {}".format(i,len(basin_list)))
         this_df = query_main(
-            basin_id, start_time=start_time, end_time=end_time, kind=this_kind)
+            basin_id, start_time=start_time, end_time=end_time, kind=this_kind,
+            collection_name=collection_name)
         while isinstance(this_df, int):
             # connection failed try again
             this_df = query_main(basin_id,
-                start_time=start_time, end_time=end_time, kind=this_kind)
+                start_time=start_time, end_time=end_time, kind=this_kind,
+                collection_name=collection_name)
         if df is None:
             df = this_df
         else:

@@ -238,8 +238,9 @@ def main():
             along_stats[k] = this_stats.crop_to_reach()
         if stretch_stack is not None:
             stretch_stack = stretch_stack.crop_to_reach()
-    #breakpoint()
-    outdir='along_stats_map_plots'
+    breakpoint()
+    outdir = None    
+    #outdir='along_stats_map_plots'
     # plot each along-stats
     for this_stats in along_stats:
         stat = 'reference'
@@ -247,7 +248,7 @@ def main():
             # plot the ~80 #ile
             stat = 80.0
         plot_along_stats(this_stats, stat=stat, outdir=outdir)
-    if outdir is not None:
+    if outdir is None:
         plt.show()
     # plot the movie if commanded
     if stretch_stack is not None:

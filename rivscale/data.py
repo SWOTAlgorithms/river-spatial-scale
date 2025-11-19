@@ -124,6 +124,11 @@ def get_swot_data(
         # TODO: filter out orbit and granules we want
     if cfg[section]['method'] == 'ingest':
         ingest_csv_file = cfg['main']['ingest_csv_file']
+        if 'collection_name' not in cfg[section].keys():
+            # Version C
+            #cfg[section]['collection_name'] = 'SWOT_L2_HR_RiverSP_2.0'
+            # Version D
+            cfg[section]['collection_name'] = 'SWOT_L2_HR_RiverSP_D'
         if (os.path.isfile(ingest_csv_file)) and (not force):
             # just read the already-made input file
             df = pd.read_csv(ingest_csv_file)
@@ -158,7 +163,8 @@ def get_swot_data(
             df = rivscale.ingest.basin_loop(
                 basin_ids,
                 out_csv_name=ingest_csv_file,
-                kind=kind)
+                kind=kind,
+                collection_name=cfg[section]['collection_name'])
         # filter out reaches we want to keep
         df = df[df['reach_id'].isin(stretch_reaches)]
     elif cfg[section]['method'] == 'offline':

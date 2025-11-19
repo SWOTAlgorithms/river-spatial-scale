@@ -38,7 +38,7 @@ def process_bayes_reconstruction(
     if 'width_prior_unc_alpha' not in cfg.keys():
         cfg['width_prior_unc_alpha'] = '50.0'
     if 'rho_wse_width' not in cfg.keys():
-        cfg['rho_wse_width'] = 50
+        cfg['rho_wse_width'] = '0'
     if 'crop' not in cfg.keys():
         cfg['crop'] = 'False'
 
@@ -49,11 +49,22 @@ def process_bayes_reconstruction(
         wse_stats,
         width_stats,
         plot=False)
+    this_wse_stats = wse_stats.copy()
+    this_width_stats = width_stats.copy()
+    # use config values instead of what is already in the along_stats if exist
+    if np.isscalar(cfg['wse_prior_unc_alpha']):
+        this_wse_stats.prior_unc_alpha = cfg['wse_prior_unc_alpha']
+    if np.isscalar(cfg['wse_char_length_tau']):
+        this_wse_stats.char_length_tau = cfg['wse_char_length_tau']
+    if np.isscalar(cfg['width_prior_unc_alpha']):
+        this_width_stats.prior_unc_alpha = cfg['width_prior_unc_alpha']
+    if np.isscalar(cfg['width_char_length_tau']):
+        this_width_stats.char_length_tau = cfg['width_char_length_tau']
     # now do the reconstruction
     joint_bayes = rivscale.products.bayes_data.BayesData.joint(
         stretch_stack,
-        wse_stats,
-        width_stats,
+        this_wse_stats,
+        this_width_stats,
         height_width,
         rho_wse_width=cfg['rho_wse_width'])
     return joint_bayes
