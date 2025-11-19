@@ -215,9 +215,27 @@ def query_hydrocron(
         "collection_name": collection_name
     }
     results = requests.get(query_url, params=params)
+    na_values = ["", 
+             "#N/A", 
+             "#N/A N/A", 
+             "#NA", 
+             "-1.#IND", 
+             "-1.#QNAN", 
+             "-NaN", 
+             "-nan", 
+             "1.#IND", 
+             "1.#QNAN", 
+             "<NA>", 
+             "N/A", 
+#              "NA", 
+             "NULL", 
+             "NaN", 
+             "n/a", 
+             "nan", 
+             "null"]
     if "results" in results.json().keys():
         results_csv = results.json()["results"]["csv"]
-        df = pd.read_csv(StringIO(results_csv), keep_default_na=False)
+        df = pd.read_csv(StringIO(results_csv), na_values=na_values, keep_default_na=False)
     else:
         df = empty_df
 
