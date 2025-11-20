@@ -276,6 +276,7 @@ class HeightWidthModel(Product):
             label_prefix=''):
         if newfig:
             plt.figure()
+        this_label = '{}model fit'.format(label_prefix)
         if (wse_data is not None) and (
                 width_data is not None):
             label = None
@@ -324,13 +325,14 @@ class HeightWidthModel(Product):
                     color = plt.gca().lines[-1].get_color()
                     plt.plot(this_hw.width_coords, this_hw.wse_coords,
                         '-',color=color, linewidth=2)
-        msk = np.logical_and(np.isfinite(d_width), np.isfinite(d_wse))
-        res = scipy.stats.spearmanr(d_width[msk], d_wse[msk])
-        this_label = '{}model fit, tot $\gamma_s$={:1.2f}'.format(
-            label_prefix, res.correlation)
+            msk = np.logical_and(np.isfinite(d_width), np.isfinite(d_wse))
+            res = scipy.stats.spearmanr(d_width[msk], d_wse[msk])
+            this_label = '{}model fit, tot $\gamma_s$={:1.2f}'.format(
+                label_prefix, res.correlation)
         if line_color is None: 
             line_color = plt.gca().lines[-1].get_color()
-        plt.plot(self.width_coords, self.wse_coords,'-',color=line_color, linewidth=2,
+        plt.plot(self.width_coords, self.wse_coords,'-',
+            color=line_color, linewidth=2,
             label=this_label)
         plt.xlabel('$\Delta$ width (m)')
         plt.ylabel('$\Delta$ wse (m)')

@@ -117,7 +117,8 @@ def get_swot_data(
         stretch_reaches,#sword_node_df,
         all_reaches,
         kind='Node',
-        force=False):
+        force=False,
+        sword_df=None):
     """
     kind can be 'Node' or 'Reach'
     """
@@ -175,13 +176,13 @@ def get_swot_data(
                    bid = int(id_str[0:10])
                 basin_ids.append(bid)
             basin_ids = np.unique(basin_ids)
-            #breakpoint()
             print("ingesting basins:", basin_ids)
             df = rivscale.ingest.basin_loop(
                 basin_ids,
                 out_csv_name=ingest_csv_file,
                 kind=kind,
-                collection_name=cfg[section]['collection_name'])
+                collection_name=cfg[section]['collection_name'],
+                sword_df=sword_df)
         # filter out reaches we want to keep
         df = df[df['reach_id'].isin(stretch_reaches)]
     elif cfg[section]['method'] == 'offline':

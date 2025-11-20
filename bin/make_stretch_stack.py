@@ -137,7 +137,8 @@ def main():
             stretch_reaches,#sword_node_df,
             all_reaches,
             kind='Node',
-            force=args.force)
+            force=args.force,
+            sword_df=sword_node_df)
         #breakpoint()
         if swot_node_df is None:
             # skip cases where we have no data

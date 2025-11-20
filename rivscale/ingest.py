@@ -29,6 +29,61 @@ from io import StringIO
 
 import os
 
+def get_feature_list(basin_id, kind='node_ids', sword_df=None):
+    feature_ids = []
+    if sword_df is not None:
+        # get the feature id list from SWORD
+        if 'reach' in kind:
+            # search SWORD reaches
+            #breakpoint()
+            str_id_list = [f'{i}' for i in np.unique(sword_df.reach_id)]
+        else:
+            # search SWORD nodes
+            str_id_list = [f'{i}' for i in np.unique(sword_df.node_id)]
+        for feature in str_id_list:
+            if feature.startswith(f'{basin_id}'):
+                 feature_ids.append(feature)
+    else:
+        # use the podaac fts calls (note this doesnt work for version D yet)
+        feature_ids = get_feature_list_fts(basin_id, kind=kind)
+    return feature_ids
+    
+def get_feature_list_fts(basin_id, kind='node_ids'):
+    FTS_URL = "https://fts.podaac.earthdata.nasa.gov/v1"
+
+    # Search by basin code
+    query_url = f"{FTS_URL}/rivers/node/{basin_id}"
+    if 'reach' in kind:
+        query_url = f"{FTS_URL}/rivers/reach/{basin_id}"
+    print(f"Searching by basin ...{query_url}")
+
+    # Search by river name
+    # query_url = f"{FTS_URL}/rivers/{RIVER_NAME}" #if searching via river name instead
+    # print(f"Searching by river name ...{query_url}")
+    page_size = 100    # Set FTS to retrieve 100 results at a time
+    page_number = 1    # Set FTS to retrieve the first page of results
+    hits = 1           # Set hits to intial value to start while loop
+    feature_ids = []
+    while (page_size * page_number) != 0 and len(feature_ids) < hits:
+        params = {
+            "page_size": page_size,
+            "page_number": page_number,
+            #"collection_name":collection_name
+            }
+        results = query_fts(query_url, params, kind=kind)
+
+        hits = results['hits']
+        page_size = results['page_size']
+        page_number = results['page_number'] + 1
+        feature_ids.extend(results[kind])
+
+        print("page_size: ", page_size, ", page_number: ", page_number - 1, ", hits: ", hits, ", # feature_ids: ", len(feature_ids))
+
+    print("Total number of features: ", len(feature_ids))
+    feature_ids = list(set(feature_ids))    # Remove duplicates
+    print("Total number of non-duplicate features: ", len(feature_ids))
+    return feature_ids
+
 def query_fts(query_url, params, kind='node_ids'):
     """Query Feature Translation Service (FTS) for reach identifers using the query_url parameter.
 
@@ -243,11 +298,12 @@ def query_hydrocron(
 
 #def setup_queries(query_url):
 def query_main(
-        BASIN_IDENTIFIER,
+        basin_id,
         start_time = "2023-07-28T00:00:00Z",
-        end_time = "2024-07-24T00:00:00Z",
+        end_time = "2028-07-24T00:00:00Z",
         kind = 'node_ids',
-        collection_name='SWOT_L2_HR_RiverSP_D'
+        collection_name='SWOT_L2_HR_RiverSP_D',
+        sword_df=None
         ):
     """
     kind = 'node_ids' or 'reach_ids'
@@ -259,40 +315,11 @@ def query_main(
     #FTS_URL = "https://fts.podaac.earthdata.nasa.gov/v2"
     #HYDROCRON_URL = "https://soto.podaac.earthdatacloud.nasa.gov/hydrocron/v2/timeseries" 
     # get the Version C data (e.g., PGC0)
-    FTS_URL = "https://fts.podaac.earthdata.nasa.gov/v1"
+    #FTS_URL = "https://fts.podaac.earthdata.nasa.gov/v1"
     HYDROCRON_URL = "https://soto.podaac.earthdatacloud.nasa.gov/hydrocron/v1/timeseries"
-    # BASIN or RIVER to query FTS for
-    #BASIN_IDENTIFIER = 74261#742610#732547#"732520" # to search via basin ID, find within SWORD database
-    #RIVER_NAME = "Ocmulgee River" #"Rhine"# to search via river name
-
-    # Search by basin code
-    query_url = f"{FTS_URL}/rivers/node/{BASIN_IDENTIFIER}"
-    if 'reach' in kind:
-        query_url = f"{FTS_URL}/rivers/reach/{BASIN_IDENTIFIER}"
-    print(f"Searching by basin ...{query_url}")
-
-    # Search by river name
-    # query_url = f"{FTS_URL}/rivers/{RIVER_NAME}" #if searching via river name instead
-    # print(f"Searching by river name ...{query_url}")
-    page_size = 100    # Set FTS to retrieve 100 results at a time
-    page_number = 1    # Set FTS to retrieve the first page of results
-    hits = 1           # Set hits to intial value to start while loop
-    feature_ids = []
-    while (page_size * page_number) != 0 and len(feature_ids) < hits:
-        params = { "page_size": page_size, "page_number": page_number }
-        results = query_fts(query_url, params, kind=kind)
-
-        hits = results['hits']
-        page_size = results['page_size']
-        page_number = results['page_number'] + 1
-        feature_ids.extend(results[kind])
-
-        print("page_size: ", page_size, ", page_number: ", page_number - 1, ", hits: ", hits, ", # feature_ids: ", len(feature_ids))
-
-    print("Total number of features: ", len(feature_ids))
-    feature_ids = list(set(feature_ids))    # Remove duplicates
-    print("Total number of non-duplicate features: ", len(feature_ids))
-
+    feature_ids = get_feature_list(
+        basin_id, kind=kind, sword_df=sword_df)
+    #breakpoint()
     # Create queries that return Pandas.DataFrame objects
     fields = "reach_id,node_id,river_name,time,time_str,crid,pass_id,cycle_id,continent_id,node_q,node_q_b,xovr_cal_q,dark_frac,ice_clim_f,wse,wse_r_u,area_total,area_tot_u,area_detct,area_det_u,area_wse,width,p_dist_out,p_length,xtrk_dist,rdr_sig0,node_dist,flow_angle,n_good_pix,lat,lon"
     if 'reach' in kind:
@@ -318,7 +345,7 @@ def query_main(
     try:
         df = ddf.compute()
     except:
-        print("##### Problem with ddf.compute() for basin: {}".format(BASIN_IDENTIFIER))
+        print("##### Problem with ddf.compute() for basin: {}".format(basin_id))
         return -1
     return df
 
@@ -344,8 +371,9 @@ def basin_loop(
         n_workers=4,
         out_csv_name=None,
         kind='Node',
-        collection_name='SWOT_L2_HR_RiverSP_D'
-        #collection_name='SWOT_L2_HR_RiverSP_2.0' # Version C
+        collection_name='SWOT_L2_HR_RiverSP_D',
+        #collection_name='SWOT_L2_HR_RiverSP_2.0', # Version C
+        sword_df=None
         ):
     this_kind = 'reach_ids'
     if 'node' in kind.lower():
@@ -359,12 +387,12 @@ def basin_loop(
         print("******* processing basin {} of {}".format(i,len(basin_list)))
         this_df = query_main(
             basin_id, start_time=start_time, end_time=end_time, kind=this_kind,
-            collection_name=collection_name)
+            collection_name=collection_name, sword_df=sword_df)
         while isinstance(this_df, int):
             # connection failed try again
             this_df = query_main(basin_id,
                 start_time=start_time, end_time=end_time, kind=this_kind,
-                collection_name=collection_name)
+                collection_name=collection_name, sword_df=sword_df)
         if df is None:
             df = this_df
         else:
