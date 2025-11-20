@@ -75,8 +75,25 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
         df['cycle'] = df['cycle_id']
     if 'pass_id' in df.keys():
         df['pass'] = df['pass_id']
-    if 'continent_id' in df.keys():
-        df['continent'] = df['continent_id']
+    if 'continent_id' not in df.keys():
+        # derive the continent from the reach_ids
+        cont_mapping = {
+            '9':'GR',
+            '8':'AR',
+            '7':'NA',
+            '6':'SA',
+            '5':'AU',
+            '4':'AS',
+            '3':'SI',
+            '2':'EU',
+            '1':'AF'
+            }
+        cont_code = [f'{i}'[0] for i in df['reach_id']]
+        cont_id = []
+        for code in cont_code:
+           cont_id.append(cont_mapping[code])
+        df['continent_id'] = np.array(cont_id)
+    df['continent'] = df['continent_id']
     if 'node_id' in df.keys():
         df['local_node_id'] = rivscale.misc.node_id_to_local_node_id(
             df['node_id'])
