@@ -32,7 +32,10 @@ from scipy.stats import spearmanr
 #from scipy.optimize import minimize
 
 from matplotlib.colors import LightSource
-from matplotlib import colormaps as cm
+#from matplotlib import colormaps as cm
+from matplotlib import cm
+
+import scipy.ndimage
 
 class HeightWidthModelArray(Product):
     """
@@ -281,7 +284,7 @@ class HeightWidthModelArray(Product):
         y = np.zeros_like(x)
         ks = np.arange(len(self[x_key+'_coords'][:,0])).astype(int)
         for k in ks:
-            yy = self.sample_row(x[k,:], k)
+            yy = self.sample_row(x[k,:], k, fill_value=fill_value)
             y[k,:] = yy
         return y
 
@@ -348,45 +351,87 @@ class HeightWidthModelArray(Product):
             k = k + 1
         return WSE_est, Width_est, np.sqrt(Err)
 
-    def plot(self, outdir=None, show=False, title_tag=None, surface=True):
+    def plot(self, outdir=None, show=False, title_tag=None,
+            surface=True, scatter=False):
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
         # just use index
-        along_dist1d = np.arange(len(self.along_dist))
+        node_index = np.arange(len(self.along_dist))
         #along_dist0 = np.broadcast_to(
         #    np.arange(len(self.along_dist)),
         #        np.shape(self.width_coords.T)).T
-        xlabel='node index'
-        if (np.sum(self.along_dist.mask)==0) and not surface:
+        #xlabel='node index'
+        #if (np.sum(self.along_dist.mask)==0) and not surface:
             # use along distance
-            along_dist1d = self.along_dist
-            xlabel='along_dist (m)'
+        along_dist1d = self.along_dist
+        #np.abs(self.along_dist - np.min(self.along_dist))
+        xlabel='along_dist (m)'
         along_dist0 = np.broadcast_to(
             along_dist1d, np.shape(self.width_coords.T)).T
-        ptile = np.broadcast_to(self.ptile_list, np.shape(self.width_coords))
-        scat = ax.scatter(
-            along_dist0,
-            self.width_coords,
-            self.wse_coords,
-            c=ptile)
-        fig.colorbar(scat, ax=ax, label='percentile')
+        if scatter:
+            ptile = np.broadcast_to(self.ptile_list, np.shape(self.width_coords))
+            scat = ax.scatter(
+                along_dist0,
+                self.width_coords,
+                self.wse_coords,
+                c=ptile)
+            fig.colorbar(scat, ax=ax, label='percentile')
+        else:
+            # plot along-river lines of percentile
+            for k in range(len(self.wse_coords[0,:])):
+                ax.plot(
+                    along_dist0[:,k],
+                    self.width_coords[:,k],
+                    self.wse_coords[:,k],
+                    label=f'{self.ptile_list[k]}%ile'
+                    )
+            ax.legend()
         if surface:
             width_bins = np.linspace(
                 np.nanpercentile(self.width_coords,1),
                 np.nanpercentile(self.width_coords,99),
                 100)
             # TODO: enable interpolating in along_dist1d (e.g., uneven node sampling)
+            
             grid_y, grid_x = np.meshgrid(width_bins, along_dist1d)
             #breakpoint()
-            grid_z = self.sample(grid_y,x_key='width')
+            # only extrapolate a little bit
+            grid_z_noextrap = self.sample(grid_y,x_key='width', fill_value=None)
+            grid_z0 = self.sample(grid_y,x_key='width')
+            # get mask near non extrapolated
+            msk = np.zeros(np.shape(grid_z0))
+            msk[np.isfinite(grid_z_noextrap)] = 1
+            struc = np.array([[0,1,0],[1,1,1],[0,1,0]])
+            msk_d = scipy.ndimage.binary_dilation(msk, structure=struc,
+                iterations=2)
+            # smooth out extrapolation
+            grid_z_clip = grid_z0.copy()
+            grid_z_clip[grid_z0>np.max(self.wse_coords)] = np.max(
+                self.wse_coords)
+            grid_z_clip[grid_z0<np.min(self.wse_coords)] = np.min(
+                self.wse_coords)
+            grid_z_sm = scipy.ndimage.uniform_filter(grid_z_clip, size=3)
+            grid_z = grid_z_sm.copy()
+            grid_z[msk==1] = grid_z0[msk==1]
+            grid_z[msk_d==0] = np.nan
+            grid_z_rgb = grid_z.copy()
+            grid_z_rgb[msk_d==0] = np.min(self.wse_coords)
+            # now interpolate/resample in regular grid in along_river
             ls = LightSource(270, 45)
             
-            rgb = ls.shade(grid_z, cmap=cm['gray'], vert_exag=0.1, blend_mode='soft')
+            rgb = ls.shade(grid_z_rgb, cmap=cm.copper#gist_earth#gray,#Blues,#'gray'],
+                #vert_exag=100,
+                #blend_mode='soft',
+                #dx=200,
+                #dy=width_bins[1]-width_bins[0],
+                #vmin = np.min(grid_z_rgb) - (np.max(grid_z_rgb) - np.min(grid_z_rgb) )/2
+                )
             ax.plot_surface(grid_x, grid_y, grid_z, alpha=0.3,
-                facecolors=rgb, shade=False,linewidth=0.1)
+                facecolors=rgb, edgecolor='none')#, shade=False)#,linewidth=0.2)#, shade=False)#, linewidth=0.5)
         ax.set_xlabel(xlabel)
         ax.set_ylabel('width (m)')
         ax.set_zlabel('wse (m)')
+        ax.set_zlim((np.min(self.wse_coords), np.max(self.wse_coords)))
         title = self.stretch_name
         if title_tag is not None:
             title = title + ' ' +title_tag
@@ -426,5 +471,7 @@ class HeightWidthModelArray(Product):
                 this[key] = self[key][mask]#mask[0]:mask[-1]]
             else: 
                 this[key] = self[key]
+        #make along_dist start at 0
+        this['along_dist'] = this['along_dist'] - np.min(this['along_dist'])
         return this
 

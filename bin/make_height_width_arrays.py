@@ -131,12 +131,12 @@ def main():
             outdir, '{}_stretch_stack_corr.nc'.format(key))
         outfile_wse_stats = os.path.join(
             outdir, '{}_wse_stats.nc'.format(key))
-        #outfile_width_stats = os.path.join(
-        #    outdir, '{}_width_stats.nc'.format(key))
+        outfile_width_stats = os.path.join(
+            outdir, '{}_width_stats.nc'.format(key))
         #outfile_dark_stats = os.path.join(
         #    outdir, '{}_dark_stats.nc'.format(key))
-        #outfile_wse_avg = os.path.join(
-        #    outdir, '{}_wse_stretch_average.nc'.format(key))
+        outfile_wse_avg = os.path.join(
+            outdir, '{}_wse_stretch_average.nc'.format(key))
         #outfile_width_avg = os.path.join(
         #    outdir, '{}_width_stretch_average.nc'.format(key))
         outfile_height_width = os.path.join(
@@ -157,6 +157,7 @@ def main():
         if len(stretch_stack.node_id) < 50:
             print("  This is a short stretch, dont process it?")
             continue
+        corr_stack = None
         if (os.path.exists(outfile_corr_stack) and (not args.force)):
             print("  This along_stretch already processed")
             # read in the ones already run
@@ -171,6 +172,7 @@ def main():
             # write output files
             #if wse_stats is not None:
             #    wse_stats.to_ncfile(outfile_wse_stats)
+            # TODO: enable crop?
             if stretch_stack is not None:
                 stretch_stack.to_ncfile(outfile_corr_stack)
             else:
@@ -182,9 +184,9 @@ def main():
         if (os.path.exists(outfile_height_width) and (not args.force)):
             print("  This along_stretch already processed")
             # read in the ones already run
-            
-            wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
-                outfile_wse_stats)
+            # TODO: do we need to read in?
+            #wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
+            #    outfile_wse_stats)
             
             #width_stats = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
             #    outfile_width_stats)
@@ -193,7 +195,7 @@ def main():
                 rivscale.products.height_width_array.HeightWidthModelArray.from_ncfile(
                 outfile_height_width)
         else:
-            print("  Processing along_stretch")
+            print("  Processing stack_filter")
             # process it
             filt_stack = rivscale.estimate.process_stack_filter(
                 cfg['filter_stack'], stretch_stack)
@@ -202,16 +204,21 @@ def main():
                 continue
             else:
                 stretch_stack = filt_stack
+            print("  Processing height_width_array")
             #TODO: should we output the filtered stack?
-            wse_stats, height_width_array = \
+            wse_stats, width_stats, wse_stretch_avg, height_width_array = \
                 rivscale.estimate.process_height_width_array(
                     cfg['height_width_array'],
                     stretch_stack)
             # write output files
             if wse_stats is not None:
                 wse_stats.to_ncfile(outfile_wse_stats)
-            #if corr_stack is not None:
-            #    corr_stack.to_ncfile(outfile_corr_stack)
+            if width_stats is not None:
+                width_stats.to_ncfile(outfile_width_stats)
+            if wse_stretch_avg is not None:
+                wse_stretch_avg.to_ncfile(outfile_wse_avg)
+            if corr_stack is not None:
+                corr_stack.to_ncfile(outfile_corr_stack)
             if height_width_array is not None:
                 height_width_array.to_ncfile(outfile_height_width)
             if (height_width_array is None):

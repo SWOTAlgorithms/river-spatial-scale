@@ -12,6 +12,7 @@ import scipy.ndimage
 import rivscale.filter
 import rivscale.products.along_stretch
 import rivscale.products.stretch_average
+import rivscale.special
 
 def smooth_widths(widths_in, size=11):
     #widths = stretch_stack['width'].copy()
@@ -116,7 +117,7 @@ def process_stack_filter(cfg, stretch_stack_in):
         return None
     return stretch_stack
 
-def process_height_width_array(cfg, stretch_stack_in):
+def process_height_width_array(cfg, stretch_stack_in, filterit=False):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
@@ -129,49 +130,102 @@ def process_height_width_array(cfg, stretch_stack_in):
     #    cfg['width_smooth_size'] = 'None'
     if 'wse_ref_kernel_size' not in cfg.keys():
         cfg['wse_ref_kernel_size'] = '35'
-    #if 'width_ref_kernel_size' not in cfg.keys():
-    #    cfg['width_ref_kernel_size'] = '11'
+    if 'width_ref_kernel_size' not in cfg.keys():
+        cfg['width_ref_kernel_size'] = 'None'
     if 'crop' not in cfg.keys():
         cfg['crop'] = 'False'
     if 'snapit' not in cfg.keys():
         cfg['snapit'] = 'False'
     if 'neighbor_win_len' not in cfg.keys():
         cfg['neighbor_win_len'] = '0'
+    if 'flow_state_filter_method' not in cfg.keys():
+        cfg['flow_state_filter_method'] = 'None'
+    if 'flow_filter_bin_width' not in cfg.keys():
+        cfg['flow_filter_bin_width'] = '0.5'
+    if 'flow_filter_oversamp_factor' not in cfg.keys():
+        cfg['flow_filter_oversamp_factor'] = '2'
     stretch_stack = stretch_stack_in.copy()
-    """
-    # create the dark stats before any filtering
-    dark_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
-        stretch_stack, signal_key='dark_frac', kernel_size=None)
-    """
-    # first filter the data (qual and outliers)
-    #stretch_stack, _ = rivscale.filter.filter_stretch_stack(
-    #    cfg,
-    #    stretch_stack,
-    #    wse_stats=None,
-    #    width_stats=None,
-    #    plot=False)
+    if filterit:
+        # normally we will filter it before calling this function
+        stretch_stack, _ = rivscale.filter.filter_stretch_stack(
+            cfg,
+            stretch_stack,
+            wse_stats=None,
+            width_stats=None,
+            plot=False)
     if np.shape(stretch_stack.width)[1]==0:
         print('  No SWOT data left after multitemporal filtering')
-        return None, None, None
+        return None, None, None, None, None
     # compute multitemporal statistics
-    wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
-        stretch_stack, signal_key='wse', kernel_size=cfg['wse_ref_kernel_size'])
-    #width_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
-    #    stretch_stack, signal_key='width', kernel_size=cfg['width_ref_kernel_size'])
+    wse_stretch_avg = None
+    width_stats = None
+    wse_stats = None
+    wse_reference = None
+    if cfg['neighbor_win_len'] > 0:
+        # we will need this to detrend so that  wses are comparable
+        # among consecutive nodes
+        wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
+            stretch_stack, signal_key='wse', kernel_size=cfg['wse_ref_kernel_size'])
+        wse_reference = wse_stats.reference
+    # init the arrays
+    wse_arr = stretch_stack.wse.copy()
+    width_arr = stretch_stack.width.copy()
+    # optionally filter arrays with common flow-states/wses
+    if cfg['flow_state_filter_method'] is not None:
+        # filter the wse and width for bins accross common flow states
+        bin_var = stretch_stack.wse.copy()
+        if 'stretch_average' in cfg['flow_state_filter_method']:
+            # use the stretch_average wse to bin flow-states
+            if wse_stats is None:
+                wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
+                    stretch_stack, signal_key='wse',
+                    kernel_size=cfg['wse_ref_kernel_size'])
+            width_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
+                stretch_stack, signal_key='width',
+                kernel_size=cfg['width_ref_kernel_size'])
+
+            wse_avg, width_avg = rivscale.estimate.process_stretch_average(
+                cfg, stretch_stack, wse_stats, width_stats)
+            bin_var = np.zeros(np.shape(stretch_stack.time_id)) + np.nan
+            for k, time_i in enumerate(wse_avg.time_id):
+                bin_var[stretch_stack.time_id==time_i] = wse_avg.mean[k]
+
+        # call the binnner
+        bbins, bin_count, p_list, width_bin_stats, wse_bin_stats = \
+            rivscale.special.var_binned_node_stats(
+                bin_var, width_arr, wse_arr,
+                bin_width=cfg['flow_filter_bin_width'],
+                oversamp_factor=cfg['flow_filter_oversamp_factor'],
+                percentile_list=[50,])#only do 50th %tile
+        wse_arr = np.squeeze(wse_bin_stats[0])
+        width_arr = np.squeeze(width_bin_stats[0])
     # now do the height_width_array
+    """
     height_width_array = rivscale.products.height_width_array.HeightWidthModelArray.from_stretch_stack(
         stretch_stack,
         wse_reference=wse_stats.reference,
         snapit=cfg['snapit'],
         neighbor_win_len=cfg['neighbor_win_len']) 
+    """
+    height_width_array = rivscale.products.height_width_array.HeightWidthModelArray.from_arrays(
+        wse_arr,
+        width_arr,
+        along_dist=stretch_stack.along_dist.copy(),
+        node_id=stretch_stack.node_id.copy(),
+        stretch_name=stretch_stack.stretch_name,
+        wse_reference=wse_reference,
+        snapit=cfg['snapit'],
+        neighbor_win_len=cfg['neighbor_win_len'])
     # now optionally crop
     if cfg['crop']:
         # crop to reach
-        wse_stats = wse_stats.crop_to_reach()
-        #width_stats = width_stats.crop_to_reach()
+        if wse_stats is not None:
+            wse_stats = wse_stats.crop_to_reach()
+        if width_stats is not None:
+            width_stats = width_stats.crop_to_reach()
         #stretch_stack = stretch_stack.crop_to_reach()
         height_width_array = height_width_array.crop_to_reach()
-    return wse_stats, height_width_array
+    return wse_stats, width_stats, wse_stretch_avg, height_width_array
 
 def process_stretch_average(
         cfg,
