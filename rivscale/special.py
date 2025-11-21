@@ -45,99 +45,126 @@ def isotonic_regression_stack(y,x, kind='linear', fill_value=np.nan):#'extrapola
         y_mono[:,k] = intrp(np.array(x))
     return y_mono
 
-
-def wse_binned_stats(wses, widths, wse_bin_width=0.2, oversamp_factor=2):
+def var_binned_node_stats(bin_var_in, var1_in, var2_in=None,
+        bin_width=0.2, oversamp_factor=2, percentile_list=[25, 50, 75]):
     """
-    For each node, take statistics of width for all samples within a wse bin
-    wse_bin_width:  the window size to bin similar wses
+    For each node, take statistics of width for all samples within a bin_var bin
+    bin_width:  the window size to bin similar bin_var
     oversamp_factor: integer greater than 0
-    TODO: also generalize percentiles, maybe add mean/std etc...
+    
+    e.g., this function can be used to estimate width statistics at particular
+    wse bins (either node-level wses, or reach/stretch-level, but mapped to
+    2D stretch-stack-style array).
+
+    INPUTS:
+    bin_var_in: variable to bin var1 (and optionally var1), handles 1D or 2D
+                    array (e.g., wse_stretch_average.mean, or just stack.wse)
+    var1_in:    primary variable that is binned 2D stretch_stack-style array
+                    (e.g. stack.width)
+    var2_in:    optional secondary variable to bin
+    
+    bin_width:  the window size to bin similar bin_var
+    oversamp_factor: integer greater than 0
+    percentile_list: which percentiles to compute
+
+    OUTPUTS:
+    bins: the bin edges used in binning
+    count: the number of time-obs nodes for each node tha were aggregated
+           to statistics. 1D array, node-length
+    var1(2)_stats: the statistics that were computed 3D array
+                (num_ptiles, num_times, num_nodes)
+    percentile_list: the list of percentiles corresponding to the first row
+                     of var1(2) stats
+    
+    TODO: maybe add mean/std etc...
     """
     warnings.filterwarnings("ignore")
-    mx = np.nanmax(wses) + wse_bin_width * 4
-    mn = np.nanmin(wses) - wse_bin_width * 2
-    d_wse = wse_bin_width
-    n_bins = int(np.floor((mx-mn) / d_wse))
-    wse_bins0 = np.arange(n_bins)*d_wse + mn#np.linspace(mn, mx1, n_bins)
-    wses_bins = []
+    # make internal copies
+    var1 = var1_in.copy()
+    bin_var = bin_var_in.copy()
+    # handle 1D bin_var (e.g., from stretch_average_stats)
+    if len(np.shape(bin_var))==1:
+        # if it is 1D broadcast to 2D
+        bin_var = np.broadcast_to(bin_var, np.shape(var1)).copy()
+    if var2_in is not None:
+        var2 = var2_in.copy()
+    else:
+        var2 = None
+    # only use measurements where all are valid
+    msk = np.logical_or(~np.isfinite(bin_var), ~np.isfinite(var1))
+    var1[msk] = np.nan
+    bin_var[msk] = np.nan
+    valids = np.ones_like(var1)
+    valids[msk] = 0
+    if var2 is not None:
+        var2 = var2.copy()
+        msk = np.logical_or.reduce((
+            ~np.isfinite(bin_var),
+            ~np.isfinite(var1),
+            ~np.isfinite(var2),
+            ))
+        var1[msk] = np.nan
+        bin_var[msk] = np.nan
+        var2[msk] = np.nan
+        valids = np.ones_like(var1)
+        valids[msk] = 0
+    # set up the binning
+    mx = np.nanmax(bin_var) + bin_width * 4
+    mn = np.nanmin(bin_var) - bin_width * 2
+    d_bin_var = bin_width
+    n_bins = int(np.floor((mx-mn) / d_bin_var))
+    bins0 = np.arange(n_bins)*d_bin_var + mn#np.linspace(mn, mx1, n_bins)
+    bins = []
     for k in range(oversamp_factor):
-        wses_bins.append(wse_bins0[0:-1] + k * d_wse/oversamp_factor)
+        bins.append(bins0[0:-1] + k * d_bin_var/oversamp_factor)
     N_bins = 0
-    for bins in wses_bins:
-        N_bins = N_bins + len(bins)
-    # only use measurements where wse and width are valid
-    wses = wses.copy()
-    widths = widths.copy()
-    wses[~np.isfinite(widths)] = np.nan
-    widths[~np.isfinite(wses)] = np.nan
-    valids = np.ones_like(wses)
-    valids[~np.isfinite(widths)] = 0
-    valids[~np.isfinite(wses)] = 0
-    # define some local helper functions
-    def perc_25(data):
-        return np.nanpercentile(data, 25)
-    def perc_75(data):
-        return np.nanpercentile(data, 75)
+    for tbins in bins:
+        N_bins = N_bins + len(tbins)
     # aggregate stats over wse bins
-    num_nodes = len(wses[:,0].flatten())
+    num_nodes = len(var1[:,0].flatten())
     num_samps = N_bins-oversamp_factor
-    wse_med = np.zeros((num_nodes, num_samps)) + np.nan
-    width_med = np.zeros((num_nodes, num_samps)) + np.nan
-    width_p25 = np.zeros((num_nodes, num_samps)) + np.nan
-    width_p75 = np.zeros((num_nodes, num_samps)) + np.nan
+    num_stats = len(percentile_list)
+    var1_stats = np.zeros((num_stats, num_nodes, num_samps)) + np.nan
+    if var2 is not None:
+        var2_stats = np.zeros((num_stats, num_nodes, num_samps)) + np.nan
     count = np.zeros((num_nodes, num_samps))
     for k in range(num_nodes):
-        for kk, wse_bins in enumerate(wses_bins):
-            skip = len(wses_bins)
-            #breakpoint()
+        for kk, tbins in enumerate(bins):
+            skip = len(bins)
             count[k,kk::skip] = scipy.stats.binned_statistic(
-                wses[k,:], valids[k,:],
-                statistic=np.nansum, bins=wse_bins)[0]
-            #
-            wse_med[k,kk::skip] = scipy.stats.binned_statistic(
-                wses[k,:], wses[k,:],
-                statistic=np.nanmedian, bins=wse_bins)[0]
-            # 
-            width_med[k,kk::skip] = scipy.stats.binned_statistic(
-                wses[k,:], widths[k,:],
-                statistic=np.nanmedian, bins=wse_bins)[0]
-            width_p25[k,kk::skip] = scipy.stats.binned_statistic(
-                wses[k,:], widths[k,:],
-                statistic=perc_25, bins=wse_bins)[0]
-            width_p75[k,kk::skip] = scipy.stats.binned_statistic(
-                wses[k,:], widths[k,:],
-                statistic=perc_75, bins=wse_bins)[0]
+                bin_var[k,:], valids[k,:],
+                statistic=np.nansum, bins=tbins)[0]
+            for p, ptile in enumerate(percentile_list):
+                percentile_func = lambda arr: np.nanpercentile(arr, ptile)
+                var1_stats[p, k,kk::skip] = scipy.stats.binned_statistic(
+                    bin_var[k,:], var1[k,:],
+                    statistic=percentile_func, bins=tbins)[0]
+                if var2 is not None:
+                    var2_stats[p, k,kk::skip] = scipy.stats.binned_statistic(
+                        bin_var[k,:], var2[k,:],
+                        statistic=percentile_func, bins=tbins)[0]
         #
-    return count, wse_med, width_med, width_p25, width_p75
+    if var2 is None:
+        return bins, count, percentile_list, var1_stats
+    return bins, count, percentile_list, var1_stats, var2_stats
 
-
-def seasonal_stats(stack, keys=['wse', 'width'], bins=np.linspace(0, 366, 10)):
+def seasonal_stats(stack, keys=['wse', 'width'],
+        percentile_list=[25, 50, 75], bins=np.linspace(0, 366, 10)):
     """
     aggregate stack stats over multple years at similar day-of-year
-    TODO: generalize percentiles, maybe also take means/std etc...
+    TODO: maybe also take means/std etc, maybe make this a class/object
     """
     # bin time dim of stretch-stack into doy bins
     dates = dates = swot_time_to_field_time(stack.time_id*60*60)
     doy = [date.timetuple().tm_yday for date in dates]
     # TODO: make mask where data from all keys exist (e.g., height/width)
-    def perc_25(data):
-        return np.nanpercentile(data, 25)
-    def perc_75(data):
-        return np.nanpercentile(data, 75)
-    dic = {
-        'bins':bins,
-        'med':[],
-        'p25':[],
-        'p75':[],
-        }
-    for key in keys:
-        dic['med'].append(scipy.stats.binned_statistic(
-            doy, stack[key], statistic=np.nanmedian, bins=bins)[0])
-        dic['p25'].append(scipy.stats.binned_statistic(
-            doy, stack[key], statistic=perc_25, bins=bins)[0])
-        dic['p75'].append(scipy.stats.binned_statistic(
-            doy, stack[key], statistic=perc_75, bins=bins)[0])
-
-    #breakpoint
+    dic = {'bins':bins}
+    for ptile in percentile_list:
+        percentile_func = lambda arr: np.nanpercentile(arr, ptile)
+        pkey = f'p{ptile}'
+        dic[pkey] = []
+        for key in keys:
+            dic[pkey].append(scipy.stats.binned_statistic(
+                doy, stack[key], statistic=percentile_func, bins=bins)[0])
     return dic
 
