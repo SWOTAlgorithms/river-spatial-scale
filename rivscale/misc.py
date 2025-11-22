@@ -201,6 +201,34 @@ def compute_anomaly(full_profile_data, bayes_data=None, sword_node_df=None):
     full_profile_data2['med_prof_stack'] = medprof_stack
     return full_profile_data2
 
+
+def smash_configs(run_config_file, section_key):
+    # rea in the runtime config
+    cfg_run = CfgParser()
+    cfg_run.read(run_config_file)
+    # read the param config
+    cfg_param = CfgParser()
+    cfg_param.read(cfg_run[section_key]['param_config'])
+    #stuff contents into wanted section of runtime config
+    for key in cfg_param[section_key].keys():
+        cfg_run[section_key][key] = '{}'.format(cfg_param[section_key][key])
+    # stuff all things in stretch_stack section into main, overwriting the main
+    # if they exist in both
+    for key in cfg_run[section_key].keys():
+        cfg_run['main'][key] = '{}'.format(cfg_run[section_key][key])
+    # write out the stretch_stack config for posterity/tracibility
+    if not os.path.exists(cfg_run['main']['out_path']):
+       os.makedirs(cfg_run['main']['out_path'])
+    cfg_outfile = os.path.join(cfg_run['main']['out_path'],
+        f'{section_key}_'+cfg_run['main']['flavor']+'.cfg')
+    # write the config
+    cfg_run.write_sects(cfg_outfile, ['main', section_key])
+    # now read it in so we run the actual config that is written
+    cfg = CfgParser()
+    cfg.read(cfg_outfile)
+    return cfg
+
+
 class CfgParser(ConfigParser):
     '''A wrapper to ConfigParser, with automatic data types'''
     def __init__(self, *args, **kwargs):
@@ -215,6 +243,21 @@ class CfgParser(ConfigParser):
         string = ''.join(string)
         super(ConfigParser, self).read_string(string)
 
+    def write_sects(self, filename, section_list):
+        """Load a file, adding 'main' section if necessary"""
+        string = ''
+        for section in section_list:
+            string = string + f'[{section}]\n'
+            for key in self[section].keys():
+                string = string + '{} = {}\n'.format(key,self[section][key])
+            string = string + '\n'
+        with open(filename, 'w') as f:
+            f.write(string+'\n')
+        #string = open(filename, 'r').readlines()
+        #if string[0][0] != '[' and string[0][-1] != ']':
+        #    string = ['[main]\n'] + string
+        #string = ''.join(string)
+        #super(ConfigParser, self).read_string(string)
 
     def get(self, *args, **kwargs):
         '''Get the data as specific type, if possible'''

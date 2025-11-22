@@ -206,6 +206,10 @@ def main():
                 stretch_stack = filt_stack
             print("  Processing height_width_array")
             #TODO: should we output the filtered stack?
+            # create the flow_state model
+            flow_state = rivscale.products.flow_state.FlowStateModel.from_objects(
+                stretch_stack, wse_stats, wse_avg)
+            # run the height/width fitting
             wse_stats, width_stats, wse_stretch_avg, height_width_array = \
                 rivscale.estimate.process_height_width_array(
                     cfg['height_width_array'],

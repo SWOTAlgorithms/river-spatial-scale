@@ -54,9 +54,8 @@ def main():
     # read in the config file
     #cfg = configparser.ConfigParser()
     #cfg.read(args.config)
-    cfg = rivscale.misc.CfgParser()
-    cfg.read(args.config)
-    # read int he SWORD file
+    cfg = rivscale.misc.smash_configs(args.config, 'stretch_stack')
+    # read in the SWORD file
     print('reading SWORD file')
     sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(
         cfg['main']['sword_file'])
@@ -64,42 +63,11 @@ def main():
     stretch_list = rivscale.misc.get_stretch_list_from_subset_cfg(
         cfg, sword_df)
     #breakpoint()
-    """
-    stretch_list0 = [
-        '{}'.format(t) for t in '{}'.format(
-            cfg['main']['stretch_subset']).split()]
-    stretch_list = []
-    for stretch in stretch_list0:
-        if stretch.isnumeric():
-            # get all reaches in basins smaller than stretch
-            st = '{}'.format(stretch)
-            tmp = [
-                '{}'.format(r).startswith(st) for r in sword_df['reach_id']]
-            reaches = np.array(sword_df['reach_id'][tmp])
-            for r in reaches:
-                stretch_list.append('{}'.format(r))
-        else:
-            # check if it is a file, if so read it
-            if stretch.endwith('.csv') and os.path.isfile(stretch):
-                tmp_df = pd.read_csv(stretch)
-                s_list = []
-                if 'stretch_name' in tmp_df.keys():
-                    s_list = tmp_df['stretch_name']
-                elif 'stretch_name' in tmp_df.keys():
-                    s_list = tmp_df['stretch_name']
-                for s in s_list:
-                    stretch_list.append('{}'.format(s))
-            else:
-                # assume it is a non-numeric stretch name
-                stretch_list.append('{}'.format(stretch))
-    """
     df_stretches = pd.read_csv(
-        cfg['main']['stretch_file'],
+        cfg['main']['stretch_definition_file'],
         usecols=stretch_list)
     # make the output dir if needed
     outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
-    #if not os.path.exists(outdir):
-    #    os.makedirs(outdir)
     # go through each stretch and process it
     N = len(df_stretches.keys())
     if N <=0:

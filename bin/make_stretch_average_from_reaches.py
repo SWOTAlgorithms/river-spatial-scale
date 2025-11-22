@@ -55,8 +55,11 @@ def main():
     # read in the config file
     #cfg = configparser.ConfigParser()
     #cfg.read(args.config)
-    cfg = rivscale.misc.CfgParser()
-    cfg.read(args.config)
+    cfg = rivscale.misc.smash_configs(args.config, 'reach_avg')
+    # read in the SWORD file    
+
+
+
     # read int he SWORD file
     print('reading SWORD file')
     sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(
@@ -80,7 +83,7 @@ def main():
             stretch_list.append('{}'.format(r))
     """
     df_stretches = pd.read_csv(
-        cfg['main']['stretch_file'],
+        cfg['main']['stretch_definition_file'],
         usecols=stretch_list)
     # make the output dir if needed
     outdir0 = os.path.join(cfg['main']['out_path'], cfg['main']['orbit'])

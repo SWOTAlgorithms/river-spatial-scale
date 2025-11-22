@@ -58,25 +58,31 @@ def main():
     # read in the config file
     #cfg = configparser.ConfigParser()
     #cfg.read(args.config)
-    cfg = rivscale.misc.CfgParser()
-    cfg.read(args.config)
+    cfg_run = rivscale.misc.CfgParser()
+    cfg_run.read(args.config)
+    cfg_param = rivscale.misc.CfgParser()
+    cfg_param.read(cfg_run['estimate']['param_config'])
     # handle non-strings for stretch_subset
     #cfg['main']['stretch_subset'] = '{}'.format(cfg['main']['stretch_subset'])
     stretch_list0 = rivscale.misc.get_stretch_list_from_subset_cfg(
-        cfg, None)
-    """
-    stretch_list0 = [
-        '{}'.format(t) for t in '{}'.format(
-            cfg['main']['stretch_subset']).split()]
-    """
+        cfg_run, None)
     # make the output dir if needed
+    stretch_stack_in_path = cfg_run['main']['out_path']# default to main output
+    if 'stretch_stack_in_path' in cfg_run['estimate'].keys():
+        stretch_stack_in_path = cfg_run['estimate']['stretch_stack_in_path']
     stretch_dir0 = os.path.join(
-        cfg['main']['stretch_stack_in_path'],cfg['main']['orbit'])
+        stretch_stack_in_path, cfg_run['main']['orbit'])
+    stretch_stack_flavor = cfg_run['stretch_stack']['flavor']# default to main output
+    if 'stretch_stack_flavor' in cfg_run['estimate'].keys():
+        stretch_stack_flavor = cfg_run['estimate']['stretch_stack_flavor']
     pekel_dir0 = None
-    if 'pekel_in_path' in cfg['main'].keys():
+    if 'pekel_in_path' in cfg_run['estimate'].keys():
         pekel_dir0 = os.path.join(
-            cfg['main']['pekel_in_path'],cfg['main']['orbit'])
-    outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
+            cfg_run['estimate']['pekel_in_path'],cfg_run['main']['orbit'])
+    out_path = cfg_run['main']['out_path']
+    if 'out_path' in cfg_run['estimate'].keys():
+        out_path = cfg_run['estimate']['out_path']
+    outdir0 = os.path.join(out_path, cfg_run['main']['orbit'])
     #outdir = os.path.join(outdir0, cfg['main']['flavor'])
     stretch_files = []
     for stretch in stretch_list0:
@@ -90,7 +96,7 @@ def main():
         head, tail = os.path.split(fle)
         stretch_list.append(tail.split('_')[0])
     df_stretches = pd.read_csv(
-        cfg['main']['stretch_file'],
+        cfg_run['main']['stretch_definition_file'],
         usecols=stretch_list)
     #if not os.path.exists(outdir):
     #    os.makedirs(outdir)
@@ -103,13 +109,13 @@ def main():
     for i,key in enumerate(df_stretches.keys()):
         stretch_dir = os.path.join(
             stretch_dir0, key, 'stretch_stack_{}'.format(
-                cfg['main']['stretch_stack_flavor']))
+                stretch_stack_flavor))
         pekel_dir = None
         if pekel_dir0 is not None:
             pekel_dir = os.path.join(
                 pekel_dir0, key, 'pekel_{}'.format(
-                    cfg['main']['pekel_flavor']))
-        outdir = os.path.join(outdir0, key, cfg['main']['flavor'])
+                    cfg_run['main']['pekel_flavor']))
+        outdir = os.path.join(outdir0, key, cfg_run['estimate']['flavor'])
         if not os.path.exists(outdir):
             os.makedirs(outdir)
         this_start = time.time()
@@ -170,7 +176,7 @@ def main():
             # process it
             wse_stats, width_stats, dark_stats = \
                 rivscale.estimate.process_along_stats(
-                    cfg['along_stats'], stretch_stack)
+                    cfg_param['along_stats'], stretch_stack)
             # write output files
             if wse_stats is not None:
                 wse_stats.to_ncfile(outfile_wse_stats)
@@ -187,9 +193,9 @@ def main():
         # stop here if commanded but pekel files dont exist
         ####
         pekel_stats = None
-        sa_cfg = cfg['stretch_average']
-        hw_cfg = cfg['height_width']
-        bayes_cfg = cfg['reconstruct']
+        sa_cfg = cfg_param['stretch_average']
+        hw_cfg = cfg_param['height_width']
+        bayes_cfg = cfg_param['reconstruct']
         if 'use_pekel' not in sa_cfg.keys():
             sa_cfg['use_pekel'] = 'False'
         if 'use_pekel' not in hw_cfg.keys():
@@ -244,7 +250,7 @@ def main():
             else:
                 this_width_stats = width_stats.copy()
             height_width = rivscale.products.height_width.HeightWidthModel.from_objects(
-                cfg['height_width'],
+                cfg_param['height_width'],
                 wse_avg,
                 width_avg,
                 this_width_stats)
@@ -262,7 +268,7 @@ def main():
             else:
                 this_width_stats = width_stats.copy()
             bayes = rivscale.reconstruct.process_bayes_reconstruction(
-                cfg['reconstruct'],
+                cfg_param['reconstruct'],
                 stretch_stack,
                 wse_stats,
                 this_width_stats,

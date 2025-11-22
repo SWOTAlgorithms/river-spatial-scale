@@ -287,7 +287,7 @@ def setup_from_cfg(cfg):
     stretch_list2 = get_stretch_list(stretch_list0, stretch_dir0, kind='reach_avg')
     stretch_list = np.unique(list(set(stretch_list1).union(set(stretch_list2))))
     df_stretches = pd.read_csv(
-        cfg['main']['stretch_file'],
+        cfg['main']['stretch_definition_file'],
         usecols=stretch_list)
     return df_stretches, stretch_dir0, pekel_dir0, outdir0
 
@@ -331,21 +331,31 @@ def main():
         try:
             flavor = cfg['main']['stretch_stack_flavor']
         except KeyError:
-            flavor = cfg['main']['flavor']
+            try:
+                stretch_flavor = cfg['main']['flavor']
+            except KeyError:
+                stretch_flavor = cfg['stretch_stack']['flavor']
         try:
             pekel_flavor = cfg['main']['pekel_flavor']
         except KeyError:
-            pekel_flavor = cfg['main']['flavor']
+            try:
+                pekel_flavor = cfg['main']['flavor']
+            except KeyError:
+                pekel_flavor = cfg['pekel']['flavor']
+        try:
+            flavor = cfg['main']['flavor']
+        except KeyError:
+            flavor = cfg['estimate']['flavor']
         stretch_dir = os.path.join(
             stretch_dir0, key, 'stretch_stack_{}'.format(
-                flavor))
+                stretch_flavor))
         reach_dir = os.path.join(# guess this one
             stretch_dir0, key, 'reach_avg_{}'.format(
                 flavor))
         pekel_dir = os.path.join(
             pekel_dir0, key, 'pekel_{}'.format(
                 pekel_flavor))
-        outdir = os.path.join(outdir0, key, cfg['main']['flavor'])
+        outdir = os.path.join(outdir0, key, flavor)
 
         file_stretch = os.path.join(
             stretch_dir, '{}_stretch_stack.nc'.format(key))
