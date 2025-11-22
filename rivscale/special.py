@@ -127,6 +127,7 @@ def var_binned_node_stats(bin_var_in, var1_in, var2_in=None,
     var1_stats = np.zeros((num_stats, num_nodes, num_samps)) + np.nan
     if var2 is not None:
         var2_stats = np.zeros((num_stats, num_nodes, num_samps)) + np.nan
+    bin_stats = np.zeros((num_stats, num_nodes, num_samps)) + np.nan
     count = np.zeros((num_nodes, num_samps))
     for k in range(num_nodes):
         for kk, tbins in enumerate(bins):
@@ -136,17 +137,23 @@ def var_binned_node_stats(bin_var_in, var1_in, var2_in=None,
                 statistic=np.nansum, bins=tbins)[0]
             for p, ptile in enumerate(percentile_list):
                 percentile_func = lambda arr: np.nanpercentile(arr, ptile)
+                # bin var1
                 var1_stats[p, k,kk::skip] = scipy.stats.binned_statistic(
                     bin_var[k,:], var1[k,:],
                     statistic=percentile_func, bins=tbins)[0]
+                bin_stats[p, k,kk::skip] = scipy.stats.binned_statistic(
+                    bin_var[k,:], bin_var[k,:],
+                    statistic=percentile_func, bins=tbins)[0]
+                # bin the input bin_var too
                 if var2 is not None:
+                    # bin var2
                     var2_stats[p, k,kk::skip] = scipy.stats.binned_statistic(
                         bin_var[k,:], var2[k,:],
                         statistic=percentile_func, bins=tbins)[0]
         #
     if var2 is None:
-        return bins, count, percentile_list, var1_stats
-    return bins, count, percentile_list, var1_stats, var2_stats
+        return bins, count, percentile_list, bin_stats, var1_stats
+    return bins, count, percentile_list, bin_stats, var1_stats, var2_stats
 
 def seasonal_stats(stack, keys=['wse', 'width'],
         percentile_list=[25, 50, 75], bins=np.linspace(0, 366, 10)):

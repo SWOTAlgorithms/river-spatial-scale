@@ -45,5 +45,10 @@ DIMENSIONS_NTR = odict([
     ['num_times', 0],
     ['num_reaches', 0]])
 
+DIMENSIONS_FLOW = odict([
+    ['num_nodes', 0],
+    ['num_states', 0]])
+
+
 PERCENTILES = [5, 25, 32, 50, 68, 75, 95]
 
