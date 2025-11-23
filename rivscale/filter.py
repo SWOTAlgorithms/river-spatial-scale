@@ -38,12 +38,14 @@ def filter_stretch_stack(
     if 'crop' not in cfg.keys():
         cfg['crop'] = 'False'
     #
+    """
     # populate witdh_u
     # TODO: fix the uncertainty itself instead of fudging it here  
     node_len = stretch_stack['area_total'] / stretch_stack['width']
     stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
     # make measurement uncert at least as much as signal uncert we assume
     stretch_stack['width_u'] = stretch_stack['width_u'] + 10 # + 500#2*prior_unc_alpha_width
+    """
     # smooth the widths before anything else, if commanded
     if cfg['width_smooth_size'] is not None:
         stretch_stack.smooth_widths(size=cfg['width_smooth_size'])

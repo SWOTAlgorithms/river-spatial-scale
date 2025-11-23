@@ -26,7 +26,73 @@ def smooth_widths(widths_in, size=11):
     width_filt[w_mask==0] = np.nan
     return width_filt
 
-def process_along_stats(cfg, stretch_stack_in):
+def process_dark_stats(cfg,stretch_stack_in):
+    """
+    This function processes the original stack of multitemporal 
+    SWOT data node-level measurements over a multi-reach streach
+    to estimate the along-river statistics for dark water
+    """
+    # first handle optional config params
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = 'False'
+    stretch_stack = stretch_stack_in.copy()
+    # create the dark stats before any filtering
+    dark_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
+        stretch_stack, signal_key='dark_frac', kernel_size=None)
+    if cfg['crop']:
+        # crop to reach
+        dark_stats = dark_stats.crop_to_reach()
+    return dark_stats
+
+def process_smooth_widths(cfg, stretch_stack_in):
+    """
+    This function processes the original stack of multitemporal 
+    SWOT data node-level measurements over a multi-reach streach
+    to estimate the along-river statistics for WSE and width
+    """
+    # first handle optional config params
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = 'False'
+    stretch_stack = stretch_stack_in.copy()
+    ## optionally smooth the widths
+    if cfg['width_smooth_size'] is not None:
+        stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
+    return stretch_stack
+
+def process_filter_stack(cfg, stretch_stack_in):
+    """
+    This function processes the original stack of multitemporal 
+    SWOT data node-level measurements over a multi-reach streach
+    to filter out/exclude poor data based on quality and outlier rejection
+    """
+    # first handle optional config params
+    if 'width_smooth_size' not in cfg.keys():
+        cfg['width_smooth_size'] = 'None'
+    if 'wse_ref_kernel_size' not in cfg.keys():
+        cfg['wse_ref_kernel_size'] = '35'
+    if 'width_ref_kernel_size' not in cfg.keys():
+        cfg['width_ref_kernel_size'] = 'None'#'11'
+    if 'crop' not in cfg.keys():
+        cfg['crop'] = 'False'
+    stretch_stack = stretch_stack_in.copy()
+    # filter the data
+    stretch_stack, _ = rivscale.filter.filter_stretch_stack(
+            cfg,
+            stretch_stack,
+            wse_stats=None,
+            width_stats=None,
+            plot=False)
+    if np.shape(stretch_stack.width)[1]==0:
+        print('  No SWOT data left after multitemporal filtering')
+        return None
+    if cfg['crop']:
+        # crop to reach
+        stretch_stack = stretch_stack.crop_to_reach()
+    return stretch_stack
+
+def process_along_stats(cfg, stretch_stack_in, filterit=False):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
@@ -38,26 +104,24 @@ def process_along_stats(cfg, stretch_stack_in):
     if 'wse_ref_kernel_size' not in cfg.keys():
         cfg['wse_ref_kernel_size'] = '35'
     if 'width_ref_kernel_size' not in cfg.keys():
-        cfg['width_ref_kernel_size'] = '11'
+        cfg['width_ref_kernel_size'] = 'None'#'11'
     if 'crop' not in cfg.keys():
         cfg['crop'] = 'False'
     stretch_stack = stretch_stack_in.copy()
-    # create the dark stats before any filtering
-    dark_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
-        stretch_stack, signal_key='dark_frac', kernel_size=None)
     # filter the data
-    stretch_stack, _ = rivscale.filter.filter_stretch_stack(
-        cfg,
-        stretch_stack,
-        wse_stats=None,
-        width_stats=None,
-        plot=False)
+    if filterit:
+        stretch_stack, _ = rivscale.filter.filter_stretch_stack(
+            cfg,
+            stretch_stack,
+            wse_stats=None,
+            width_stats=None,
+            plot=False)
     if np.shape(stretch_stack.width)[1]==0:
         print('  No SWOT data left after multitemporal filtering')
-        return None, None, None
+        return None, None
     ## optionally smooth the widths
-    #if cfg['width_smooth_size'] is not None:
-    #    stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
+    if cfg['width_smooth_size'] is not None:
+        stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
     # compute multitemporal statistics
     wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
         stretch_stack, signal_key='wse', kernel_size=cfg['wse_ref_kernel_size'])
@@ -67,7 +131,7 @@ def process_along_stats(cfg, stretch_stack_in):
         # crop to reach
         wse_stats = wse_stats.crop_to_reach()
         width_stats = width_stats.crop_to_reach()
-    return wse_stats, width_stats, dark_stats
+    return wse_stats, width_stats
 
 def process_width_correction(cfg, stretch_stack_in):
     """
@@ -91,7 +155,8 @@ def process_width_correction(cfg, stretch_stack_in):
             apply_filter=False, cfg=cfg)
     return stretch_stack
 
-def process_stack_filter(cfg, stretch_stack_in):
+# TODO: should delete this one?
+def process_stack_filter_defunkt(cfg, stretch_stack_in):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
@@ -117,33 +182,47 @@ def process_stack_filter(cfg, stretch_stack_in):
         return None
     return stretch_stack
 
-def process_height_width_array(cfg, stretch_stack_in, filterit=False):
+def process_flow_state(cfg, stretch_stack, wse_stats, wse_stretch_avg):
+    """
+    """
+    # first handle optional config params
+    if 'bin_width' not in cfg.keys():
+        cfg['bin_width'] = '0.5'
+    if 'oversamp_factor' not in cfg.keys():
+        cfg['oversamp_factor'] = '2'
+
+    flow_state = None
+    if 'stretch_average' in cfg['method']:
+        # TODO: check that input data are valid
+        flow_state = rivscale.products.flow_state.FlowStateModel.from_objects(
+            stretch_stack,
+            wse_stats,
+            wse_stretch_avg,
+            bin_width = cfg['bin_width'], 
+            oversamp_factor = cfg['oversamp_factor'])
+    elif 'stack' in cfg['method']:
+        #TODO: implement from_arrays
+        pass
+    return flow_state
+       
+
+def process_height_width_array(cfg, stretch_stack_in,
+        wse_stats, flow_state, filterit=False):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
     to estimate the along-river statistics for WSE and width
     as well as the height/width model fit for each node
     """
-    # first handle optional config params
-    
-    #if 'width_smooth_size' not in cfg.keys():
-    #    cfg['width_smooth_size'] = 'None'
-    if 'wse_ref_kernel_size' not in cfg.keys():
-        cfg['wse_ref_kernel_size'] = '35'
-    if 'width_ref_kernel_size' not in cfg.keys():
-        cfg['width_ref_kernel_size'] = 'None'
+    # first handle optional config params 
+    if 'use_flow_state' not in cfg.keys():
+        cfg['use_flow_state'] = 'False'
     if 'crop' not in cfg.keys():
         cfg['crop'] = 'False'
     if 'snapit' not in cfg.keys():
         cfg['snapit'] = 'False'
     if 'neighbor_win_len' not in cfg.keys():
         cfg['neighbor_win_len'] = '0'
-    if 'flow_state_filter_method' not in cfg.keys():
-        cfg['flow_state_filter_method'] = 'None'
-    if 'flow_filter_bin_width' not in cfg.keys():
-        cfg['flow_filter_bin_width'] = '0.5'
-    if 'flow_filter_oversamp_factor' not in cfg.keys():
-        cfg['flow_filter_oversamp_factor'] = '2'
     stretch_stack = stretch_stack_in.copy()
     if filterit:
         # normally we will filter it before calling this function
@@ -155,77 +234,29 @@ def process_height_width_array(cfg, stretch_stack_in, filterit=False):
             plot=False)
     if np.shape(stretch_stack.width)[1]==0:
         print('  No SWOT data left after multitemporal filtering')
-        return None, None, None, None, None
+        return None
     # compute multitemporal statistics
-    wse_stretch_avg = None
-    width_stats = None
-    wse_stats = None
-    wse_reference = None
-    if cfg['neighbor_win_len'] > 0:
-        # we will need this to detrend so that  wses are comparable
-        # among consecutive nodes
-        wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
-            stretch_stack, signal_key='wse', kernel_size=cfg['wse_ref_kernel_size'])
-        wse_reference = wse_stats.reference
-    # init the arrays
     wse_arr = stretch_stack.wse.copy()
     width_arr = stretch_stack.width.copy()
-    # optionally filter arrays with common flow-states/wses
-    if cfg['flow_state_filter_method'] is not None:
-        # filter the wse and width for bins accross common flow states
-        bin_var = stretch_stack.wse.copy()
-        if 'stretch_average' in cfg['flow_state_filter_method']:
-            # use the stretch_average wse to bin flow-states
-            if wse_stats is None:
-                wse_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
-                    stretch_stack, signal_key='wse',
-                    kernel_size=cfg['wse_ref_kernel_size'])
-            width_stats = rivscale.products.along_stretch.AlongStretchStats.from_StretchStack(
-                stretch_stack, signal_key='width',
-                kernel_size=cfg['width_ref_kernel_size'])
-
-            wse_avg, width_avg = rivscale.estimate.process_stretch_average(
-                cfg, stretch_stack, wse_stats, width_stats)
-            bin_var = np.zeros(np.shape(stretch_stack.time_id)) + np.nan
-            for k, time_i in enumerate(wse_avg.time_id):
-                bin_var[stretch_stack.time_id==time_i] = wse_avg.mean[k]
-
-        # call the binnner
-        bbins, bin_count, p_list, width_bin_stats, wse_bin_stats = \
-            rivscale.special.var_binned_node_stats(
-                bin_var, width_arr, wse_arr,
-                bin_width=cfg['flow_filter_bin_width'],
-                oversamp_factor=cfg['flow_filter_oversamp_factor'],
-                percentile_list=[50,])#only do 50th %tile
-        wse_arr = np.squeeze(wse_bin_stats[0])
-        width_arr = np.squeeze(width_bin_stats[0])
-    # now do the height_width_array
-    """
-    height_width_array = rivscale.products.height_width_array.HeightWidthModelArray.from_stretch_stack(
-        stretch_stack,
-        wse_reference=wse_stats.reference,
-        snapit=cfg['snapit'],
-        neighbor_win_len=cfg['neighbor_win_len']) 
-    """
-    height_width_array = rivscale.products.height_width_array.HeightWidthModelArray.from_arrays(
-        wse_arr,
-        width_arr,
-        along_dist=stretch_stack.along_dist.copy(),
-        node_id=stretch_stack.node_id.copy(),
-        stretch_name=stretch_stack.stretch_name,
-        wse_reference=wse_reference,
-        snapit=cfg['snapit'],
-        neighbor_win_len=cfg['neighbor_win_len'])
+    wse_reference = wse_stats.reference
+    if cfg['use_flow_state']:
+        wse_arr = flow_state.wse_profiles
+        width_arr = flow_state.width_profiles
+    height_width_array = \
+        rivscale.products.height_width_array.HeightWidthModelArray.from_arrays(
+            wse_arr,
+            width_arr,
+            along_dist=stretch_stack.along_dist.copy(),
+            node_id=stretch_stack.node_id.copy(),
+            stretch_name=stretch_stack.stretch_name,
+            wse_reference=wse_reference,
+            snapit=cfg['snapit'],
+            neighbor_win_len=cfg['neighbor_win_len'])
     # now optionally crop
     if cfg['crop']:
         # crop to reach
-        if wse_stats is not None:
-            wse_stats = wse_stats.crop_to_reach()
-        if width_stats is not None:
-            width_stats = width_stats.crop_to_reach()
-        #stretch_stack = stretch_stack.crop_to_reach()
         height_width_array = height_width_array.crop_to_reach()
-    return wse_stats, width_stats, wse_stretch_avg, height_width_array
+    return height_width_array
 
 def process_stretch_average(
         cfg,
