@@ -406,16 +406,18 @@ class HeightWidthModelArray(Product):
                 iterations=2)
             # smooth out extrapolation
             grid_z_clip = grid_z0.copy()
-            grid_z_clip[grid_z0>np.max(self.wse_coords)] = np.max(
+            grid_z_clip[grid_z0>np.max(self.wse_coords)] = np.nanmax(
                 self.wse_coords)
-            grid_z_clip[grid_z0<np.min(self.wse_coords)] = np.min(
+            grid_z_clip[grid_z0<np.min(self.wse_coords)] = np.nanmin(
                 self.wse_coords)
             grid_z_sm = scipy.ndimage.uniform_filter(grid_z_clip, size=3)
             grid_z = grid_z_sm.copy()
             grid_z[msk==1] = grid_z0[msk==1]
             grid_z[msk_d==0] = np.nan
             grid_z_rgb = grid_z.copy()
-            grid_z_rgb[msk_d==0] = np.min(self.wse_coords)
+            zmin = np.nanmin(self.wse_coords)
+            grid_z_rgb[~(np.isfinite(grid_z_rgb))] = zmin
+            grid_z_rgb[msk_d==0] = zmin
             # now interpolate/resample in regular grid in along_river
             ls = LightSource(270, 45)
             
@@ -431,7 +433,7 @@ class HeightWidthModelArray(Product):
         ax.set_xlabel(xlabel)
         ax.set_ylabel('width (m)')
         ax.set_zlabel('wse (m)')
-        ax.set_zlim((np.min(self.wse_coords), np.max(self.wse_coords)))
+        ax.set_zlim((np.nanmin(self.wse_coords), np.nanmax(self.wse_coords)))
         title = self.stretch_name
         if title_tag is not None:
             title = title + ' ' +title_tag
