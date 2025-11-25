@@ -14,6 +14,100 @@ import rivscale.products.along_stretch
 import rivscale.products.stretch_average
 import rivscale.special
 
+import rivscale.misc
+import os.path
+
+def make_single_stretch_config(cfg_run, stretch_name, abspath=True):
+    '''
+    use the runtime config for process_stretch_stack.py that can run several
+    stretches to a different format runtime config for a signel stretch that
+    is wanted by the est_priors Worker class
+    '''
+    # handle input being a file or an already read config
+    if isinstance(cfg_run,str):
+        infile = cfg_run
+        cfg_run = rivscale.misc.CfgParser()
+        cfg_run.read(infile)
+    # get outdir
+    out_path = cfg_run['main']['out_path']
+    if 'out_path' in cfg_run['estimate'].keys():
+        # use the one in estimate section if exists
+        out_path = cfg_run['estimate']['out_path']
+    outdir0 = os.path.join(out_path, cfg_run['main']['orbit'])
+    this_outpath = os.path.join(
+            outdir0,
+            f'{stretch_name}',
+            '{}'.format(cfg_run['estimate']['flavor']))
+    # get the stretch_stack file
+    try:
+        stretch_flavor = cfg_run['estimate']['stretch_stack_flavor']
+    except KeyError as e:
+        try:
+            # use the one from the stretch_stack section
+            stretch_flavor = cfg_run['stretch_stack']['flavor']
+        except KeyError as e1:
+            print("cannot generate input stretch_stack file")
+            stretch_flavor = None
+    stretch_file = 'None'
+    if stretch_flavor is not None:
+        stretch_file = os.path.join(
+            outdir0,
+            f'{stretch_name}',
+            f'stretch_stack_{stretch_flavor}',
+            f'{stretch_name}_stretch_stack.nc')
+    # get the reach average file
+    try:
+        reach_flavor = cfg_run['estimate']['reach_flavor']
+    except KeyError as e:
+        try:
+            # use the one from the reach_avg section
+            reach_flavor = cfg_run['reach_avg']['flavor']
+        except KeyError as e1:
+            reach_flavor = None
+    reach_path = 'None'
+    if reach_flavor is not None:
+        reach_path = os.path.join(
+            outdir0,
+            f'{stretch_name}',
+            f'reach_avg_{reach_flavor}')
+    # get the pekel file
+    try:
+        pekel_flavor = cfg_run['estimate']['pekel_flavor']
+    except KeyError as e:
+        try:
+            pekel_flavor = cfg_run['pekel']['flavor']
+        except KeyError as e1:
+            pekel_flavor = None
+    pekel_file = 'None'
+    if pekel_flavor is not None:
+        pekel_file = os.path.join(
+            outdir0,
+            f'{stretch_name}',
+            f'pekel_{pekel_flavor}',
+            f'{stretch_name}_width_along_stats.nc')
+    # get the param config file
+    try:
+        param_config_file = cfg_run['estimate']['param_config']
+    except KeyError as e:
+        param_config_file = 'None'
+    ####
+    # now create the config from string
+    ####
+    cfg_str = '[main]\n'+ \
+            'stretch_definition_file = {}\n'.format(
+                cfg_run['main']['stretch_definition_file']) + \
+            f'stretch_name = {stretch_name}\n' + \
+            f'stretch_stack_file = {stretch_file}\n' + \
+            f'reach_avg_path = {reach_path}\n' + \
+            f'pekel_along_stats_file = {pekel_file}\n' + \
+            f'out_path = {this_outpath}\n' + \
+            f'param_config = {param_config_file}'
+    out_cfg = rivscale.misc.CfgParser()
+    out_cfg.read_string(cfg_str)
+    if abspath:
+        out_cfg.abspaths()
+    return out_cfg
+
 def smooth_widths(widths_in, size=11):
     #widths = stretch_stack['width'].copy()
     widths = widths_in.copy()
