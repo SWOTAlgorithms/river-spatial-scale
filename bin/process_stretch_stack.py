@@ -46,63 +46,12 @@ import warnings
 import time
 import rivscale.misc
 
-EXAMPLE=''
+import rivscale.processors.est_priors
 
-def load_product(outfile, product_name, force):
-    #try to load the product, if cant, return None
-    obj = None
-    if force:
-        # return None
-        return obj
-    if 'stretch_stack' in product_name:
-        # it is a stretch
-        try:
-            obj = rivscale.products.stretch_stack.StretchStack.from_ncfile(
-                outfile)
-        except FileNotFoundError:
-            pass
-    elif 'stats' in product_name:
-        # its an alongstats product
-        try:
-            obj = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
-                outfile)
-        except FileNotFoundError:
-            pass
-    elif 'avg' in product_name:
-        # it is a stretch_average (or reach_average)
-        try:
-            obj = rivscale.products.stretch_average.StretchAverageStats.from_ncfile(
-                outfile)
-        except FileNotFoundError:
-            pass
-    elif 'height_width' in product_name:
-        if 'array' in product_name:
-            # it is a height_width_array_file
-            try:
-                obj = rivscale.products.height_width_array.HeightWidthModelArray.from_ncfile(
-                    outfile)
-            except FileNotFoundError:
-             pass
-        else:
-            # it is a height_width file
-            try:
-                obj = rivscale.products.height_width.HeightWidthModel.from_ncfile(
-                    outfile)
-            except FileNotFoundError:
-                pass
-    elif 'flow' in product_name:
-        try:
-            obj = rivscale.products.flow_state.FlowStateModel.from_ncfile(
-                outfile)
-        except FileNotFoundError:
-            pass
-    elif 'bayes' in product_name:
-        try:
-            obj = rivscale.products.bayes_data.BayesData.from_ncfile(
-                outfile)
-        except FileNotFoundError:
-            pass
-    return obj
+import logging
+LOGGER = logging.getLogger('estimate_priors')
+
+EXAMPLE=''
 
 def run_processor(processor_name, products, cfg, outfiles):
     print(f'    processing {processor_name}')
@@ -332,7 +281,7 @@ def process_one_stretch(cfg_run, cfg_param, force, stretch_dir0, pekel_dir0, out
     # now go through and try to load or process the products
     for prod_key in product_list:
         # try to load the file for this product
-        this_prod = load_product(outfiles[prod_key],prod_key, force)
+        this_prod = rivscale.io.load_product(outfiles[prod_key],prod_key, force)
         products[prod_key] = this_prod
         #
     
@@ -363,6 +312,9 @@ def main():
     parser.add_argument('config', help='config file')
     parser.add_argument('--force', default=False, action='store_true',
         help='force rerun and overwriting of output files')
+    parser.add_argument(
+        '-l', '--log-level', type=str, default="debug",
+        help="logging level, one of: debug info warning error")
     args = parser.parse_args()
     # read in the config file
     #cfg = configparser.ConfigParser()
@@ -421,8 +373,88 @@ def main():
             df_stretches[df_stretches[key]>0][key]).astype(int)
         print("processing {} of {}, stretch: {}".format(
             i, N, key), ", Reaches:", stretch_reaches)
-        process_one_stretch(cfg_run, cfg_param, args.force,
-            stretch_dir0, pekel_dir0, outdir0, key, stretch_stack_flavor)
+        #process_one_stretch(cfg_run, cfg_param, args.force,
+        #    stretch_dir0, pekel_dir0, outdir0, key, stretch_stack_flavor)
+        # create config
+        this_cfg = rivscale.misc.CfgParser()
+        #this_cfg.copy_sects(['main', 'estimate'], cfg_run)
+        #this_cfg.abspaths()
+        #this_cfg.write_sects(os.path.join(cfg_run['main']['out_path'],cfg_run['main']['out_path'],))
+        try:
+            stretch_flavor = cfg_run['estimate']['stretch_stack_flavor']
+        except KeyError as e:
+            # use the one from the stretch_stack section
+            stretch_flavor = cfg_run['stretch_stack']['flavor']
+        try:
+            reach_flavor = cfg_run['estimate']['reach_flavor']
+        except KeyError as e:
+            # use the one from the reach_avg section
+            reach_flavor = cfg_run['reach_avg']['flavor']
+        try:
+            pekel_flavor = cfg_run['estimate']['pekel_flavor']
+        except KeyError as e:
+            pekel_flavor = cfg_run['pekel']['flavor']
+        #
+        stretch_file = os.path.join(
+            outdir0,
+            f'{stretch}',
+            f'stretch_stack_{stretch_flavor}',
+            f'{key}_stretch_stack.nc')
+        reach_path = os.path.join(
+            outdir0,
+            f'{stretch}',
+            f'reach_avg_{reach_flavor}')
+        this_outpath = os.path.join(
+            outdir0,
+            f'{stretch}',
+            '{}'.format(cfg_run['estimate']['flavor']))
+        pekel_file = os.path.join(
+            outdir0,
+            f'{stretch}',
+            f'pekel_{pekel_flavor}',
+            f'{key}_width_along_stats.nc')
+        param_config_file = cfg_run['estimate']['param_config']
+        cfg_str = '[main]\n'+ \
+            'stretch_definition_file = {}\n'.format(
+                cfg_run['main']['stretch_definition_file']) + \
+            f'stretch_name = {key}\n' + \
+            f'stretch_stack_file = {stretch_file}\n' + \
+            f'reach_avg_path = {reach_path}\n' + \
+            f'pekel_along_stats_file = {pekel_file}\n' + \
+            f'out_path = {this_outpath}\n' + \
+            f'param_config = {param_config_file}'
+        this_cfg.read_string(cfg_str)
+        this_cfg.abspaths()
+        #this_cdf.write_sects(['main',])
+        #breakpoint()
+        # replace the stretch_subset with the single one
+        
+        #this_cfg['main']['stretch_subset'] = f'{key}'
+        #this_cdf.write_sects(['main', 'estimate'])
+        # create output dir if no exist and write the config
+        if not os.path.exists(this_outpath):
+            os.makedirs(this_outpath)
+        this_cfg.write_sects(os.path.join(this_outpath,'run.cfg'),['main'])
+        # set up logger
+        both_logfile = os.path.join(this_outpath, 'log.txt')
+        level = {'debug': logging.DEBUG, 'info': logging.INFO,
+             'warning': logging.WARNING, 'error': logging.ERROR}[args.log_level]
+        frmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        #if args.stdout:
+        #    logging.basicConfig(level=level, format=format)
+        #else:
+        print('Logging all output to:', both_logfile)
+        logging.basicConfig(
+            filename=both_logfile ,level=level, format=frmt, filemode='w')
+        # call worker
+        worker = rivscale.processors.est_priors.Worker(this_cfg, args.force)
+        success = worker.run()
+        # TODO: logs gets clobbered if we dont reprocess
+        #       should check and not clobber log if we dont rerun
+        #       Also, should probably check to not clobber config
+        #breakpoint()
+        if not success:
+            continue
         this_stop = time.time()
         print('  execution time: {:2.2f} seconds'.format(this_stop - this_start))
 

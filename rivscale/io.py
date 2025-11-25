@@ -196,5 +196,48 @@ def load_field_data(fles, sword_file):
     return pt_df, drift_df
 
 
+def load_product(infile, product_name=None, force=False):
+    #try to load the product, if cant, return None
+    obj = None
+    # first check if the file exists
+    if not os.path.exists(infile):
+        return None
+    if product_name is None:
+        # try to derive it from the filename
+        pth, base = os.path.split(infile)
+        product_name = base
+    if force:
+        # return None
+        return obj
+    # now try each case
+    if 'stretch_stack' in product_name:
+        # it is a stretch    
+        obj = rivscale.products.stretch_stack.StretchStack.from_ncfile(
+            infile)
+    elif 'stats' in product_name:
+        # its an alongstats product
+        obj = rivscale.products.along_stretch.AlongStretchStats.from_ncfile(
+            infile)
+    elif 'avg' in product_name:
+        # it is a stretch_average (or reach_average)
+        obj = rivscale.products.stretch_average.StretchAverageStats.from_ncfile(
+            infile)
+    elif 'height_width' in product_name:
+        if 'array' in product_name:
+            # it is a height_width_array_file
+            obj = rivscale.products.height_width_array.HeightWidthModelArray.from_ncfile(
+                infile)
+        else:
+            # it is a height_width file
+            obj = rivscale.products.height_width.HeightWidthModel.from_ncfile(
+                infile)
+    elif 'flow' in product_name:
+        obj = rivscale.products.flow_state.FlowStateModel.from_ncfile(
+            infile)
+    elif 'bayes' in product_name:
+        obj = rivscale.products.bayes_data.BayesData.from_ncfile(
+            infile)
+    return obj
+
 
 

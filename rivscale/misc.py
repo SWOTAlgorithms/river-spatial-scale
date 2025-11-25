@@ -14,6 +14,7 @@ import textwrap
 import os.path
 import pandas as pd
 import datetime
+import os.path
 
 MISSING_VALUE_FLT = -999999999999
 
@@ -243,21 +244,37 @@ class CfgParser(ConfigParser):
         string = ''.join(string)
         super(ConfigParser, self).read_string(string)
 
-    def write_sects(self, filename, section_list):
-        """Load a file, adding 'main' section if necessary"""
+    def read_string(self,string):
+        super(ConfigParser, self).read_string(string)
+
+    def abspaths(self):
+        """make all existing paths abspaths"""
+        for section in self.keys():
+            for key in self[section].keys():
+                value = f'{self[section][key]}'
+                if os.path.exists(value):
+                    self[section][key] = os.path.abspath(value)
+
+    def sects_to_string(self, section_list):
+        """make the config into a string for specific sections"""
         string = ''
         for section in section_list:
             string = string + f'[{section}]\n'
             for key in self[section].keys():
                 string = string + '{} = {}\n'.format(key,self[section][key])
             string = string + '\n'
+        return string
+
+    def copy_sects(self, section_list, cfg_in):
+        """copy specific sections form onther config"""
+        string = cfg_in.sects_to_string(section_list)
+        super(ConfigParser, self).read_string(string)
+
+    def write_sects(self, filename, section_list):
+        """write specific sections to file"""
+        string = self.sects_to_string(section_list)
         with open(filename, 'w') as f:
-            f.write(string+'\n')
-        #string = open(filename, 'r').readlines()
-        #if string[0][0] != '[' and string[0][-1] != ']':
-        #    string = ['[main]\n'] + string
-        #string = ''.join(string)
-        #super(ConfigParser, self).read_string(string)
+            f.write(string)
 
     def get(self, *args, **kwargs):
         '''Get the data as specific type, if possible'''
