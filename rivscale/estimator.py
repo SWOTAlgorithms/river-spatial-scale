@@ -28,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 
 WARN_STR = '        already processed, not rerunning'
 
-class Worker(object):
+class Estimator(object):
     '''
     Turn a stretch_stack into multiple products holding information
     for a specific stretch aggregated over time.  These products include:
