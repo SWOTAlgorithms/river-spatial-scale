@@ -105,7 +105,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
         df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
     if 'xtrk_dist' in df.keys():
         tmp = df['xtrk_dist']
-        tmp[tmp==''] = np.nan # handle null ct...not sure why we get it though
+        not_scalar = np.array([np.logical_not(np.isscalar(t)) for t in tmp])
+        tmp[not_scalar] = np.nan # handle null ct...not sure why we get it though
         #breakpoint()
         df['cross_track'] = tmp / 1000.0 #(km)
     #if 'continent' not in df.keys():
