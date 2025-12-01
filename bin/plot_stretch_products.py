@@ -36,7 +36,17 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
     for f in files:
         base, fle = os.path.split(f)
         if 'stretch_stack' in fle:
-            dic['stretch_stack'] = \
+            if 'stretch_stack_smoothwidth' in fle:
+                dic['stretch_stack_smoothwidth'] = \
+                    rivscale.products.stretch_stack.StretchStack.from_ncfile(f)
+            elif 'stretch_stack_filt' in fle:
+                dic['stretch_stack_filt'] = \
+                    rivscale.products.stretch_stack.StretchStack.from_ncfile(f)
+            elif 'stretch_stack_corr' in fle:
+                dic['stretch_stack_corr'] = \
+                    rivscale.products.stretch_stack.StretchStack.from_ncfile(f)
+            else:
+                dic['stretch_stack'] = \
                     rivscale.products.stretch_stack.StretchStack.from_ncfile(f)
         if 'wse_stats' in fle:
             dic['wse_stats'] = \
@@ -131,7 +141,15 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
                     'wse_stats' in dic.keys()) and (
                         'width_stats')):
                 # plot the noisy node data
-                stretch_stack = dic['stretch_stack']
+                # use the most processed stretch_stack
+                if 'stretch_stack_smoothwidth' in dic.keys():
+                    stretch_stack = dic['stretch_stack_smoothwidth']
+                elif 'stretch_stack_filt' in dic.keys():
+                    stretch_stack = dic['stretch_stack_filt']
+                elif 'stretch_stack_corr' in dic.keys():
+                    stretch_stack = dic['stretch_stack_corr']
+                else:
+                    stretch_stack = dic['stretch_stack']
                 wse_stats = dic['wse_stats']
                 width_stats = dic['width_stats']
                 wse = stretch_stack['wse']
@@ -204,6 +222,10 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
     if cfg is not None:
         try:
             this_cfg = cfg['reconstruct']
+            if 'stretch_stack_corr' in dic.keys():
+                this_stack = dic['stretch_stack'].copy()
+            else:
+                this_stack = dic['stretch_stack'].copy()
             if 'use_pekel' not in this_cfg.keys():
                 this_cfg['use_pekel'] = 'false'
             if this_cfg['use_pekel']:
@@ -213,7 +235,7 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
             #breakpoint()
             stretch_stack, _ = rivscale.filter.filter_stretch_stack(
                 this_cfg,
-                dic['stretch_stack'].copy(),
+                this_stack,#dic['stretch_stack_corr'].copy(),
                 dic['wse_stats'],
                 this_width_stats,
                 plot=True,
@@ -359,6 +381,12 @@ def main():
 
         file_stretch = os.path.join(
             stretch_dir, '{}_stretch_stack.nc'.format(key))
+        file_stretch_corr = os.path.join(
+            outdir, '{}_stretch_stack_corr.nc'.format(key))
+        file_stretch_filt = os.path.join(
+            outdir, '{}_stretch_stack_filt.nc'.format(key))
+        file_stretch_smoothwidth = os.path.join(
+            outdir, '{}_stretch_stack_smoothwidth.nc'.format(key))
         file_reach_wse = os.path.join(
             reach_dir, '{}_wse_reach_average.nc'.format(key))
         file_reach_width = os.path.join(
@@ -386,6 +414,12 @@ def main():
         files = []
         if os.path.exists(file_stretch):
             files.append(file_stretch)
+        if os.path.exists(file_stretch_corr):
+            files.append(file_stretch_corr)
+        if os.path.exists(file_stretch_filt):
+            files.append(file_stretch_filt)
+        if os.path.exists(file_stretch_smoothwidth):
+            files.append(file_stretch_smoothwidth)
         if os.path.exists(file_reach_wse):
             files.append(file_reach_wse)
         if os.path.exists(file_reach_width):
