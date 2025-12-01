@@ -31,7 +31,7 @@ This produces and output named
 ## Making a Stretch Stack
 The process of creating the stretch objects and processing them runs in a few steps based on config files (an example is in the config subdir).  The first script that generates the StretchStack object of the SWOT SP node data is (you can stage the RiverSP data locally or have it be ingested using the hydrochron script):
 
-`$ make_stretch_stack.py <config.cfg>`
+`$ make_stretch_stack.py <runtime.cfg>`
 
 This creates products/files for each commanded stretch called
 
@@ -41,10 +41,12 @@ If the option to ingest the RiverSP data using hte hydrochron tools is commanded
 
 For the stretches defined by multireach\_from\_sword.py the stretch\_name is the reach\_id.
 
+Note that the runtime.cfg file defines which reaches/stretches to create/process as well as the input and output paths to files as well as controls how the SWOT data are obtained/input (e.g., ingested from podaac on the fly or run from predownloaded dataframes or RiverSP files etc).  The same runtime config can be used for multple processing steps and controls how each subprocessor behaves (including pointing to separate, potentially different parmater config files param.cfg).  Examples of these two config files are in the config subdir of the repository, users will need to adjust paths in the runtime config, but should only need to modify the param.cfg in special curcumstances.
+
 ## Making Reach-input Objects (Optional)
 The stack of reach data can be optionally created from the RiverSP reach data by calling:
 
-`$ make_stretch_average_from_reaches.py <reach_avg.cfg>`
+`$ make_stretch_average_from_reaches.py <runtime.cfg>`
 
 This creates product(s)/file(s) called:
  
@@ -57,7 +59,7 @@ This creates product(s)/file(s) called:
 ## Making Pekel Products (Optional)
 The pekel-derived along-river width statistics can also be optionally created from special 'truth' river processing outputs of the Pekel occurrence maps thresholded at different water occurrence rates.
 
-`$ pekel_width_stats.py <stretch_stack.cfg>`
+`$ pekel_width_stats.py <runtime.cfg>`
 
 which produces a product with file-name:
 
@@ -66,7 +68,7 @@ which produces a product with file-name:
 ## Processing the Stretch Stack
 Now all the stretch_stack processing steps can be run from the stretch stack (and optionally the pekel width stats):
 
-`$ process_stretch_stack.py <process.cfg>`
+`$ process_stretch_stack.py <runtime.cfg>`
 
 This outputs several products/files in the output directory:
 
@@ -87,20 +89,9 @@ This outputs several products/files in the output directory:
 ## Plotting and Visualizing
 The results/products can be plotted using:
 
-`$ plot_stretch_products.py -c <process.cfg>`
+`$ plot_stretch_products.py -c <runtime.cfg>`
 
 If the -s option is given with a particular stretch name, the interactive plots are displayed for the given stretch, otherwise the plots are written to files in the corresponding subdirs.
-
-## Estimating Height/Width Relationships on a Per-node Basis
-A separate workflow has been created to estimate the height/width relationships for every node in a stretch/reach.  This approach optionally applies a per-pass width correction up front, then does quality and outlier filtering after which height/width relationships are estimated using percentiles for height and width for each node using only wse and width node estimates where both are valid and pass the quality filters.  There is also an option to estimate the percentiles over a multinode window for each node, effectively smoothing/relgularizing in the along river dimension to improve the statistics/estimates at the expense of spatial resolution.  There is a config called height_width_array.cfg in the config dir that can be used to set the various parameters of each step.
-
-Instead of calling process_stretch_stack.py, this workflow can be called (after creating the stretch_stack) from the command-line like this:
-
-`$ make_height_width_array.py <height_width_array.cfg>`
-
-The plot_stretch_products.py script can also be used to plot a 3D visualization of the height/width estimates along the channel:
-
-`$ plot_stretch_products.py -c <height_width_array.cfg> -s <stretch_name(i.e., reach_id)>`
 
 # info for older code
 The hydrochron.py script grabs data for the Ocmulgee, Colorado, and Yellowstone rivers and puts them in a pandas dataframe
