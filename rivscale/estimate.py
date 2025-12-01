@@ -242,10 +242,9 @@ def process_width_correction(cfg, stretch_stack_in):
     if 'width_ref_kernel_size' not in cfg.keys():
         cfg['width_ref_kernel_size'] = '11'
     stretch_stack = stretch_stack_in.copy()
-    #breakpoint()
     if cfg['method']=='bundle_adjust':
         # TODO: enable potentially different config for bundle adjustment
-        stretch_stack = bundle_adjust_per_pass_widths(
+        stretch_stack = stretch_stack.bundle_adjust_per_pass_widths(
             apply_filter=False, cfg=cfg)
     return stretch_stack
 

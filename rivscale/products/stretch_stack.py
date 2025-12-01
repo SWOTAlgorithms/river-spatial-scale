@@ -506,6 +506,8 @@ class StretchStack(Product):
                 wse_stats=None,
                 width_stats=None,
                 plot=False)
+        else:
+            stack = self.copy()
         # now split into separate passes
         stacks = stack.split_per_pass()
         # now estimate the correction for each pass for all nodes 
@@ -515,7 +517,7 @@ class StretchStack(Product):
         pid = []
         for this_stack in stacks:# loop over the pass-split stacks
             # run alongstats
-            t_wse_stats, t_width_stats, t_dark_stats = \
+            t_wse_stats, t_width_stats = \
                 rivscale.estimate.process_along_stats(
                     cfg, this_stack)
             #
