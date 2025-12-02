@@ -5,7 +5,7 @@ This software may be subject to U.S. export control laws. By accepting this soft
 
 Author: Brent Williams
 
-This class defines a processor for estimating the 
+This class defines a processor for running Bayes reconstruction giving the input 
 '''
 
 import logging
@@ -28,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 
 WARN_STR = '        already processed, not rerunning'
 
-class Estimator(object):
+class Reconstructor(object):
     '''
     Turn a stretch_stack into multiple products holding information
     for a specific stretch aggregated over time.  These products include:
@@ -48,7 +48,6 @@ class Estimator(object):
             run_config.read(run_config)
         self.cfg_run =  run_config
         self.force = force
-        #self.runable = True
         self.cfg_param = rivscale.misc.CfgParser()
         # create a container to hold products
         self.products = {}
@@ -70,21 +69,6 @@ class Estimator(object):
             if last_processor=='reconstruct':
                 if self.products['bayes'] is not None:
                     need = False
-            elif last_processor=='height_width_array':
-                if self.products['height_width_array'] is not None:
-                    need = False
-            elif last_processor=='height_width':
-                if self.products['height_width'] is not None:
-                    need = False
-            elif last_processor=='flow_state':
-                if self.products['flow_state'] is not None:
-                    need = False
-            elif last_processor=='stretch_average':
-                if self.products['wse_avg'] is not None:
-                    need = False
-            elif last_processor=='along_stats':
-                if self.products['wse_stats'] is not None:
-                    need = False
             elif last_processor=='smooth_widths':
                 if self.products['stretch_stack_smoothwidth'] is not None:
                     need = False
@@ -93,9 +77,6 @@ class Estimator(object):
                     need = False
             elif last_processor=='filter_stack':
                 if self.products['stretch_stack_filt'] is not None:
-                    need = False
-            elif last_processor=='dark_stats':
-                if self.products['dark_stats'] is not None:
                     need = False
 
         return need
@@ -124,12 +105,16 @@ class Estimator(object):
         # param config section headings
         ####
         # get processor list from section heading names
-        processor_list = list(self.cfg_param.keys())
+        self.processor_list = list(self.cfg_param.keys())
         # exclude the stretch-stack, stretch_avg, and pekel etc
         # assume we start processing with dark_stats
         # TODO: refine this
-        self.processor_list = processor_list[
-            processor_list.index('dark_stats'):]
+        #breakpoint()
+        rm_keys = ['DEFAULT', 'main']
+        for key in rm_keys:
+            if key in self.processor_list:
+                self.processor_list.remove(key)
+        #breakpoint()
         return success
 
     def load_inputs(self):
@@ -152,17 +137,9 @@ class Estimator(object):
         self.products['stretch_stack'] = stretch_stack
 
         # TODO: handle reach_avg and pekel
-
-        return success
-
-    def load_outputs(self):
         # load the output files if they already exist
         # get a list of output product names
-        self.product_list = [
-            'stretch_stack_corr',
-            'dark_stats',
-            'stretch_stack_filt',
-            'stretch_stack_smoothwidth',
+        product_list = [
             'wse_stats',
             'width_stats',
             'wse_avg',
@@ -170,6 +147,42 @@ class Estimator(object):
             'height_width',
             'flow_state',
             'height_width_array',
+            ]
+        # create the files
+        infiles = {}
+        for prod_key in product_list:
+            try:
+                infiles[prod_key] = os.path.join(
+                    self.cfg_run['main']['estimate_path'], '{}_{}.nc'.format(
+                        self.cfg_run['main']['stretch_name'], prod_key))
+            except KeyError as e:
+                self.outfiles[prod_key] = None
+        ####
+        # initialize products, and try to read if exists
+        ####
+        # init the output products to None
+        for prod_key in product_list:
+            self.products[prod_key] = None
+        # now go through and try to load the products if they already exist
+        for prod_key in product_list:
+            # try to load the file for this product
+            this_prod = None
+            if infiles[prod_key] is not None:
+                #try to read it
+                this_prod = rivscale.io.load_product(
+                    infiles[prod_key], prod_key, False)
+            if this_prod is None:
+                success = False
+            self.products[prod_key] = this_prod
+        return success
+
+    def load_outputs(self):
+        # load the output files if they already exist
+        # get a list of output product names
+        self.product_list = [
+            'stretch_stack_corr',
+            'stretch_stack_filt',
+            'stretch_stack_smoothwidth',
             'bayes',
             ]
         # create the output files
@@ -211,7 +224,8 @@ class Estimator(object):
 
     def run(self):
         '''run the worker to process a single stretch'''
-        LOGGER.info('    Running the estimate priors processor')
+        LOGGER.info('    Running the reconstruct Bayes processor')
+        #breakpoint()
         if not self.isrunable:
             LOGGER.info('    processor not runable')
             return False
@@ -229,22 +243,10 @@ class Estimator(object):
         success = False
         if processor_name=='width_correction':
             success = self.run_width_correction(self.cfg_param[processor_name])
-        elif processor_name=='dark_stats':
-            success = self.run_dark_stats(self.cfg_param[processor_name])
         elif processor_name=='filter_stack':
             success = self.run_filter_stack(self.cfg_param[processor_name])
         elif processor_name=='smooth_widths':
             success = self.run_smooth_widths(self.cfg_param[processor_name])
-        elif processor_name=='along_stats':
-            success = self.run_along_stats(self.cfg_param[processor_name])
-        elif processor_name=='stretch_average':
-            success = self.run_stretch_average(self.cfg_param[processor_name])
-        elif processor_name=='height_width':
-            success = self.run_height_width(self.cfg_param[processor_name])
-        elif processor_name=='flow_state':
-            success = self.run_flow_state(self.cfg_param[processor_name])
-        elif processor_name=='height_width_array':
-            success = self.run_height_width_array(self.cfg_param[processor_name])
         elif processor_name=='reconstruct':
             success = self.run_reconstruct(self.cfg_param[processor_name])
         return success
@@ -265,18 +267,6 @@ class Estimator(object):
             self.products['stretch_stack'] = corr_stack.copy()
         return True
 
-    def run_dark_stats(self, cfg):
-        if (self.products['dark_stats'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
-        else:
-            dark_stats = rivscale.estimate.process_dark_stats(
-                cfg, self.products['stretch_stack'])
-            # write output
-            if dark_stats is not None:
-                dark_stats.to_ncfile(self.outfiles['dark_stats'])
-            # update products
-            self.products['dark_stats'] = dark_stats
-        return True
  
     def run_filter_stack(self, cfg):
         filt_stack = self.products['stretch_stack_filt']
@@ -303,91 +293,6 @@ class Estimator(object):
                 corr_stack.to_ncfile(self.outfiles['stretch_stack_smoothwidth'])
             # update products
             self.products['stretch_stack_smoothwidth'] = corr_stack
-        return True
-
-    def run_along_stats(self, cfg):
-        if (self.products['width_stats'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
-        else:
-            wse_stats, width_stats = rivscale.estimate.process_along_stats(
-                cfg, self.products['stretch_stack'])
-            # write outputs
-            if wse_stats is not None:
-                wse_stats.to_ncfile(self.outfiles['wse_stats'])
-            if width_stats is not None:
-                width_stats.to_ncfile(self.outfiles['width_stats'])
-            #
-            self.products['wse_stats'] = wse_stats
-            self.products['width_stats'] = width_stats
-            #
-            if (wse_stats is None):
-                print(" wse_stats not generated, skipping rest of processing")
-                # TODO: should we check width too? but only of not using Pekel?
-                #continue
-                return False
-        return True
-
-    def run_stretch_average(self, cfg):
-        if (self.products['width_avg'] is not None) and (not self. force):
-            LOGGER.info(WARN_STR)
-        else:
-            wse_avg, width_avg = rivscale.estimate.process_stretch_average(
-                cfg,
-                self.products['stretch_stack'],
-                self.products['wse_stats'],
-                self.products['width_stats'])
-            # write outputs
-            if wse_avg is not None:
-                wse_avg.to_ncfile(self.outfiles['wse_avg'])
-            if width_avg is not None:
-                width_avg.to_ncfile(self.outfiles['width_avg'])
-            #
-            self.products['wse_avg'] = wse_avg
-            self.products['width_avg'] = width_avg
-        return True
-
-    def run_height_width(self, cfg):
-        if (self.products['height_width'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
-        else:
-            height_width = rivscale.products.height_width.HeightWidthModel.from_objects(
-                cfg,
-                self.products['wse_avg'],
-                self.products['width_avg'],
-                self.products['width_stats'])# TODO: handle Pekel
-            if height_width is not None:
-                height_width.to_ncfile(self.outfiles['height_width'])
-            self.products['height_width'] = height_width
-        return True
-
-    def run_flow_state(self, cfg):
-        if (self.products['flow_state'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
-        else:
-            flow_state = rivscale.estimate.process_flow_state(
-                cfg,
-                self.products['stretch_stack'],
-                self.products['wse_stats'],
-                self.products['wse_avg'],
-                )
-            if flow_state is not None:
-                flow_state.to_ncfile(self.outfiles['flow_state'])
-            self.products['flow_state'] = flow_state
-        return True
-
-    def run_height_width_array(self, cfg):
-        if (self.products['height_width_array'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
-        else:
-            hw_array = rivscale.estimate.process_height_width_array(
-                cfg,
-                self.products['stretch_stack'],
-                self.products['wse_stats'],
-                self.products['flow_state'],
-                )
-            if hw_array is not None:
-                hw_array.to_ncfile(self.outfiles['height_width_array'])
-            self.products['height_width_array'] = hw_array
         return True
 
     def run_reconstruct(self, cfg):

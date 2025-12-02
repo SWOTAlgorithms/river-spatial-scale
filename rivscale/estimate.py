@@ -17,7 +17,8 @@ import rivscale.special
 import rivscale.misc
 import os.path
 
-def make_single_stretch_config(cfg_run, stretch_name, abspath=True):
+def make_single_stretch_config(
+        cfg_run, stretch_name, abspath=True, section='estimate'):
     '''
     use the runtime config for process_stretch_stack.py that can run several
     stretches to a different format runtime config for a signel stretch that
@@ -30,17 +31,17 @@ def make_single_stretch_config(cfg_run, stretch_name, abspath=True):
         cfg_run.read(infile)
     # get outdir
     out_path = cfg_run['main']['out_path']
-    if 'out_path' in cfg_run['estimate'].keys():
+    if 'out_path' in cfg_run[section].keys():
         # use the one in estimate section if exists
-        out_path = cfg_run['estimate']['out_path']
+        out_path = cfg_run[section]['out_path']
     outdir0 = os.path.join(out_path, cfg_run['main']['orbit'])
     this_outpath = os.path.join(
             outdir0,
             f'{stretch_name}',
-            '{}'.format(cfg_run['estimate']['flavor']))
+            '{}'.format(cfg_run[section]['flavor']))
     # get the stretch_stack file
     try:
-        stretch_flavor = cfg_run['estimate']['stretch_stack_flavor']
+        stretch_flavor = cfg_run[section]['stretch_stack_flavor']
     except KeyError as e:
         try:
             # use the one from the stretch_stack section
@@ -50,6 +51,10 @@ def make_single_stretch_config(cfg_run, stretch_name, abspath=True):
             stretch_flavor = None
     stretch_file = 'None'
     if stretch_flavor is not None:
+        outdir1 = f'{outdir0}'
+        if 'stretch_stack_in_path' in cfg_run[section].keys():
+            outdir1 = os.path.join(
+                cfg_run[section]['stretch_stack_in_path'], cfg_run['main']['orbit'])
         stretch_file = os.path.join(
             outdir0,
             f'{stretch_name}',
@@ -57,7 +62,7 @@ def make_single_stretch_config(cfg_run, stretch_name, abspath=True):
             f'{stretch_name}_stretch_stack.nc')
     # get the reach average file
     try:
-        reach_flavor = cfg_run['estimate']['reach_flavor']
+        reach_flavor = cfg_run[section]['reach_flavor']
     except KeyError as e:
         try:
             # use the one from the reach_avg section
@@ -72,7 +77,7 @@ def make_single_stretch_config(cfg_run, stretch_name, abspath=True):
             f'reach_avg_{reach_flavor}')
     # get the pekel file
     try:
-        pekel_flavor = cfg_run['estimate']['pekel_flavor']
+        pekel_flavor = cfg_run[section]['pekel_flavor']
     except KeyError as e:
         try:
             pekel_flavor = cfg_run['pekel']['flavor']
@@ -80,14 +85,36 @@ def make_single_stretch_config(cfg_run, stretch_name, abspath=True):
             pekel_flavor = None
     pekel_file = 'None'
     if pekel_flavor is not None:
+        outdir1 = f'{outdir0}'
+        if 'pekel_in_path' in cfg_run[section].keys():
+            outdir1 = os.path.join(
+                cfg_run[section]['pekel_in_path'], cfg_run['main']['orbit'])
         pekel_file = os.path.join(
-            outdir0,
+            outdir1,
             f'{stretch_name}',
             f'pekel_{pekel_flavor}',
             f'{stretch_name}_width_along_stats.nc')
+    # try to get the "estimate" path/flavor
+    try:
+        estimate_flavor = cfg_run[section]['estimate_flavor']
+    except KeyError as e:
+        try:
+            estimate_flavor = cfg_run['estimate']['flavor']
+        except KeyError as e1:
+            estimate_flavor = None
+    estimate_path = 'None'
+    if estimate_flavor is not None:
+        outdir1 = f'{outdir0}'
+        if 'estimate_in_path' in cfg_run[section].keys():
+            outdir1 = os.path.join(
+                cfg_run[section]['estimate_in_path'], cfg_run['main']['orbit'])
+        estimate_path = os.path.join(
+            outdir1,
+            f'{stretch_name}',
+            f'{estimate_flavor}')
     # get the param config file
     try:
-        param_config_file = cfg_run['estimate']['param_config']
+        param_config_file = cfg_run[section]['param_config']
     except KeyError as e:
         param_config_file = 'None'
     ####
@@ -97,9 +124,14 @@ def make_single_stretch_config(cfg_run, stretch_name, abspath=True):
             'stretch_definition_file = {}\n'.format(
                 cfg_run['main']['stretch_definition_file']) + \
             f'stretch_name = {stretch_name}\n' + \
-            f'stretch_stack_file = {stretch_file}\n' + \
+            f'stretch_stack_file = {stretch_file}\n'
+    if section=='estimate':
+        cfg_str = cfg_str + \
             f'reach_avg_path = {reach_path}\n' + \
-            f'pekel_along_stats_file = {pekel_file}\n' + \
+            f'pekel_along_stats_file = {pekel_file}\n'
+    if section=='reconstruct':
+        cfg_str = cfg_str + f'estimate_path = {estimate_path}\n'
+    cfg_str = cfg_str + \
             f'out_path = {this_outpath}\n' + \
             f'param_config = {param_config_file}'
     out_cfg = rivscale.misc.CfgParser()
