@@ -87,7 +87,6 @@ class FlowStateModel(Product):
         if stretch_name is None:
             stretch_name = stretch_stack.stretch_name
         #
-        breakpoint()
         return cls.from_arrays(
             bin_var,
             stretch_stack.wse,
