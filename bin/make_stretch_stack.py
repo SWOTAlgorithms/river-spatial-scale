@@ -50,6 +50,8 @@ def main():
     parser.add_argument('config', help='config file')
     parser.add_argument('--force', default=False, action='store_true',
         help='force rerun and overwriting of output files')
+    parser.add_argument('--ingest_force', default=False, action='store_true',
+        help='force rerun and overwriting of output files')
     args = parser.parse_args()
     # read in the config file
     #cfg = configparser.ConfigParser()
@@ -81,6 +83,14 @@ def main():
         all_reaches = all_reaches + list(stretch_reaches)
     all_reaches = np.unique(all_reaches) 
     stretch_list = []
+    # get the SWOT node data
+    swot_node_df = rivscale.data.get_swot_data(
+            cfg,
+            stretch_reaches,#sword_node_df,
+            all_reaches,
+            kind='Node',
+            force=args.ingest_force,
+            sword_df=sword_node_df)
     for i,key in enumerate(df_stretches.keys()):
         outdir = os.path.join(
             outdir0,
@@ -99,14 +109,16 @@ def main():
         if (os.path.exists(outfile_stretch) and (not args.force)):
             print("  This stretch already processed")
             continue
+        """
         # get the SWOT node data
         swot_node_df = rivscale.data.get_swot_data(
             cfg,
             stretch_reaches,#sword_node_df,
             all_reaches,
             kind='Node',
-            force=args.force,
+            force=ingest_force,
             sword_df=sword_node_df)
+        """
         #breakpoint()
         if swot_node_df is None:
             # skip cases where we have no data

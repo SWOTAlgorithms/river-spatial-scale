@@ -78,7 +78,6 @@ class FlowStateModel(Product):
             bin_var = np.zeros(np.shape(stretch_stack.time_id)) + np.nan
             for k, time_i in enumerate(wse_stretch_avg.time_id):
                 bin_var[stretch_stack.time_id==time_i] = wse_stretch_avg.mean[k]
-            bin_var = wse_stretch_avg.mean
             #
             kind = 'wse_stretch_avg'
         else:
@@ -88,6 +87,7 @@ class FlowStateModel(Product):
         if stretch_name is None:
             stretch_name = stretch_stack.stretch_name
         #
+        breakpoint()
         return cls.from_arrays(
             bin_var,
             stretch_stack.wse,
