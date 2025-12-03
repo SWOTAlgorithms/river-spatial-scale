@@ -121,7 +121,7 @@ def main():
                 # only squash the final log file if we rerun it
                 shutil.move(log_file_tmp, log_file)
             except Exception as e:
-                print('problem processing')
+                print(f'problem processing {e}')
         else:
             print('    already processed, not reruning')
         this_stop = time.time()

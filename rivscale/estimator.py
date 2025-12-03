@@ -88,16 +88,6 @@ class Estimator(object):
        #
        self.LOGGER.info('successfully set up logger')
 
-    """
-    def __del__(self):
-        self.close()
-
-    def __exit__(self):
-        self.close()
-
-    def close(self):
-        self.release_logger()
-    """
     def release_logger(self):
         if self.log_handler is not None:
             if self.LOGGER is not None:
@@ -248,6 +238,8 @@ class Estimator(object):
             self.products[prod_key] = this_prod
 
     def load_data(self):
+        # first load the outputs to see if already processed
+        self.load_outputs()
         # load the param config
         if not self.load_param_config():
             return False
@@ -255,23 +247,11 @@ class Estimator(object):
         if not self.load_inputs():
             return False
         # now load the outputs
-        self.load_outputs()
+        #self.load_outputs()
         return True
 
     def run(self, logfile=None, log_level='info'):
         '''run the worker to process a single stretch'''
-        # set up the logger
-        #breakpoint()
-        """
-        self.LOGGER = logging.getLogger('{}'.format(self.cfg_run['main']['stretch_name']))
-        if logfile is not None:
-            level = {'debug': logging.DEBUG, 'info': logging.INFO,
-                'warning': logging.WARNING, 'error': logging.ERROR}[log_level]
-            frmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            #print('Logging all output to:', both_logfile)
-            logging.basicConfig(
-                filename=logfile ,level=level, format=frmt, filemode='w')
-        """
         self.LOGGER.info('Running the estimate priors processor')
         if not self.isrunable:
             self.LOGGER.info('processor not runable')
