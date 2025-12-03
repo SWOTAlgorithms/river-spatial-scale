@@ -29,20 +29,25 @@ import numpy as np
 
 WARN_STR = '        already processed, not rerunning'
 
-class Estimator(object):
+# define subprocess/sections with their outputs
+PROCESSOR_OUTPUTS = {
+    'reconstruct':'bayes',
+    'height_width_array':'height_width_array',
+    'height_width':'height_width',
+    'flow_state':'flow_state',
+    'stretch_average':'wse_avg',
+    'along_stats':'wse_stats',
+    'smooth_widths':'stretch_stack_smoothwidth',
+    'width_correction':'stretch_stack_corr',
+    'filter_stack':'stretch_stack_filt',
+    'dark_stats':'dark_stats'
+    }
+
+class Processor(object):
     '''
-    Turn a stretch_stack into multiple products holding information
-    for a specific stretch aggregated over time.  These products include:
-    1) along-river wse/width reference profiles and statistics
-    2) along-river spatial covariance estimates (wse and width)
-    3) height/width relationships (at node and at stretch-level)
-    4) flow-state model giving typical along-river info for wse and width
-       at multiple flow-states (e.g., binned in stretch-average wse bins)
-    
-    These are intended to be used in Bayes reconstruction on a per-pass-obs
-    basis, but are also directly useful for science investigations
+    A Container for a genereic processor super class (e.g., estimator, reconstructoir etc)
     '''
-    def __init__(self, run_config, force=False,
+    def __init__(self, run_config, kind='estimate', force=False,
             stretch_name='', log_level='info', log_file='log_tmp.txt'):
         # if it is a filename read it into an object
         if isinstance(run_config, str):
@@ -50,20 +55,83 @@ class Estimator(object):
             run_config.read(run_config)
         self.cfg_run =  run_config
         self.force = force
-        #self.runable = True
         self.cfg_param = rivscale.misc.CfgParser()
         # create a container to hold products
         self.products = {}
         # create a container for subprocessors
         self.processor_list = {}
-        #self.log_handler = None
-        #self.LOGGER = None
-        #self.state = 'init'
+        #
         self.completed_sucessfully = False
         self.setup_logger(stretch_name, log_level, log_file)
+        # setup special items for each kind
+        self.kind = kind
+        self.setup_kind()
         # load the data and set if it is runable
         self.isrunable = self.load_data()
         #
+
+    def setup_kind(self):
+        if self.kind=='reconstruct':
+            self.required_inputs = [
+                'stretch_stack',
+                'wse_stats',
+                'width_stats',
+                'height_width',
+                ]
+            self.product_list = [
+                'stretch_stack_corr',
+                'stretch_stack_filt',
+                'stretch_stack_smoothwidth',
+                'bayes',
+                ]
+            self.rm_keys = [
+                'DEFAULT',
+                'main',
+                'stretch_stack',
+                'reach_avg',
+                'pekel_stats',
+                'dark_stats',# maybe not do the rest of these?
+                'along_stats',
+                'stretch_average',
+                'height_width',
+                'flow_state',
+                'height_width_array',
+                ]
+            # these are processors that are required to complete with nonempty
+            # outputs (if commanded), not that are required to be commanded
+            self.required_processors = [
+                'filter_stack',
+                ]
+        else:
+            # estimate
+            self.required_inputs = ['stretch_stack']
+            self.product_list = [
+                'stretch_stack_corr',
+                'dark_stats',
+                'stretch_stack_filt',
+                'stretch_stack_smoothwidth',
+                'wse_stats',
+                'width_stats',
+                'wse_avg',
+                'width_avg',
+                'height_width',
+                'flow_state',
+                'height_width_array',
+                'bayes',
+                ]
+            self.rm_keys = [
+                'DEFAULT',
+                'main',
+                'stretch_stack',
+                'reach_avg',
+                'pekel_stats',
+                ]
+            self.required_processors = [
+            'filter_stack',
+            'along_stats',
+            'height_width',
+            #'height_width_array',
+            ]
 
     def setup_logger(self, stretch_name='', log_level='info', log_file='log.txt'):
        self.LOGGER = logging.getLogger(f'{__name__}.{stretch_name}')
@@ -71,10 +139,6 @@ class Estimator(object):
        level = {'debug': logging.DEBUG, 'info': logging.INFO,
             'warning': logging.WARNING, 'error': logging.ERROR}[log_level]
        frmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-       #logging.basicConfig(
-       #    filename=log_file ,level=level, format=frmt, filemode='w') 
-       
-       
        self.log_handler = logging.FileHandler(log_file, mode='w')
        #self.log_handler = logging.StreamHandler()
        self.log_handler.setLevel(level)
@@ -100,38 +164,10 @@ class Estimator(object):
         need = True
         if len(self.processor_list)>0:
             last_processor = self.processor_list[-1]
-            # try each case for a valid object for the last product 
-            if last_processor=='reconstruct':
-                if self.products['bayes'] is not None:
-                    need = False
-            elif last_processor=='height_width_array':
-                if self.products['height_width_array'] is not None:
-                    need = False
-            elif last_processor=='height_width':
-                if self.products['height_width'] is not None:
-                    need = False
-            elif last_processor=='flow_state':
-                if self.products['flow_state'] is not None:
-                    need = False
-            elif last_processor=='stretch_average':
-                if self.products['wse_avg'] is not None:
-                    need = False
-            elif last_processor=='along_stats':
-                if self.products['wse_stats'] is not None:
-                    need = False
-            elif last_processor=='smooth_widths':
-                if self.products['stretch_stack_smoothwidth'] is not None:
-                    need = False
-            elif last_processor=='width_correction':
-                if self.products['stretch_stack_corr'] is not None:
-                    need = False
-            elif last_processor=='filter_stack':
-                if self.products['stretch_stack_filt'] is not None:
-                    need = False
-            elif last_processor=='dark_stats':
-                if self.products['dark_stats'] is not None:
-                    need = False
-
+            for processor_name in PROCESSOR_OUTPUTS.keys():
+                if last_processor==processor_name:
+                    if self.products[PROCESSOR_OUTPUTS[processor_name]] is not None:
+                        need = False                
         return need
 
     def load_param_config(self):
@@ -175,30 +211,57 @@ class Estimator(object):
 
     def load_inputs(self):
         success = True
-        # load the input file
-        try:
-            stretch_stack = \
-                rivscale.products.stretch_stack.StretchStack.from_ncfile(
-                    self.cfg_run['main']['stretch_stack_file'])
-        except (FileNotFoundError, KeyError) as e:
-            self.LOGGER.info(f'    Problem loading stretch_stack file: {e}')
-            return False
+        self.infiles = {}
+        for prod_key in self.required_inputs:
+            try:
+                self.infiles[prod_key] = os.path.join(
+                    self.cfg_run['main']['out_path'], '{}'.format(
+                        self.cfg_run['main'][f'{prod_key}_file'], prod_key))
+            except KeyError as e:
+                self.infiles[prod_key] = None
+        ####
+        # initialize input products, and try to read if exist
+        ####
+        # init the output products to None
+        for prod_key in self.required_inputs:
+            self.products[prod_key] = None
+        # now go through and try to load the products if they already exist
+        # unless force is set
+        for prod_key in self.required_inputs:
+            # try to load the file for this product
+            this_prod = None
+            if self.infiles[prod_key] is not None:
+                #try to read it
+                this_prod = rivscale.io.load_product(
+                    self.infiles[prod_key], prod_key, False)
+            self.products[prod_key] = this_prod
+        ## load the input file
+        #try:
+        #    stretch_stack = \
+        #        rivscale.products.stretch_stack.StretchStack.from_ncfile(
+        #            self.cfg_run['main']['stretch_stack_file'])
+        #except (FileNotFoundError, KeyError) as e:
+        #    self.LOGGER.info(f'    Problem loading stretch_stack file: {e}')
+        #    return False
+        
         # populate witdh_u
         # TODO: fix the uncertainty itself instead of fudging it here  
-        node_len = stretch_stack['area_total'] / stretch_stack['width']
-        stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
-        # make measurement uncert at least as much as signal uncert we assume
-        stretch_stack['width_u'] = stretch_stack['width_u'] + 10
-        # stuff it into the products container
-        self.products['stretch_stack'] = stretch_stack
-
+        stretch_stack = self.products['stretch_stack']
+        if stretch_stack is not None:
+            node_len = stretch_stack['area_total'] / stretch_stack['width']
+            stretch_stack['width_u'] = stretch_stack['area_tot_u'] / node_len
+            # make measurement uncert at least as much as signal uncert we assume
+            stretch_stack['width_u'] = stretch_stack['width_u'] + 10
+            # stuff it into the products container
+            self.products['stretch_stack'] = stretch_stack
         # check for valid data (dont process empty stretch_stack)
-        if self.product_isempty(stretch_stack):
-            success = False
-            self.products['stretch_stack'] = None
+        for prod_key in self.required_inputs:
+            if self.product_isempty(self.products[prod_key]):
+                success = False
+                self.products[prod_key] = None
 
         # TODO: handle reach_avg and pekel
-
+        # also read in the Bayes
         return success
 
     def product_isempty(self, product, min_obs=2):
@@ -213,26 +276,21 @@ class Estimator(object):
             num_width = len(product.wse[valid_width])
             if (num_wse > min_obs) or (num_width > min_obs):
                 isempty = False
+        if isinstance(product, rivscale.products.along_stretch.AlongStretchStats):
+            # check for valid ref profile
+            valid_ref = np.isfinite(product.reference)
+            num_ref = len(product.wse[valid_ref])
+            if (num_wse > min_obs):
+                isempty = False
+        if isinstance(product, rivscale.products.height_width.HeightWidthModel):
+            # TODO: implement this one?
+            pass
         # TODO: add other products here
         return isempty
 
     def load_outputs(self):
         # load the output files if they already exist
         # get a list of output product names
-        self.product_list = [
-            'stretch_stack_corr',
-            'dark_stats',
-            'stretch_stack_filt',
-            'stretch_stack_smoothwidth',
-            'wse_stats',
-            'width_stats',
-            'wse_avg',
-            'width_avg',
-            'height_width',
-            'flow_state',
-            'height_width_array',
-            'bayes',
-            ]
         # create the output files
         self.outfiles = {}
         for prod_key in self.product_list:
@@ -274,7 +332,7 @@ class Estimator(object):
 
     def run(self, logfile=None, log_level='info'):
         '''run the worker to process a single stretch'''
-        self.LOGGER.info('Running the estimate priors processor')
+        self.LOGGER.info('Running the processor')
         if not self.isrunable:
             self.LOGGER.info('processor not runable')
             return False
@@ -293,6 +351,7 @@ class Estimator(object):
                 # return without processing rest
                 all_success = False
                 break
+        self.completed_sucessfully = True
         return all_success
 
     def run_processor(self, processor_name):

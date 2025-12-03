@@ -33,7 +33,7 @@ import warnings
 import time
 import rivscale.misc
 
-import rivscale.estimator
+import rivscale.processor
 import shutil
 
 
@@ -50,6 +50,8 @@ def main():
     parser.add_argument(
         '-l', '--log-level', type=str, default="info",#default="debug",
         help="logging level, one of: debug info warning error")
+    parser.add_argument('--kind', default='estimate',
+        help='estimate or reconstruct')
     #
     args = parser.parse_args()
     # read in the config file
@@ -99,14 +101,17 @@ def main():
         ####
         # create a one-stretch config
         ####
-        this_cfg = rivscale.estimate.make_single_stretch_config(cfg_run, key)
+        #this_cfg = rivscale.estimate.make_single_stretch_config(cfg_run, key)
+        this_cfg = rivscale.estimate.make_single_stretch_config(
+            cfg_run, key, section=args.kind)
         this_outpath = this_cfg['main']['out_path']
         if not os.path.exists(this_outpath):
             os.makedirs(this_outpath)
         log_file_tmp = os.path.join(this_outpath, 'log_tmp.txt')
         log_file = os.path.join(this_outpath, 'log.txt')
         # initialize the worker
-        worker = rivscale.estimator.Estimator(this_cfg,
+        worker = rivscale.processor.Processor(this_cfg,
+            kind=args.kind,
             stretch_name='{}'.format(key),
             log_level=args.log_level,
             log_file=log_file_tmp,
