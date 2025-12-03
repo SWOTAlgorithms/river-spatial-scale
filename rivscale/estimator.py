@@ -23,6 +23,7 @@ import rivscale.products.height_width
 import rivscale.products.flow_state
 import rivscale.products.height_width_array
 import rivscale.misc
+import numpy as np
 
 #LOGGER = logging.getLogger(__name__)
 
@@ -165,6 +166,7 @@ class Estimator(object):
                 self.processor_list.remove(key)
         # define modules that are required to run for subsequent processing to work
         self.required_processors = [
+            'filter_stack',
             'along_stats',
             'height_width',
             #'height_width_array',
@@ -190,9 +192,29 @@ class Estimator(object):
         # stuff it into the products container
         self.products['stretch_stack'] = stretch_stack
 
+        # check for valid data (dont process empty stretch_stack)
+        if self.product_isempty(stretch_stack):
+            success = False
+            self.products['stretch_stack'] = None
+
         # TODO: handle reach_avg and pekel
 
         return success
+
+    def product_isempty(self, product, min_obs=2):
+        isempty = True
+        #if product is None:
+        #    emtpy = True
+        if isinstance(product, rivscale.products.stretch_stack.StretchStack):
+            # check for valid wse or width data
+            valid_wse = np.isfinite(product.wse)
+            valid_width = np.isfinite(product.width)
+            num_wse = len(product.wse[valid_wse])
+            num_width = len(product.wse[valid_width])
+            if (num_wse > min_obs) or (num_width > min_obs):
+                isempty = False
+        # TODO: add other products here
+        return isempty
 
     def load_outputs(self):
         # load the output files if they already exist
@@ -340,6 +362,9 @@ class Estimator(object):
             filt_stack = rivscale.estimate.process_filter_stack(
                 cfg, self.products['stretch_stack'])
             if filt_stack is None:
+                return False
+            if self.product_isempty(filt_stack):
+                self.LOGGER.info("stretch_stack is empty after filtering")
                 return False
             filt_stack.to_ncfile(self.outfiles['stretch_stack_filt'])
             self.products['stretch_stack_filt'] = filt_stack
