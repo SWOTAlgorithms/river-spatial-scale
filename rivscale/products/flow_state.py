@@ -151,7 +151,7 @@ class FlowStateModel(Product):
     # TODO add along-river smoothing/intepolation over holes?
     # TODO: add inter-state sampling/interpolation (e.g., given
     #       a wse_stretch_avg, return a mean wse and width profile for the state)
-    def plot(self, show=False):
+    def plot(self, outdir=None, title_tag='', show=False):
         # TODO: refine these
         # count
         plt.figure()

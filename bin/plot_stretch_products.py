@@ -26,6 +26,8 @@ import rivscale.products.stretch_average
 import rivscale.products.bayes_data
 import rivscale.products.height_width
 import rivscale.products.height_width_array
+import rivscale.products.flow_state
+
 import rivscale.misc
 
 EXAMPLE = ''
@@ -76,6 +78,9 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
             else:
                 dic['width_reach_average'] = \
                     rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
+        if 'flow_state' in fle:
+            dic['flow_state'] = \
+                    rivscale.products.flow_state.FlowStateModel.from_ncfile(f)
         if 'height_width' in fle:
             if 'array' in fle:
                 # plot the height_width_array object
