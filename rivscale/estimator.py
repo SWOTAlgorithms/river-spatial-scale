@@ -24,7 +24,7 @@ import rivscale.products.flow_state
 import rivscale.products.height_width_array
 import rivscale.misc
 
-LOGGER = logging.getLogger(__name__)
+#LOGGER = logging.getLogger(__name__)
 
 WARN_STR = '        already processed, not rerunning'
 
@@ -41,7 +41,8 @@ class Estimator(object):
     These are intended to be used in Bayes reconstruction on a per-pass-obs
     basis, but are also directly useful for science investigations
     '''
-    def __init__(self, run_config, force=False):
+    def __init__(self, run_config, force=False,
+            stretch_name='', log_level='info', log_file='log_tmp.txt'):
         # if it is a filename read it into an object
         if isinstance(run_config, str):
             run_config = rivscale.misc.CfgParser()
@@ -54,13 +55,55 @@ class Estimator(object):
         self.products = {}
         # create a container for subprocessors
         self.processor_list = {}
-
-        self.state = 'init'
+        #self.log_handler = None
+        #self.LOGGER = None
+        #self.state = 'init'
         self.completed_sucessfully = False
+        self.setup_logger(stretch_name, log_level, log_file)
         # load the data and set if it is runable
         self.isrunable = self.load_data()
         #
-        
+
+    def setup_logger(self, stretch_name='', log_level='info', log_file='log.txt'):
+       self.LOGGER = logging.getLogger(f'{__name__}.{stretch_name}')
+       #
+       level = {'debug': logging.DEBUG, 'info': logging.INFO,
+            'warning': logging.WARNING, 'error': logging.ERROR}[log_level]
+       frmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+       #logging.basicConfig(
+       #    filename=log_file ,level=level, format=frmt, filemode='w') 
+       
+       
+       self.log_handler = logging.FileHandler(log_file, mode='w')
+       #self.log_handler = logging.StreamHandler()
+       self.log_handler.setLevel(level)
+       self.LOGGER.setLevel(level)
+       #
+       formatter = logging.Formatter(frmt)
+       self.log_handler.setFormatter(formatter)
+       #
+       self.LOGGER.addHandler(self.log_handler)
+       #
+       self.LOGGER.propagate = False
+       #
+       self.LOGGER.info('successfully set up logger')
+
+    """
+    def __del__(self):
+        self.close()
+
+    def __exit__(self):
+        self.close()
+
+    def close(self):
+        self.release_logger()
+    """
+    def release_logger(self):
+        if self.log_handler is not None:
+            if self.LOGGER is not None:
+                self.LOGGER.removeHandler(self.log_handler)
+            self.log_handler.close()
+
     def need_to_run(self):
         '''check if all output files already exist'''
         need = True
@@ -107,29 +150,35 @@ class Estimator(object):
             # read the param cfg
             self.cfg_param.read(self.cfg_run['main']['param_config'])
         except (FileNotFoundError, KeyError) as e:
-            LOGGER.info(f'    Problem loading param config: {e}')
+            self.LOGGER.info(f'    Problem loading param config: {e}')
             success = False
         # check that output location exists if not try to create it
         out_path = None
         try:
             out_path = self.cfg_run['main']['out_path']
         except KeyError as e:
-            LOGGER.info(f'    no out_path key in config: {e}')
+            self.LOGGER.info(f'    no out_path key in config: {e}')
             success = False
         if out_path is not None:
             if not os.path.exists(out_path):
                 os.makedirs(out_path)
         ####
-        # get subprocessor list in the order listed in in the
+        # get subprocessor list in the order listed in the
         # param config section headings
         ####
         # get processor list from section heading names
-        processor_list = list(self.cfg_param.keys())
+        self.processor_list = list(self.cfg_param.keys())
         # exclude the stretch-stack, stretch_avg, and pekel etc
-        # assume we start processing with dark_stats
-        # TODO: refine this
-        self.processor_list = processor_list[
-            processor_list.index('dark_stats'):]
+        rm_keys = ['DEFAULT', 'main', 'stretch_stack', 'reach_avg', 'pekel_stats']
+        for key in rm_keys:
+            if key in self.processor_list:
+                self.processor_list.remove(key)
+        # define modules that are required to run for subsequent processing to work
+        self.required_processors = [
+            'along_stats',
+            'height_width',
+            #'height_width_array',
+            ]
         return success
 
     def load_inputs(self):
@@ -140,7 +189,7 @@ class Estimator(object):
                 rivscale.products.stretch_stack.StretchStack.from_ncfile(
                     self.cfg_run['main']['stretch_stack_file'])
         except (FileNotFoundError, KeyError) as e:
-            LOGGER.info(f'    Problem loading stretch_stack file: {e}')
+            self.LOGGER.info(f'    Problem loading stretch_stack file: {e}')
             return False
         # populate witdh_u
         # TODO: fix the uncertainty itself instead of fudging it here  
@@ -209,15 +258,35 @@ class Estimator(object):
         self.load_outputs()
         return True
 
-    def run(self):
+    def run(self, logfile=None, log_level='info'):
         '''run the worker to process a single stretch'''
-        LOGGER.info('    Running the estimate priors processor')
+        # set up the logger
+        #breakpoint()
+        """
+        self.LOGGER = logging.getLogger('{}'.format(self.cfg_run['main']['stretch_name']))
+        if logfile is not None:
+            level = {'debug': logging.DEBUG, 'info': logging.INFO,
+                'warning': logging.WARNING, 'error': logging.ERROR}[log_level]
+            frmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            #print('Logging all output to:', both_logfile)
+            logging.basicConfig(
+                filename=logfile ,level=level, format=frmt, filemode='w')
+        """
+        self.LOGGER.info('Running the estimate priors processor')
         if not self.isrunable:
-            LOGGER.info('    processor not runable')
+            self.LOGGER.info('processor not runable')
             return False
         all_success = True
         for processor_name in self.processor_list:
-            success = self.run_processor(processor_name)
+            try:
+                success = self.run_processor(processor_name)
+                if not success:
+                    self.LOGGER.info(f'    unsuccessful running {processor_name}')
+                    if processor_name not in self.required_processors:
+                        success = True
+            except Exception as e:
+                success = False
+                self.LOGGER.exception(f"Error processing {processor_name}:"+" %s", e)
             if not(success):
                 # return without processing rest
                 all_success = False
@@ -225,7 +294,7 @@ class Estimator(object):
         return all_success
 
     def run_processor(self, processor_name):
-        LOGGER.info(f'     processing: {processor_name}') 
+        self.LOGGER.info(f'processing: {processor_name}') 
         success = False
         if processor_name=='width_correction':
             success = self.run_width_correction(self.cfg_param[processor_name])
@@ -251,42 +320,47 @@ class Estimator(object):
 
     # define subprocessors
     def run_width_correction(self, cfg):
+        success = True
         corr_stack = self.products['stretch_stack_corr']
         if (self.products['stretch_stack_corr'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             corr_stack = rivscale.estimate.process_width_correction(
                 cfg, self.products['stretch_stack'])
-            if corr_stack is not None:
-                corr_stack.to_ncfile(self.outfiles['stretch_stack_corr'])
+            if corr_stack is None:
+                return False
+            corr_stack.to_ncfile(self.outfiles['stretch_stack_corr'])
             # update products
             self.products['stretch_stack_corr'] = corr_stack
         if cfg['use_as_working_stack']:
             self.products['stretch_stack'] = corr_stack.copy()
-        return True
+        return success
 
     def run_dark_stats(self, cfg):
+        success = True
         if (self.products['dark_stats'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             dark_stats = rivscale.estimate.process_dark_stats(
                 cfg, self.products['stretch_stack'])
             # write output
             if dark_stats is not None:
                 dark_stats.to_ncfile(self.outfiles['dark_stats'])
+            else:
+                success = False
             # update products
             self.products['dark_stats'] = dark_stats
-        return True
+        return success
  
     def run_filter_stack(self, cfg):
         filt_stack = self.products['stretch_stack_filt']
         if (self.products['stretch_stack_filt'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             filt_stack = rivscale.estimate.process_filter_stack(
                 cfg, self.products['stretch_stack'])
             if filt_stack is None:
-                return False # return bad exist status
+                return False
             filt_stack.to_ncfile(self.outfiles['stretch_stack_filt'])
             self.products['stretch_stack_filt'] = filt_stack
         if cfg['use_as_working_stack']:
@@ -294,20 +368,25 @@ class Estimator(object):
         return True
 
     def run_smooth_widths(self, cfg):
+        smooth_stack = self.products['stretch_stack_smoothwidth']
         if (self.products['stretch_stack_smoothwidth'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
-            corr_stack = rivscale.estimate.process_smooth_widths(
+            smooth_stack = rivscale.estimate.process_smooth_widths(
                 cfg, self.products['stretch_stack'])
-            if corr_stack is not None:
-                corr_stack.to_ncfile(self.outfiles['stretch_stack_smoothwidth'])
+            if smooth_stack is None:
+                return False
+            smooth_stack.to_ncfile(self.outfiles['stretch_stack_smoothwidth'])
             # update products
-            self.products['stretch_stack_smoothwidth'] = corr_stack
+            self.products['stretch_stack_smoothwidth'] = smooth_stack_stack
+        if cfg['use_as_working_stack']:
+            self.products['stretch_stack'] = smooth_stack.copy()
         return True
 
     def run_along_stats(self, cfg):
+        success = True
         if (self.products['width_stats'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             wse_stats, width_stats = rivscale.estimate.process_along_stats(
                 cfg, self.products['stretch_stack'])
@@ -320,16 +399,17 @@ class Estimator(object):
             self.products['wse_stats'] = wse_stats
             self.products['width_stats'] = width_stats
             #
-            if (wse_stats is None):
-                print(" wse_stats not generated, skipping rest of processing")
+            if (wse_stats is None) or (width_stats is None):
+                #print(" wse_stats not generated, skipping rest of processing")
                 # TODO: should we check width too? but only of not using Pekel?
                 #continue
-                return False
-        return True
+                success = False
+        return success
 
     def run_stretch_average(self, cfg):
+        success = True
         if (self.products['width_avg'] is not None) and (not self. force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             wse_avg, width_avg = rivscale.estimate.process_stretch_average(
                 cfg,
@@ -339,16 +419,21 @@ class Estimator(object):
             # write outputs
             if wse_avg is not None:
                 wse_avg.to_ncfile(self.outfiles['wse_avg'])
+            else:
+                success = False
             if width_avg is not None:
                 width_avg.to_ncfile(self.outfiles['width_avg'])
+            else:
+                success = False
             #
             self.products['wse_avg'] = wse_avg
             self.products['width_avg'] = width_avg
-        return True
+        return success
 
     def run_height_width(self, cfg):
+        success = True
         if (self.products['height_width'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             height_width = rivscale.products.height_width.HeightWidthModel.from_objects(
                 cfg,
@@ -357,12 +442,15 @@ class Estimator(object):
                 self.products['width_stats'])# TODO: handle Pekel
             if height_width is not None:
                 height_width.to_ncfile(self.outfiles['height_width'])
+            else:
+                success = False
             self.products['height_width'] = height_width
-        return True
+        return success
 
     def run_flow_state(self, cfg):
+        success = True
         if (self.products['flow_state'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             flow_state = rivscale.estimate.process_flow_state(
                 cfg,
@@ -372,12 +460,15 @@ class Estimator(object):
                 )
             if flow_state is not None:
                 flow_state.to_ncfile(self.outfiles['flow_state'])
+            else:
+                success = False
             self.products['flow_state'] = flow_state
-        return True
+        return success
 
     def run_height_width_array(self, cfg):
+        success = True
         if (self.products['height_width_array'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             hw_array = rivscale.estimate.process_height_width_array(
                 cfg,
@@ -387,12 +478,15 @@ class Estimator(object):
                 )
             if hw_array is not None:
                 hw_array.to_ncfile(self.outfiles['height_width_array'])
+            else:
+                success = False
             self.products['height_width_array'] = hw_array
-        return True
+        return success
 
     def run_reconstruct(self, cfg):
+        success = True
         if (self.products['bayes'] is not None) and (not self.force):
-            LOGGER.info(WARN_STR)
+            self.LOGGER.info(WARN_STR)
         else:
             bayes = rivscale.reconstruct.process_bayes_reconstruction(
                 cfg,
@@ -402,6 +496,8 @@ class Estimator(object):
                 self.products['height_width'])
             if bayes is not None:
                 bayes.to_ncfile(self.outfiles['bayes'])
+            else:
+                success = False
             self.products['bayes'] = bayes
-        return True
+        return success
 

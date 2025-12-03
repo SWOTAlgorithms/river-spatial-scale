@@ -131,6 +131,7 @@ class BayesData(Product):
             signal_key,
             char_length_tau=None,
             prior_unc_alpha=None):
+        #    
         bayes = cls()
         bayes.stretch_name = stretch_stack.stretch_name
         bayes.reaches = stretch_stack.reaches
@@ -142,6 +143,12 @@ class BayesData(Product):
         bayes.signal_key = signal_key
         bayes.signal_mean = stats.reference.copy()
         time_key = 'time_id'
+        # do some validity checks
+        num_valid = len(stretch_stack[signal_key][
+            np.isfinite(stretch_stack[signal_key])])
+        if num_valid < 2:
+            return bayes
+        # create the cov
         if (char_length_tau is not None) and (prior_unc_alpha is not None):
             bayes.signal_cov = rivscale.reconstruct.generate_cov_matrix(
                 stretch_stack,

@@ -106,10 +106,7 @@ class Reconstructor(object):
         ####
         # get processor list from section heading names
         self.processor_list = list(self.cfg_param.keys())
-        # exclude the stretch-stack, stretch_avg, and pekel etc
-        # assume we start processing with dark_stats
-        # TODO: refine this
-        #breakpoint()
+        # exclude the sections we dont want to process here
         rm_keys = ['DEFAULT', 'main']
         for key in rm_keys:
             if key in self.processor_list:

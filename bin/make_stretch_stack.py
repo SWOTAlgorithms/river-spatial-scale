@@ -83,6 +83,7 @@ def main():
         all_reaches = all_reaches + list(stretch_reaches)
     all_reaches = np.unique(all_reaches) 
     stretch_list = []
+    """
     # get the SWOT node data
     swot_node_df = rivscale.data.get_swot_data(
             cfg,
@@ -91,6 +92,8 @@ def main():
             kind='Node',
             force=args.ingest_force,
             sword_df=sword_node_df)
+    """
+    ingest_force = args.ingest_force
     for i,key in enumerate(df_stretches.keys()):
         outdir = os.path.join(
             outdir0,
@@ -109,7 +112,7 @@ def main():
         if (os.path.exists(outfile_stretch) and (not args.force)):
             print("  This stretch already processed")
             continue
-        """
+        
         # get the SWOT node data
         swot_node_df = rivscale.data.get_swot_data(
             cfg,
@@ -118,7 +121,7 @@ def main():
             kind='Node',
             force=ingest_force,
             sword_df=sword_node_df)
-        """
+        ingest_force = False
         #breakpoint()
         if swot_node_df is None:
             # skip cases where we have no data

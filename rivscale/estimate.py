@@ -365,6 +365,8 @@ def process_height_width_array(cfg, stretch_stack_in,
     width_arr = stretch_stack.width.copy()
     wse_reference = wse_stats.reference
     if cfg['use_flow_state']:
+        if flow_state is None:
+            return None
         wse_arr = flow_state.wse_profiles
         width_arr = flow_state.width_profiles
     height_width_array = \

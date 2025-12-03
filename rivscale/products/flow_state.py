@@ -112,6 +112,9 @@ class FlowStateModel(Product):
             bin_width = 0.5,
             oversamp_factor=2
             ):
+        # first do some sanity checks
+        if len(bin_var[np.isfinite(bin_var)]) < 2:
+            return None
         #
         flow_state = cls()
         flow_state.bin_width = bin_width
