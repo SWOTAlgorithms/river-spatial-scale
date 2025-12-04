@@ -23,7 +23,7 @@ def main():
     parser.add_argument('sword_file', help='SWORD netcdf file')
     parser.add_argument('outdir', help='output directory')
     args = parser.parse_args()
-    print(args.sword_file)
+    print('reading SWORD file:',args.sword_file)
     # create outdir if it doesnt exist
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
@@ -33,32 +33,32 @@ def main():
     # make multireach stretch for each reach
     # skip (disconnected lake, dam, unrealizable topology) reaches
     skip_types = [3, 4, 5]
-    stretch_df = None
-    sword_df['up_reach_id'] = np.zeros_like(sword_df['reach_id'])
-    sword_df['down_reach_id'] = np.zeros_like(sword_df['reach_id'])
+    stretch_d ={}
+    up_reach_id_arr = np.zeros_like(np.array(sword_df['reach_id']))
+    down_reach_id_arr = np.zeros_like(np.array(sword_df['reach_id']))
+    N = len(sword_df['reach_id'])
     for k,rch in enumerate(sword_df['reach_id']):
+        if np.mod(k, 1000)==0:
+            print(f'reach {k} of {N}')
         this_up_id = 0
         for up_id in d_up['{}'.format(rch)]:
             if not up_id % 10 in skip_types:
                 this_up_id = up_id
-                sword_df['up_reach_id'][k] = this_up_id
+                #breakpoint()
+                up_reach_id_arr[k] = this_up_id
                 break
         this_down_id = 0
         for down_id in d_down['{}'.format(rch)]:
             if not down_id % 10 in skip_types:
                 this_down_id = down_id
-                sword_df['down_reach_id'][k] = this_down_id
+                down_reach_id_arr[k] = this_down_id
                 break
         # make a dataframe with the multi-reach list of reach-ids
         this_stretch = [this_down_id, rch, this_up_id]
-        if stretch_df is None:
-            # create the data frame
-            d ={'{}'.format(rch):this_stretch}
-            stretch_df = pd.DataFrame(d)
-        else:
-            # append new column
-            stretch_df['{}'.format(rch)] = this_stretch
-        #breakpoint()
+        stretch_d['{}'.format(rch)] = this_stretch
+    stretch_df = pd.DataFrame(stretch_d)
+    sword_df['up_reach_id'] = up_reach_id_arr
+    sword_df['down_reach_id'] = down_reach_id_arr
     # Write out the csv file for each multi-reach
     head, tail = os.path.split(args.sword_file)
     outname = tail.replace('.nc', '_multireach.csv')
@@ -70,7 +70,6 @@ def main():
     outfile2 = os.path.join(args.outdir, outname)
     # TODO: make dirs if not exist
     sword_df.to_csv(outfile2, index=False)
-    #breakpoint()
 
 if __name__ == '__main__':
     main()
