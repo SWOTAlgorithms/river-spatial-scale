@@ -84,7 +84,27 @@ This outputs several products/files in the output directory:
 
 `<stretch_name>_height_width.nc`
 
+`<stretch_name>_height_width_array.nc`
+
+`<stretch_name>_flow_state.nc`
+
 `<stretch_name>_bayes.nc`
+
+Note that there are two modes to the process_stretch_stack.py script:
+
+(1) for estimating the prior parameters for Bayes reconstruction (optionally also runing the reconstruction)
+
+(2) for running the reconstruction from the stretch_stack and the already created prior files
+
+Option 1 is the default, but the reconstructing process can be run after estimation of the priors by using the --kind reconstruct option. To be pedantic, we can call the following sequence to create the stretch_stack for multiple stretchs, and then estimate the priors, and then run the Bayes reconstruction:
+
+`$ make_stretch_stack.py <runtime.cfg>`
+
+`$ process_stretch_stack.py <runtime.cfg>`
+
+`$ process_stretch_stack.py <runtime.cfg> --kind reconstruct`
+
+
 
 ## Plotting and Visualizing
 The results/products can be plotted using:
@@ -92,6 +112,10 @@ The results/products can be plotted using:
 `$ plot_stretch_products.py -c <runtime.cfg>`
 
 If the -s option is given with a particular stretch name, the interactive plots are displayed for the given stretch, otherwise the plots are written to files in the corresponding subdirs.
+
+Alternatively you can use the --infile option to plot a specific product:
+
+`$ pekel_width_stats.py --infile /path/to/product/nc/file`
 
 # info for older code
 The hydrochron.py script grabs data for the Ocmulgee, Colorado, and Yellowstone rivers and puts them in a pandas dataframe
