@@ -89,6 +89,17 @@ def get_stretch_list_from_subset_cfg(cfg, sword_df):
                 stretch_list.append('{}'.format(stretch))
     return stretch_list
 
+def filter_stack_list_for_code_type(cfg, stretch_list):
+    valid_types = [
+        '{}'.format(t) for t in '{}'.format(
+            cfg['main']['valid_reach_code_types']).split()]
+    stretch_list_typ = []
+    for stretch in stretch_list:
+        for typ in valid_types:
+            if f'{stretch}'.endswith(f'{typ}'):
+                stretch_list_typ.append(stretch)
+    return stretch_list_typ
+
 def swot_time_to_field_time(swot_times, swot_filenames=None):
     """
     convert swot total-second time to utc datetime

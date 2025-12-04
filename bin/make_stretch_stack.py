@@ -64,6 +64,11 @@ def main():
     # get the list of stretches (or multireaches)
     stretch_list = rivscale.misc.get_stretch_list_from_subset_cfg(
         cfg, sword_df)
+    # filter stretches by stretch type?
+    if 'valid_reach_code_types' in cfg['main'].keys():
+        stretch_list = rivscale.misc.filter_stack_list_for_code_type(
+            cfg, stretch_list)
+    print("making stretches:", stretch_list)
     #breakpoint()
     df_stretches = pd.read_csv(
         cfg['main']['stretch_definition_file'],

@@ -81,6 +81,10 @@ def main():
             stretch_list = stretch_list + these_stretches
     else:
         stretch_list = stretch_list0
+    # filter stretches by stretch type?
+    if 'valid_reach_code_types' in cfg_run['main'].keys():
+        stretch_list = rivscale.misc.filter_stack_list_for_code_type(
+            cfg_run, stretch_list)        
     print(f'preparing to process stretches: {stretch_list}')
     # get the stretch_definition rows for the stretch_list
     df_stretches = pd.read_csv(
