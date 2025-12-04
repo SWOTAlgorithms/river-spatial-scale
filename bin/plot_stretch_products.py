@@ -28,7 +28,10 @@ import rivscale.products.height_width
 import rivscale.products.height_width_array
 import rivscale.products.flow_state
 
+import rivscale.processor
 import rivscale.misc
+
+import warnings
 
 EXAMPLE = ''
 
@@ -97,6 +100,9 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
         if 'bayes' in fle:
             dic['bayes'] = \
                     rivscale.products.bayes_data.BayesData.from_ncfile(f)
+    rivscale.plot.plot_products(dic, width_correction)
+"""
+def plot_products(dic, cfg, width_correction=None)
     if width_correction is not None:
         # apply the width correction to the width stretch_avg and reach_avg data
         wc_df = pd.read_csv(width_correction)
@@ -249,6 +255,7 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
             print('could not plot outliers: {}'.format(e))
     #if outdir is None:
     #    plt.show()
+"""
 
 def get_stretch_list(stretch_list_in, dir_in, kind='stretch_stack'):
     stretch_files = []
@@ -273,13 +280,66 @@ def setup_from_cfg(cfg):
     """
 
     """
-    stretch_list0 = rivscale.misc.get_stretch_list_from_subset_cfg(
+    stretch_list = rivscale.misc.get_stretch_list_from_subset_cfg(
         cfg, None)
     """
+    # get the base dir for each section in cfg
+    sections.remove('DEFAULT')
+    section_files = {}
+    for section in sections:
+        # compute the output data path
+        try:
+            dir0 = os.path.join(
+                cfg[section]['out_path'],cfg['main']['orbit'])
+        except KeyError:
+            # use the output path (assuming a stretch_stack.cfg or reach_avg.cfg)
+            dir0 = os.path.join(
+                cfg['main']['out_path'],cfg['main']['orbit'])
+        #
+        products = [
+            'stretch_stack',
+            'stretch_stack_corr',
+            'stretch_stack_filt',
+            ]
+        for key in products
+        section_files['stretch_stack'] = os.path.join(
+            stretch_dir, '{}_stretch_stack.nc'.format(key))
+        file_stretch_corr = os.path.join(
+            outdir, '{}_stretch_stack_corr.nc'.format(key))
+        file_stretch_filt = os.path.join(
+            outdir, '{}_stretch_stack_filt.nc'.format(key))
+        file_stretch_smoothwidth = os.path.join(
+            outdir, '{}_stretch_stack_smoothwidth.nc'.format(key))
+        file_reach_wse = os.path.join(
+            reach_dir, '{}_wse_reach_average.nc'.format(key))
+        file_reach_width = os.path.join(
+            reach_dir, '{}_width_reach_average.nc'.format(key))
+        file_reach_height_width = os.path.join(
+            reach_dir, '{}_height_width_reach_average.nc'.format(key))
+        file_pekel = os.path.join(
+            pekel_dir, '{}_pekel_stats.nc'.format(key))
+        file_wse_stats = os.path.join(
+            outdir, '{}_wse_stats.nc'.format(key))
+        file_width_stats = os.path.join(
+            outdir, '{}_width_stats.nc'.format(key))
+        file_dark_stats = os.path.join(
+            outdir, '{}_dark_stats.nc'.format(key))
+        file_wse_avg = os.path.join(
+            outdir, '{}_wse_stretch_average.nc'.format(key))
+        file_width_avg = os.path.join(
+            outdir, '{}_width_stretch_average.nc'.format(key))
+        file_height_width = os.path.join(
+            outdir, '{}_height_width.nc'.format(key))
+        file_height_width_array = os.path.join(
+            outdir, '{}_height_width_array.nc'.format(key))
+        file_bayes = os.path.join(
+            outdir, '{}_bayes.nc'.format(key))
+
+    
     stretch_list0 = [
         '{}'.format(t) for t in '{}'.format(
             cfg['main']['stretch_subset']).split()]
-    """
+    
     # make the output dir if needed
     try:
         stretch_dir0 = os.path.join(
@@ -297,7 +357,7 @@ def setup_from_cfg(cfg):
             cfg['main']['out_path'],cfg['main']['orbit'])
     outdir0 = os.path.join(cfg['main']['out_path'],cfg['main']['orbit'])
     #outdir = os.path.join(outdir0, cfg['main']['flavor'])
-    """
+    
     stretch_files = []
     for stretch in stretch_list0:
         # get all reaches in basins smaller than stretch
@@ -309,14 +369,25 @@ def setup_from_cfg(cfg):
     for fle in stretch_files:
         head, tail = os.path.split(fle)
         stretch_list.append(tail.split('_')[0])
-    """
+    
     stretch_list1 = get_stretch_list(stretch_list0, stretch_dir0, kind='stretch_stack')
     stretch_list2 = get_stretch_list(stretch_list0, stretch_dir0, kind='reach_avg')
     stretch_list = np.unique(list(set(stretch_list1).union(set(stretch_list2))))
+    """
     df_stretches = pd.read_csv(
         cfg['main']['stretch_definition_file'],
         usecols=stretch_list)
-    return df_stretches, stretch_dir0, pekel_dir0, outdir0
+    """
+    # get all the filenames
+    for stretch in df_stretches:
+        worker = rivscale.processor.Processor(this_cfg,
+            kind=kind,
+            stretch_name='{}'.format(stretch),
+            log_level='dfbug',
+            log_file=None,
+            force=False)
+    """ 
+    return df_stretches
 
 def main():
     parser = argparse.ArgumentParser(
@@ -334,6 +405,8 @@ def main():
         help='stretch_name(s) to plot')
     parser.add_argument('--width_correction', default=None,
         help='csv input file with width vs cross-track correction to apply')
+    parser.add_argument('--kind', default='estimate',
+        help='estimate, or reconstruct')
     args = parser.parse_args()
     #breakpoint()
     if args.infile is not None:
@@ -346,15 +419,28 @@ def main():
     #cfg.read(args.config)
     cfg = rivscale.misc.CfgParser()
     cfg.read(args.config)
-    df_stretches, stretch_dir0, pekel_dir0, outdir0 = setup_from_cfg(cfg)
+    df_stretches = setup_from_cfg(cfg)
     if len(df_stretches.keys())==0:
         print('no files to process')
     all_stretches = list(df_stretches.keys())
     #breakpoint()
+    warnings.filterwarnings("ignore")
     if args.stretch_name is not None:
         all_stretches = list(args.stretch_name)
     for i,key in enumerate(all_stretches):
         print('plotting stretch: {}'.format(key))
+        # use the processor class to get all the output files
+        this_cfg = rivscale.estimate.make_single_stretch_config(
+            args.config, key, section=args.kind)
+        this_outpath = this_cfg['main']['out_path']
+        # initialize the worker
+        worker = rivscale.processor.Processor(this_cfg,
+            kind=args.kind,
+            stretch_name='{}'.format(key),
+            log_level='info',
+            log_file=None,
+            force=False)
+        """
         try:
             flavor = cfg['main']['stretch_stack_flavor']
         except KeyError:
@@ -370,9 +456,13 @@ def main():
             except KeyError:
                 pekel_flavor = cfg['pekel']['flavor']
         try:
-            flavor = cfg['main']['flavor']
+            est_flavor = cfg['main']['flavor']
         except KeyError:
-            flavor = cfg['estimate']['flavor']
+            est_flavor = cfg['estimate']['flavor']
+        try:
+            bayes_flavor = cfg['main']['flavor']
+        except KeyError:
+            bayes_flavor = cfg['bayes']['flavor']
         stretch_dir = os.path.join(
             stretch_dir0, key, 'stretch_stack_{}'.format(
                 stretch_flavor))
@@ -380,6 +470,9 @@ def main():
             stretch_dir0, key, 'reach_avg_{}'.format(
                 flavor))
         pekel_dir = os.path.join(
+            pekel_dir0, key, 'pekel_{}'.format(
+                pekel_flavor))
+        estimate_dir = os.path.join(
             pekel_dir0, key, 'pekel_{}'.format(
                 pekel_flavor))
         outdir = os.path.join(outdir0, key, flavor)
@@ -449,6 +542,7 @@ def main():
             files.append(file_height_width_array)
         if os.path.exists(file_bayes):
             files.append(file_bayes)
+        """
         #breakpoint()
         # plot the stretch
         #if os.path.exists(file_stretch):
@@ -459,12 +553,15 @@ def main():
         #    plot_single_stretch([file_pekel,], outdir=None)
         plotdir = None
         if args.stretch_name is None:
-            plotdir = os.path.join(outdir, 'plots')
-            if not os.path.exists(plotdir):
-                os.makedirs(plotdir)
+            plotdir = os.path.join(this_outpath, 'plots')
         # now plot the rest
-        plot_single_stretch(files, outdir=plotdir, cfg=cfg,
-            width_correction=args.width_correction)
+        try:
+            # TODO: handle --force
+            worker.plot(plotdir)
+            #plot_single_stretch(files, outdir=plotdir, cfg=cfg,
+            #    width_correction=args.width_correction)
+        except Exception as e:
+            print('problem plotting')
         if plotdir is None:
             plt.show()
         plt.close('all')

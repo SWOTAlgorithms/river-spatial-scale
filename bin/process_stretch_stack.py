@@ -60,31 +60,8 @@ def main():
     ####
     # get the list of stretches to process
     ###
-    stretch_list0 = rivscale.misc.get_stretch_list_from_subset_cfg(
+    stretch_list = rivscale.misc.get_stretch_list_from_subset_cfg(
         cfg_run, None)
-    # handle basin-level stretch_list
-    isbasin = False
-    for stretch in stretch_list0:
-        if len(stretch)< 11:
-            isbasin = True
-    if isbasin:
-        stretch_list = []
-        this_df = pd.read_csv(
-            cfg_run['main']['stretch_definition_file'])
-        reach_ids = this_df.keys()
-        for stretch in stretch_list0:
-            msk = [False for rid in reach_ids] # start with all False
-            for k, rid in enumerate(reach_ids):
-                if rid.startswith(stretch):
-                    msk[k] = True
-            these_stretches = list(reach_ids[msk])
-            stretch_list = stretch_list + these_stretches
-    else:
-        stretch_list = stretch_list0
-    # filter stretches by stretch type?
-    if 'valid_reach_code_types' in cfg_run['main'].keys():
-        stretch_list = rivscale.misc.filter_stack_list_for_code_type(
-            cfg_run, stretch_list)        
     print(f'preparing to process stretches: {stretch_list}')
     # get the stretch_definition rows for the stretch_list
     df_stretches = pd.read_csv(

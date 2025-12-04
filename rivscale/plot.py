@@ -447,3 +447,167 @@ def plot_stretch_stack(
         if show:
             plt.show()
 
+def plot_products(dic, outdir=None, cfg=None, width_correction=None):
+    """
+    plot all the products in the dictonary and output them to outdir
+    if outdir is not None, otherwise plot them all interactively
+    """
+    if outdir is not None:
+        # create the dir if not exist
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+    if width_correction is not None:
+        # apply the width correction to the width stretch_avg and reach_avg data
+        wc_df = pd.read_csv(width_correction)
+        # do stretch correction
+        if dic['width_stretch_average'] is not None:
+            ct = dic['width_stretch_average'].cross_track
+            w_corr = np.interp(np.abs(ct),
+                wc_df['cross_track'], wc_df['width_correction'])
+            dic['width_stretch_average'].mean = \
+                dic['width_stretch_average'].mean - w_corr
+        # do rech correction
+        if dic['width_reach_average'] is not None:
+            ct = dic['width_reach_average'].cross_track
+            w_corr = np.interp(np.abs(ct),
+                wc_df['cross_track'], wc_df['width_correction'])
+            dic['width_reach_average'].mean = \
+                dic['width_reach_average'].mean - w_corr
+        #breakpoint()
+    for key in dic.keys():
+        if dic[key] is None:
+            continue
+        # plot each individual plot
+        if key=='height_width_array':
+            # plot the 3d plot if we are interactove else don't
+            #breakpoint()
+            if outdir is None:
+                dic[key].plot()
+        elif key=='height_width':
+            something_plotted=False
+            # plot the stretch averages if they exist
+            if ('wse_stretch_average' in dic.keys()) and (
+                    'width_stretch_average' in dic.keys()):
+                wse_data = dic['wse_stretch_average']
+                width_data = dic['width_stretch_average']
+                dic[key].plot(
+                    wse_data=wse_data,
+                    width_data=width_data,
+                    outdir=outdir,
+                    show=False,
+                    title_tag='stretch average data')
+                # also plot the per_pass wse and width time series
+                rivscale.plot.plot_per_pass_time_series(
+                    wse_data,
+                    width_data,
+                    outdir=outdir,
+                    title_tag='stretch average')
+                something_plotted=True
+            if (('stretch_stack' in dic.keys()) and (
+                    'wse_stats' in dic.keys()) and (
+                        'width_stats')):
+                # plot the noisy node data
+                # use the most processed stretch_stack
+                if 'stretch_stack_smoothwidth' in dic.keys():
+                    stretch_stack = dic['stretch_stack_smoothwidth']
+                elif 'stretch_stack_filt' in dic.keys():
+                    stretch_stack = dic['stretch_stack_filt']
+                elif 'stretch_stack_corr' in dic.keys():
+                    stretch_stack = dic['stretch_stack_corr']
+                else:
+                    stretch_stack = dic['stretch_stack']
+                wse_stats = dic['wse_stats']
+                width_stats = dic['width_stats']
+                wse = stretch_stack['wse']
+                width = stretch_stack['width']
+                ref2 = np.broadcast_to(
+                    wse_stats.reference, np.shape(wse.T)).T
+                ref2_w = np.broadcast_to(
+                    width_stats.reference, np.shape(width.T)).T
+                dic[key].plot(
+                    wse_data=wse - ref2,
+                    width_data=width - ref2_w,
+                    outdir=outdir,
+                    show=False,
+                    title_tag='node measurements')
+                something_plotted=True
+            if 'bayes' in dic.keys():
+                # plot bayes node data
+                bayes = dic['bayes']
+                wse_bayes, width_bayes, postcov = bayes.unpack_joint()
+                wse = wse_bayes['signal']
+                width = width_bayes['signal']
+                ref2 = np.broadcast_to(
+                    wse_bayes.signal_mean, np.shape(wse.T)).T
+                ref2_w = np.broadcast_to(
+                    width_bayes.signal_mean, np.shape(width.T)).T
+                d_wse = wse - ref2
+                d_width = width - ref2_w
+                dic[key].plot(
+                    wse_data=d_wse,
+                    width_data=d_width,
+                    outdir=outdir,
+                    show=False,
+                    title_tag='Bayes node estimates')
+                something_plotted=True
+            if not something_plotted:
+                # plot just the h/w fit
+                dic[key].plot(
+                    outdir=outdir,
+                    show=False)
+        elif key=='height_width_reach_average':
+            wse_data = None
+            width_data = None
+            title_tag = None
+            if ('wse_reach_average' in dic.keys()) and (
+                    'width_reach_average' in dic.keys()):
+                wse_data = dic['wse_reach_average']
+                width_data = dic['width_reach_average']
+                title_tag='reach average data'
+                # plot the wse and width time series per-pass
+                rivscale.plot.plot_per_pass_time_series(
+                    wse_data,
+                    width_data,
+                    outdir=outdir,
+                    title_tag='reach average')
+            dic[key].plot(
+                wse_data=wse_data,
+                width_data=width_data,
+                outdir=outdir,
+                show=False,
+                title_tag=title_tag)
+        else:
+            # single object plot
+            title_tag = ''
+            if 'pekel' in key:
+                title_tag = 'Pekel'
+            if 'reach' in key:
+                title_tag = 'reach'
+            dic[key].plot(outdir=outdir, show=False, title_tag=title_tag)
+    # optionally plot the outliers?
+    if cfg is not None:
+        try:
+            this_cfg = cfg['reconstruct']
+            if 'stretch_stack_corr' in dic.keys():
+                this_stack = dic['stretch_stack'].copy()
+            else:
+                this_stack = dic['stretch_stack'].copy()
+            if 'use_pekel' not in this_cfg.keys():
+                this_cfg['use_pekel'] = 'false'
+            if this_cfg['use_pekel']:
+                this_width_stats = dic['pekel_stats']
+            else:
+                this_width_stats = dic['width_stats']
+            #breakpoint()
+            stretch_stack, _ = rivscale.filter.filter_stretch_stack(
+                this_cfg,
+                this_stack,#dic['stretch_stack_corr'].copy(),
+                dic['wse_stats'],
+                this_width_stats,
+                plot=True,
+                outdir=outdir)
+        except KeyError as e:
+            print('could not plot outliers: {}'.format(e))
+    #if outdir is None:
+    #    plt.show()
+

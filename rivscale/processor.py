@@ -25,6 +25,8 @@ import rivscale.products.height_width_array
 import rivscale.misc
 import numpy as np
 
+import rivscale.plot
+
 #LOGGER = logging.getLogger(__name__)
 
 WARN_STR = '        already processed, not rerunning'
@@ -60,6 +62,9 @@ class Processor(object):
         self.products = {}
         # create a container for subprocessors
         self.processor_list = {}
+        #
+        self.outfiles = None
+        self.outdir = None
         #
         self.completed_sucessfully = False
         self.setup_logger(stretch_name, log_level, log_file)
@@ -139,8 +144,10 @@ class Processor(object):
        level = {'debug': logging.DEBUG, 'info': logging.INFO,
             'warning': logging.WARNING, 'error': logging.ERROR}[log_level]
        frmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-       self.log_handler = logging.FileHandler(log_file, mode='w')
-       #self.log_handler = logging.StreamHandler()
+       if log_file is not None:
+           self.log_handler = logging.FileHandler(log_file, mode='w')
+       else:
+           self.log_handler = logging.StreamHandler()
        self.log_handler.setLevel(level)
        self.LOGGER.setLevel(level)
        #
@@ -288,8 +295,9 @@ class Processor(object):
         self.outfiles = {}
         for prod_key in self.product_list:
             try:
+                self.outdir = self.cfg_run['main']['out_path']
                 self.outfiles[prod_key] = os.path.join(
-                    self.cfg_run['main']['out_path'], '{}_{}.nc'.format(
+                    self.outdir, '{}_{}.nc'.format(
                         self.cfg_run['main']['stretch_name'], prod_key))
             except KeyError as e:
                 self.outfiles[prod_key] = None
@@ -559,3 +567,14 @@ class Processor(object):
             self.products['bayes'] = bayes
         return success
 
+    ####
+    # plot the products
+    ####
+    def plot(self, plotdir=None):
+        """
+        This method can be used (e.g., in conjunction with
+        plot_stretch_produts.py) to plot the various output products
+        that get produced after a specific kind of processing (e.g., )
+        """
+        rivscale.plot.plot_products(self.products, outdir=plotdir)
+        

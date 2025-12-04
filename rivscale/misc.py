@@ -87,6 +87,33 @@ def get_stretch_list_from_subset_cfg(cfg, sword_df):
             else:
                 # assume it is a non-numeric stretch name
                 stretch_list.append('{}'.format(stretch))
+    ###
+    # needed if sword_df is None
+    ###
+    stretch_list0 = [item for item in stretch_list]
+    # handle basin-level stretch_list
+    isbasin = False
+    for stretch in stretch_list0:
+        if len(stretch)< 11:
+            isbasin = True
+    if isbasin:
+        stretch_list = []
+        this_df = pd.read_csv(
+            cfg['main']['stretch_definition_file'])
+        reach_ids = this_df.keys()
+        for stretch in stretch_list0:
+            msk = [False for rid in reach_ids] # start with all False
+            for k, rid in enumerate(reach_ids):
+                if rid.startswith(stretch):
+                    msk[k] = True
+            these_stretches = list(reach_ids[msk])
+            stretch_list = stretch_list + these_stretches
+    else:
+        stretch_list = stretch_list0
+    # filter stretches by stretch type?
+    if 'valid_reach_code_types' in cfg['main'].keys():
+        stretch_list = filter_stack_list_for_code_type(
+            cfg, stretch_list)
     return stretch_list
 
 def filter_stack_list_for_code_type(cfg, stretch_list):
