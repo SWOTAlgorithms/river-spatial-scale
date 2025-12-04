@@ -45,7 +45,7 @@ PROCESSOR_OUTPUTS = {
 
 class Processor(object):
     '''
-    A Container for a genereic processor super class (e.g., estimator, reconstructoir etc)
+    A Container for a genereic processor class (e.g., estimator, reconstructor etc)
     '''
     def __init__(self, run_config, kind='estimate', force=False,
             stretch_name='', log_level='info', log_file='log_tmp.txt'):
@@ -196,17 +196,9 @@ class Processor(object):
         # get processor list from section heading names
         self.processor_list = list(self.cfg_param.keys())
         # exclude the stretch-stack, stretch_avg, and pekel etc
-        rm_keys = ['DEFAULT', 'main', 'stretch_stack', 'reach_avg', 'pekel_stats']
-        for key in rm_keys:
+        for key in self.rm_keys:
             if key in self.processor_list:
                 self.processor_list.remove(key)
-        # define modules that are required to run for subsequent processing to work
-        self.required_processors = [
-            'filter_stack',
-            'along_stats',
-            'height_width',
-            #'height_width_array',
-            ]
         return success
 
     def load_inputs(self):
@@ -214,9 +206,14 @@ class Processor(object):
         self.infiles = {}
         for prod_key in self.required_inputs:
             try:
-                self.infiles[prod_key] = os.path.join(
-                    self.cfg_run['main']['out_path'], '{}'.format(
-                        self.cfg_run['main'][f'{prod_key}_file'], prod_key))
+                if prod_key=='stretch_stack':
+                    self.infiles[prod_key] ='{}'.format(
+                        self.cfg_run['main'][f'{prod_key}_file'], prod_key)
+                else:
+                    # load the estimated prior files
+                    self.infiles[prod_key] = os.path.join(self.cfg_run[
+                        'main']['estimate_path'], '{}_{}.nc'.format(
+                            self.cfg_run['main']['stretch_name'], prod_key))
             except KeyError as e:
                 self.infiles[prod_key] = None
         ####
@@ -235,15 +232,6 @@ class Processor(object):
                 this_prod = rivscale.io.load_product(
                     self.infiles[prod_key], prod_key, False)
             self.products[prod_key] = this_prod
-        ## load the input file
-        #try:
-        #    stretch_stack = \
-        #        rivscale.products.stretch_stack.StretchStack.from_ncfile(
-        #            self.cfg_run['main']['stretch_stack_file'])
-        #except (FileNotFoundError, KeyError) as e:
-        #    self.LOGGER.info(f'    Problem loading stretch_stack file: {e}')
-        #    return False
-        
         # populate witdh_u
         # TODO: fix the uncertainty itself instead of fudging it here  
         stretch_stack = self.products['stretch_stack']
@@ -261,7 +249,7 @@ class Processor(object):
                 self.products[prod_key] = None
 
         # TODO: handle reach_avg and pekel
-        # also read in the Bayes
+        
         return success
 
     def product_isempty(self, product, min_obs=2):
@@ -273,18 +261,23 @@ class Processor(object):
             valid_wse = np.isfinite(product.wse)
             valid_width = np.isfinite(product.width)
             num_wse = len(product.wse[valid_wse])
-            num_width = len(product.wse[valid_width])
+            num_width = len(product.width[valid_width])
             if (num_wse > min_obs) or (num_width > min_obs):
                 isempty = False
-        if isinstance(product, rivscale.products.along_stretch.AlongStretchStats):
+        if isinstance(product,
+                rivscale.products.along_stretch.AlongStretchStats):
             # check for valid ref profile
             valid_ref = np.isfinite(product.reference)
-            num_ref = len(product.wse[valid_ref])
-            if (num_wse > min_obs):
+            num_ref = len(product.reference[valid_ref])
+            if (num_ref > min_obs):
                 isempty = False
         if isinstance(product, rivscale.products.height_width.HeightWidthModel):
-            # TODO: implement this one?
-            pass
+            valid_wse = np.isfinite(product.wse_coords)
+            valid_width = np.isfinite(product.width_coords)
+            num_wse = len(product.wse_coords[valid_wse])
+            num_width = len(product.width_coords[valid_width])
+            if (num_wse > min_obs) and (num_width > min_obs):
+                isempty = False
         # TODO: add other products here
         return isempty
 
@@ -320,6 +313,7 @@ class Processor(object):
     def load_data(self):
         # first load the outputs to see if already processed
         self.load_outputs()
+        #breakpoint()
         # load the param config
         if not self.load_param_config():
             return False
