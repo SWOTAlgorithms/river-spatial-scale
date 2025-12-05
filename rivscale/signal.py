@@ -8,6 +8,8 @@ Author(s): Brent Williams
 This mdule is a place for signal processing, moddleing and estimation
 including convariance/spectral estimation and data-driven modeling etc
 '''
+import numpy as np
+
 
 def estimate_signal_mean(var_in):
     """
