@@ -17,6 +17,8 @@ import rivscale.special
 import rivscale.misc
 import os.path
 
+from sklearn.isotonic import IsotonicRegression
+
 def make_single_stretch_config(
         cfg_run, stretch_name, abspath=True, section='estimate'):
     '''
@@ -450,7 +452,8 @@ def process_stretch_average(
     #        width_stretch_avg, width_stats, width_outlier_scale)
     return wse_stretch_avg, width_stretch_avg
 
-def get_med_profile(signal, dist_out, kernel_size=35):
+def get_med_profile(signal, dist_out, kernel_size=35,
+        make_monotonic=False, extrap=False):
     """
     This function estimates a river profile from multitemporal SWOT measurements
     over a connected river stretch (potentially mutu-reach section of river
@@ -464,7 +467,15 @@ def get_med_profile(signal, dist_out, kernel_size=35):
     med_filt = median profile with holes onterpolated over and spatially 
                median-filter smoothed
     """
+    #take median over non-along-river dim (e.g., time)
     med = np.nanmedian(signal, axis=1)
+    # interp and filter
+    med_filt = interp_smooth_and_monotonify(dist_out, med,
+        kernel_size=kernel_size,
+        make_monotonic=make_monotonic,
+        extrap=extrap
+        )
+    """
     msk = np.isfinite(med)
     if np.sum(msk)==0:
         # TODO: print warning?
@@ -474,6 +485,7 @@ def get_med_profile(signal, dist_out, kernel_size=35):
     #    dist_out, dist_out[msk], med[msk], left=np.nan, right=np.nan)
     # TODO: handle remaining nans by filling with linear fit or sword prior? 
     #       just fill with max or min for now
+    
     med_min = np.nanmin(med)
     med_max = np.nanmax(med)
     med_interp = np.interp(
@@ -483,5 +495,61 @@ def get_med_profile(signal, dist_out, kernel_size=35):
     if kernel_size is not None:
         med_filt = scipy.ndimage.median_filter(
             med_interp, size=kernel_size, mode='nearest')
+    """
     return med_filt
+
+def interp_smooth_and_monotonify(x, y, kernel_size=35,
+        make_monotonic=True, extrap=True):
+    # x and y are 1d arrays, y possibly has nans
+    msk = np.isfinite(y)
+    if np.sum(msk)==0:
+        # TODO: print warning?
+        return y
+    # check that x is increasing
+    dx = np.diff(x)
+    #breakpoint()
+    if np.any(dx<0):
+        if np.any(dx>0):
+            print("x is not increasing or decreasing")
+        else:
+            x = -x
+    # handle masked arrays
+    if isinstance(x, np.ma.masked_array):
+        x = x.filled(0)
+    if isinstance(y, np.ma.masked_array):
+        y = y.filled(0)
+    # do interpolation without extrapolation to get mask ov extrapolated
+    sig_min = np.nan
+    sig_max = np.nan
+    sig_interp_noextrap = np.interp(
+        x, x[msk], y[msk], left=sig_min, right=sig_max)
+    isextrapolated = np.isnan(sig_interp_noextrap)
+    #sig_min = np.nanmin(signal1d)
+    #sig_max = np.nanmax(signal1d)
+    #sig_interp = np.interp(
+    #    dist_out, dist_out[msk], signal1d[msk], left=sig_min, right=sig_max)
+    # TODO: figure out better way to extrapolate
+    # interpolate with extrapolation (otherwise the median filter does
+    # funny things on the edges)
+    intrp = scipy.interpolate.interp1d(
+            x[msk],
+            y[msk],
+            kind='linear',
+            bounds_error=False,
+            fill_value='extrapolate'
+            )
+    sig_interp = intrp(x)
+    # do along-river smoothing, preserving discontinuitites
+    sig_filt = sig_interp.copy()
+    if kernel_size is not None:
+        sig_filt = scipy.ndimage.median_filter(
+            sig_interp, size=kernel_size, mode='nearest')
+    if make_monotonic:
+        # apply isotonic filter after all other things
+        ir = IsotonicRegression(out_of_bounds="clip")
+        sig_filt = ir.fit_transform(x, sig_filt)
+    if not extrap:
+        sig_filt[isextrapolated] = np.nan
+    # TODO: maybe just output the isextrapolated mask
+    return sig_filt
 

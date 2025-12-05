@@ -148,38 +148,90 @@ class FlowStateModel(Product):
             self.wse_profiles,
             self.along_dist)
 
+    def exclude_poor_values(self):
+        # low counts
+        self.wse_profiles[self.counts < 5] = np.nan
+        self.width_profiles[self.counts < 5] = np.nan
+        # large variabilty
+        self.wse_profiles[self.wse_iqrs > 1] = np.nan
+        self.width_profiles[self.width_iqrs > 50] = np.nan
     # TODO add along-river smoothing/intepolation over holes?
     # TODO: add inter-state sampling/interpolation (e.g., given
     #       a wse_stretch_avg, return a mean wse and width profile for the state)
     def plot(self, outdir=None, title_tag='', show=False):
         # TODO: refine these
+        #self.exclude_poor_values()
+        #self.isotonic_wse()
         # count
         plt.figure()
         plt.plot(self.along_dist, self.counts)
         plt.ylabel('count')
         plt.xlabel('along_dist (m)')
         plt.grid()
-        # wse
+        # wse/width
         plt.figure()
         plt.subplot(2,1,1)
         plt.plot(self.along_dist, self.wse_profiles)
         plt.ylabel('wse (m)')
         plt.grid()
         plt.subplot(2,1,2)
-        plt.plot(self.along_dist, self.wse_iqrs)
-        plt.ylabel('wse IQR (m)')
+        plt.plot(self.along_dist, self.width_profiles)
+        plt.ylabel('width (m)')        
+        #plt.plot(self.along_dist, self.wse_iqrs)
+        #plt.ylabel('wse IQR (m)')
         plt.xlabel('along_dist (m)')
         plt.grid()
-        # width
+        # IQR
         plt.figure()
         plt.subplot(2,1,1)
-        plt.plot(self.along_dist, self.width_profiles)
-        plt.ylabel('width (m)')
+        #plt.plot(self.along_dist, self.width_profiles)
+        #plt.ylabel('width (m)')
+        plt.plot(self.along_dist, self.wse_iqrs)
+        plt.ylabel('wse IQR (m)')
         plt.grid()
         plt.subplot(2,1,2)
         plt.plot(self.along_dist, self.width_iqrs)
         plt.ylabel('width IQR (m)')
         plt.xlabel('along_dist (m)')
+        plt.grid()
+        #
+        plt.figure()
+        plt.imshow(self.wse_profiles.T, aspect='auto', interpolation='none')
+        plt.title('flow state med wse')
+        plt.ylabel('flow state index')
+        plt.xlabel('node index')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(self.width_profiles.T, aspect='auto', interpolation='none')
+        plt.title('flow state med width')
+        plt.ylabel('flow state index')
+        plt.xlabel('node index')
+        plt.colorbar()
+        #
+        plt.figure()
+        plt.imshow(self.wse_iqrs.T, aspect='auto', interpolation='none')
+        plt.title('flow state wse iqr')
+        plt.ylabel('flow state index')
+        plt.xlabel('node index')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(self.width_iqrs.T, aspect='auto', interpolation='none')
+        plt.title('flow state width iqr')
+        plt.ylabel('flow state index')
+        plt.xlabel('node index')
+        plt.colorbar()
+        #
+        plt.figure()
+        plt.subplot(2,1,1)
+        plt.plot(self.wse_profiles.T)
+        plt.ylabel('wse (m)')
+        plt.grid()
+        plt.subplot(2,1,2)
+        plt.plot(self.width_profiles.T)
+        plt.ylabel('width (m)')
+        #plt.plot(self.along_dist, self.wse_iqrs)
+        #plt.ylabel('wse IQR (m)')
+        plt.xlabel('flow state index')
         plt.grid()
         #
         # width
