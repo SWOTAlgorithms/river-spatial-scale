@@ -11,7 +11,7 @@ including convariance/spectral estimation and data-driven modeling etc
 import numpy as np
 
 
-def estimate_signal_mean(var_in):
+def estimate_signal_mean(var_in, ref=None):
     """
     estimate the mean of the signal for each row in the stack
 
@@ -19,11 +19,16 @@ def estimate_signal_mean(var_in):
     """
     signal_in = np.array(var_in.copy())
     # TODO: may need to account for missing samples in the mean estimate
-    signal_mean = np.nanmean(signal_in, axis=0)
+    if ref is not None:
+        ref_2D = np.broadcast_to(ref, np.shape(signal_in.T)).T
+        ref_mean = np.nanmean(ref_2D, axis=0)
+        signal_mean = np.nanmean(signal_in - ref_2D, axis=0) + ref_mean
+    else:
+        signal_mean = np.nanmean(signal_in, axis=0)
     signal_mean_2D = np.broadcast_to(signal_mean, np.shape(signal_in))
     return signal_mean, signal_mean_2D
 
-def estimate_along_cov_from_stack_var(var_in):
+def estimate_along_cov_from_stack_var(var_in, ref=None):
     """
     estimate covariance
 
@@ -32,7 +37,7 @@ def estimate_along_cov_from_stack_var(var_in):
     signal_in = np.array(var_in.copy())
     M,N = np.shape(signal_in)
     # TODO: may need to account for missing samples in the mean estimate
-    signal_mean, signal_mean_2D = estimate_signal_mean(signal_in)
+    signal_mean, signal_mean_2D = estimate_signal_mean(signal_in, ref=ref)
     # subtract the mean
     sig = signal_in - signal_mean_2D
     # get the mask of missing values to create the sampling operator
@@ -89,6 +94,36 @@ def KL_model(Cov, var_in):
     C = np.array(B_inv @ sig)
     sig_hat = B @ C + signal_mean_2D
     return sig_hat, U, S, C, Order
+
+
+def weighted_sampled_fit(B_in, var_in, H=None):
+    """
+    var_in is a 1D or 2D array of data (e.g., along-river wse)
+    B = a linear Basis matrix/vector
+    H is a sampling/weigthing vector for each row of var_in
+    """
+    signal_in = np.array(var_in).copy()
+    B = np.array(B_in).copy()
+    # check shape of B
+    if np.shape(B)[0] != np.shape(signal_in)[0]:
+        B = B.T
+    if H is None:
+        # use the Nan Mask as the sampling operator
+        H = np.zeros_like(signal_in)
+        H[np.isfinite(signal_in)] = 1
+        signal_in[H==0] = 0
+    M,N = np.shape(signal_in)
+    fit = []
+    params = []
+    for k in range(N):
+        # do a weighted fit for each row
+        #breakpoint()
+        sig = signal_in[:,k]
+        W = np.diag(H[:,k])
+        C = np.linalg.pinv(B.T @ W @ B) @ B.T @ W @ sig
+        fit.append(B @ C)
+        params.append(C)
+    return np.array(fit).T, np.array(params).T
 
 
 
