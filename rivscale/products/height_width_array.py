@@ -77,9 +77,9 @@ class HeightWidthModelArray(Product):
     ])
 
     @classmethod
-    def from_stretch_stack(
+    def from_object(
             cls,
-            stretch_stack,
+            obj,
             wse_reference=None,
             ptile_list = [5, 25, 32, 50, 68, 75, 95],
             snapit=True,
@@ -89,17 +89,26 @@ class HeightWidthModelArray(Product):
         process a stretch-stack object to an along-river, per-node
         height/width model array
         """
+        try:
+            # stretch_stack object
+            wse = obj.wse.copy()
+            width = obj.wse.copy()
+        except AttributeError as e:
+            # flow_state
+            wse = obj.wse_profiles.copy()
+            width = obj.width_profiles.copy()
         height_width = cls.from_arrays(
-            stretch_stack.wse.copy(),
-            stretch_stack.width.copy(),
-            along_dist=stretch_stack.along_dist.copy(),
-            node_id=stretch_stack.node_id.copy(),
-            stretch_name=stretch_stack.stretch_name,
+            wse,
+            width,
+            along_dist=obj.along_dist.copy(),
+            node_id=obj.node_id.copy(),
+            stretch_name=obj.stretch_name,
             wse_reference=wse_reference,
             ptile_list=ptile_list,
             snapit=snapit,
             neighbor_win_len=neighbor_win_len)
         return height_width
+
 
     @classmethod
     def from_arrays(
