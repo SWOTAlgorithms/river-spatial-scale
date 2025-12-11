@@ -282,15 +282,17 @@ class CfgParser(ConfigParser):
 
     def read(self, filename, *args, **kwargs):
         """Load a file, adding 'main' section if necessary"""
-        string = open(filename, 'r').readlines()
+        with open(filename, 'r') as f:
+            string = f.readlines()
         if string[0][0] != '[' and string[0][-1] != ']':
             string = ['[main]\n'] + string
         string = ''.join(string)
-        super(ConfigParser, self).read_string(string)
+        self.read_string(string)
+        #super(ConfigParser, self).read_string(string)
 
     def read_string(self,string):
         super(ConfigParser, self).read_string(string)
-
+        
     def abspaths(self):
         """make all existing paths abspaths"""
         for section in self.keys():
