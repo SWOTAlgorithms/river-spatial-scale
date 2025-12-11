@@ -31,6 +31,7 @@ import numpy as np
 
 import rivscale.special
 
+
 class FlowStateModel(Product):
     ATTRIBUTES = odict([
         ['description',{'dtype':'str', 'value': textjoin("""
@@ -158,6 +159,35 @@ class FlowStateModel(Product):
     # TODO add along-river smoothing/intepolation over holes?
     # TODO: add inter-state sampling/interpolation (e.g., given
     #       a wse_stretch_avg, return a mean wse and width profile for the state)
+    def crop_to_reach(
+            self,
+            reach_id=None):
+        flow_state = FlowStateModel()
+        if reach_id is None:
+            if self.stretch_name.isdigit():
+                reach_id = self.stretch_name
+            else:
+                reach_id = 'bad'
+        if not((reach_id.isdigit()) and (len(reach_id)==11)):
+            print('reach_id is not a valid value, not cropping')
+            return None
+        # now get the mask
+        reach_ids = np.array([str(n)[0:10]+str(n)[-1] for n in self.node_id])
+        mask = np.where(reach_ids==reach_id)[0]
+        flow_state.stretch_name = self.stretch_name
+        flow_state.reaches = np.array([int(reach_id),])
+        # crop the along-river variables
+        #breakpoint()
+        keys = set(self.variables.keys()) - set(['reaches',])
+        for key in keys:
+            #print(key)
+            dims = self.VARIABLES[key]['dimensions']
+            if 'num_nodes' in dims.keys():
+                flow_state[key] = self[key][mask]#mask[0]:mask[-1]]
+            else:
+                flow_state[key] = self[key]
+        return flow_state
+
     def plot(self, outdir=None, title_tag='', show=False):
         # TODO: refine these
         #self.exclude_poor_values()

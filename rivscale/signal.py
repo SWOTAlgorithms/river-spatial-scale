@@ -37,9 +37,14 @@ def estimate_along_cov_from_stack_var(var_in, ref=None):
     signal_in = np.array(var_in.copy())
     M,N = np.shape(signal_in)
     # TODO: may need to account for missing samples in the mean estimate
-    signal_mean, signal_mean_2D = estimate_signal_mean(signal_in, ref=ref)
-    # subtract the mean
-    sig = signal_in - signal_mean_2D
+    #signal_mean, signal_mean_2D = estimate_signal_mean(signal_in, ref=ref)
+    if ref is None:
+        sig = signal_in
+        signal_mean_2D = np.zeros_like(sig)
+    else:
+        signal_mean_2D = np.broadcast_to(ref, np.shape(signal_in.T)).T
+        # subtract the mean
+        sig = signal_in - signal_mean_2D
     # get the mask of missing values to create the sampling operator
     h_msk = ~np.isfinite(sig)
     h = np.ones_like(sig)
@@ -62,7 +67,7 @@ def estimate_along_cov_from_stack_var(var_in, ref=None):
         Cov = Cov + this_cov
         Norm = Norm + this_norm
     Cov = Cov / Norm
-    return Cov, signal_mean_2D
+    return Cov, Norm, signal_mean_2D
 
 def KL_model(Cov, var_in):
     """

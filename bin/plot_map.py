@@ -26,6 +26,7 @@ from rivscale.plot import label_units
 
 import glob
 
+from rivscale.misc import TIME_ID_QUANTIZATION
 
 EXAMPLE = ''
 
@@ -112,7 +113,7 @@ def plot_multitemporal(stretch_stack, wse_along_stats, width_along_stats,
     for k in range(len(stretch_stack.time_id)):
         c = stretch_stack.wse[:,k] - wse_along_stats.reference
         cyc, pas, _ = stretch_stack.granule_id[k].split('_')
-        time_id = stretch_stack.time_id[k]*60.0*60.0
+        time_id = stretch_stack.time_id[k] * TIME_ID_QUANTIZATION
         #breakpoint()
         title = title0+ ' '+ clabel + ', date: {}, pass: {}'.format(
             swot_time_to_field_time([time_id,])[0].date(), pas)

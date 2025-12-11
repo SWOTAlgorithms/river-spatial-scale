@@ -11,7 +11,7 @@ import numpy as np
 import scipy.stats
 from sklearn.isotonic import IsotonicRegression
 import warnings
-from rivscale.misc import swot_time_to_field_time
+from rivscale.misc import time_id_to_date_hour
 
 def isotonic_regression_stack(y,x, kind='linear', fill_value=np.nan):#'extrapolate'):
     """
@@ -162,7 +162,7 @@ def seasonal_stats(stack, keys=['wse', 'width'],
     TODO: maybe also take means/std etc, maybe make this a class/object
     """
     # bin time dim of stretch-stack into doy bins
-    dates = dates = swot_time_to_field_time(stack.time_id*60*60)
+    dates = time_id_to_date_hour(stack.time_id)
     doy = [date.timetuple().tm_yday for date in dates]
     # TODO: make mask where data from all keys exist (e.g., height/width)
     dic = {'bins':bins}

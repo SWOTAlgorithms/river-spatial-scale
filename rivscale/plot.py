@@ -14,7 +14,7 @@ import scipy.ndimage
 import netCDF4 as nc
 import rivscale.misc
 import rivscale.reconstruct
-from rivscale.misc import swot_time_to_field_time
+from rivscale.misc import time_id_to_date_hour
 
 def label_units(label):
     if 'slope' in label:
@@ -137,7 +137,8 @@ def plot_stretch_stats(
     if x_key=='time_id':
         # convert to datetime
         #breakpoint()
-        x = swot_time_to_field_time(x*60.0*60.0)
+        #x = swot_time_to_field_time(x*60.0*60.0)
+        x = time_id_to_date_hour(x)
         x_label = 'time'
         marker = '.'
     y_key = stats.signal_key
@@ -210,7 +211,8 @@ def plot_the_per_pass(gid, x, y, y_u, marker, cross_track=None):
     for p in upid:
         this_y = y[pid==p].flatten()
         this_x = x[pid==p].flatten()
-        this_x = swot_time_to_field_time(this_x*60.0*60.0)
+        #this_x = swot_time_to_field_time(this_x*60.0*60.0)
+        this_x = time_id_to_date_hour(x)
         this_y_u = y_u[pid==p].flatten()
         label = 'pass {}'.format(p)
         if cross_track is not None:
@@ -406,7 +408,8 @@ def plot_stretch_stack(
     x_label = x_key
     if x_key=='time_id':
         # convert to datetime
-        x = swot_time_to_field_time(x*60*60)
+        #x = swot_time_to_field_time(x*60*60)
+        x = time_id_to_date_hour(x)
         y = y.T
         y2 = y2.T
         x_label = 'time'

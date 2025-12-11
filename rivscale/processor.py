@@ -421,7 +421,7 @@ class Processor(object):
             self.LOGGER.info(WARN_STR)
         else:
             filt_stack = rivscale.estimate.process_filter_stack(
-                cfg, self.products['stretch_stack'])
+                cfg, self.products['stretch_stack'], self.LOGGER)
             if filt_stack is None:
                 return False
             if self.product_isempty(filt_stack):
@@ -455,7 +455,7 @@ class Processor(object):
             self.LOGGER.info(WARN_STR)
         else:
             wse_stats, width_stats = rivscale.estimate.process_along_stats(
-                cfg, self.products['stretch_stack'])
+                cfg, self.products['stretch_stack'], self.LOGGER)
             # write outputs
             if wse_stats is not None:
                 wse_stats.to_ncfile(self.outfiles['wse_stats'])
@@ -541,7 +541,7 @@ class Processor(object):
                 self.products['stretch_stack'],
                 self.products['wse_stats'],
                 self.products['flow_state'],
-                )
+                self.LOGGER)
             if hw_array is not None:
                 hw_array.to_ncfile(self.outfiles['height_width_array'])
             else:

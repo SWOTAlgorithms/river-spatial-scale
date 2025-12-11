@@ -29,6 +29,7 @@ import numpy as np
 
 import rivscale.products.bayes_data
 import rivscale.products.along_stretch
+from rivscale.misc import TIME_ID_QUANTIZATION
 
 class StretchAverageStats(Product):
     ATTRIBUTES = odict([
@@ -111,9 +112,11 @@ class StretchAverageStats(Product):
             df[df['slope']<-1e5] = np.nan
             other_key = 'width'
             slope = []
-        time_ids = np.unique(np.array(np.floor(df['time']/60/60))).astype(int)
+        time_ids = np.unique(np.array(np.floor(
+            df['time'] / TIME_ID_QUANTIZATION))).astype(int)
         for time_i in time_ids:
-            times_id = np.floor(df['time']/60/60).astype(int)
+            times_id = np.floor(
+                df['time']/TIME_ID_QUANTIZATION).astype(int)
             this_df = df[times_id==time_i]
             # TODO handle window over desired reach
             dist_out.append(np.array(this_df['dist_out']))

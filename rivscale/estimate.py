@@ -189,7 +189,7 @@ def process_smooth_widths(cfg, stretch_stack_in):
         stretch_stack.smooth_widths(size=cfg['width_smooth_size'])
     return stretch_stack
 
-def process_filter_stack(cfg, stretch_stack_in):
+def process_filter_stack(cfg, stretch_stack_in, LOGGER=None):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
@@ -213,14 +213,19 @@ def process_filter_stack(cfg, stretch_stack_in):
             width_stats=None,
             plot=False)
     if np.shape(stretch_stack.width)[1]==0:
-        print('  No SWOT data left after multitemporal filtering')
+        log_str = 'No SWOT data left after multitemporal filtering'
+        if LOGGER is not None:
+            LOGGER.info(log_str)
+        else:
+            print('  '+log_str)
         return None
     if cfg['crop']:
         # crop to reach
         stretch_stack = stretch_stack.crop_to_reach()
     return stretch_stack
 
-def process_along_stats(cfg, stretch_stack_in, filterit=False):
+def process_along_stats(cfg, stretch_stack_in,
+        filterit=False, LOGGER=None):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
@@ -245,7 +250,11 @@ def process_along_stats(cfg, stretch_stack_in, filterit=False):
             width_stats=None,
             plot=False)
     if np.shape(stretch_stack.width)[1]==0:
-        print('  No SWOT data left after multitemporal filtering')
+        log_str = 'No SWOT data left after multitemporal filtering'
+        if LOGGER is not None:
+            LOGGER.info(log_str)
+        else:
+            print('  ' + log_str)
         return None, None
     ## optionally smooth the widths
     if cfg['width_smooth_size'] is not None:
@@ -334,7 +343,7 @@ def process_flow_state(cfg, stretch_stack, wse_stats, wse_stretch_avg):
        
 
 def process_height_width_array(cfg, stretch_stack_in,
-        wse_stats, flow_state, filterit=False):
+        wse_stats, flow_state, filterit=False, LOGGER=None):
     """
     This function processes the original stack of multitemporal 
     SWOT data node-level measurements over a multi-reach streach
@@ -360,7 +369,11 @@ def process_height_width_array(cfg, stretch_stack_in,
             width_stats=None,
             plot=False)
     if np.shape(stretch_stack.width)[1]==0:
-        print('  No SWOT data left after multitemporal filtering')
+        log_str = 'No SWOT data left after multitemporal filtering'
+        if LOGGER is not None:
+            LOGGER.info(log_str)
+        else:
+            print('  '+log_str)
         return None
     # compute multitemporal statistics
     wse_arr = stretch_stack.wse.copy()
@@ -499,7 +512,7 @@ def get_med_profile(signal, dist_out, kernel_size=35,
     return med_filt
 
 def interp_smooth_and_monotonify(x, y, kernel_size=35,
-        make_monotonic=True, extrap=True):
+        make_monotonic=True, extrap=True, LOGGER=None):
     # x and y are 1d arrays, y possibly has nans
     msk = np.isfinite(y)
     if np.sum(msk)==0:
@@ -510,7 +523,8 @@ def interp_smooth_and_monotonify(x, y, kernel_size=35,
     #breakpoint()
     if np.any(dx<0):
         if np.any(dx>0):
-            print("x is not increasing or decreasing")
+            if LOGGER is not None:
+                LOGGER.info("x is not increasing or decreasing")
         else:
             x = -x
     # handle masked arrays

@@ -18,6 +18,8 @@ import os.path
 
 MISSING_VALUE_FLT = -999999999999
 
+TIME_ID_QUANTIZATION = 3600.0 # 60.0*60.0 = quantization to hour
+
 def textjoin(text):
     """Dedent join and strip text"""
     text = textwrap.dedent(text)
@@ -156,6 +158,10 @@ def swot_time_to_field_time(swot_times, swot_filenames=None):
         time = time_start + datetime.timedelta(seconds=this_time)
         utc_time.append(datetime.datetime.utcfromtimestamp(time.timestamp()))
     return utc_time
+
+def time_id_to_date_hour(time_id):
+    return swot_time_to_field_time(
+        time_id * TIME_ID_QUANTIZATION)
 
 def split_utc_time(utc_times):
     """split time strings, copied from reproc"""

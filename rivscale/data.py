@@ -15,6 +15,8 @@ import rivscale.products.stretch_stack
 import xarray as xr
 import datetime
 
+from rivscale.misc import TIME_ID_QUANTIZATION
+
 try:
     import rivscale.ingest
 except ModuleNotFoundError:
@@ -368,7 +370,8 @@ def make_stretch_stack(
     # get separate list of the 1D keys
     sword_keys = ['node_length', 'dist_out', 'node_id', 'local_node_id','p_lat','p_lon']
     extra_keys = sword_keys + ['time_id', 'granule_id']
-    time_ids = np.sort(np.unique(np.floor(swot_node_df['time']/60/60)))
+    time_ids = np.sort(np.unique(np.floor(
+        swot_node_df['time']/TIME_ID_QUANTIZATION)))
     stretch_data = init_dict_from_keys(keys + extra_keys)
     # go through each reach and stack the various items
     for reach in stretch_reaches:
@@ -388,7 +391,8 @@ def make_stretch_stack(
         signal = init_dict_from_keys(keys + extra_keys)
         # go through the time/cycles
         for t_id in time_ids:
-            that_df = this_df[np.floor(this_df['time']/60/60)==t_id]
+            that_df = this_df[np.floor(
+                this_df['time']/TIME_ID_QUANTIZATION)==t_id]
             this_nodes = np.array(that_df['local_node_id'])
             for key in keys:
                 this_key = np.array(that_df[key])
