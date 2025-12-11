@@ -78,11 +78,15 @@ class BayesData(Product):
             title_tag=''):
         title_tag = title_tag+'Bayes'
         # create reference object
-        wse_reference = rivscale.products.along_stretch.AlongStretchStats()
-        width_reference = rivscale.products.along_stretch.AlongStretchStats()
+        #wse_reference = rivscale.products.along_stretch.AlongStretchStats()
+        #width_reference = rivscale.products.along_stretch.AlongStretchStats()
         # cast to a stretch_stack object and use its plotter
         stretch_stack = rivscale.products.stretch_stack.StretchStack()
         stretch_stack.stretch_name = self.stretch_name
+        wse_ref = None
+        width_ref = None
+        wse_reference = None
+        width_reference = None
         if 'joint' not in self.signal_key:
             stretch_stack.dist_out = self.dist_out
             stretch_stack.along_dist = self.along_dist
@@ -93,12 +97,14 @@ class BayesData(Product):
             title_tag = title_tag + ' wse'
             stretch_stack.wse = self.signal
             stretch_stack.wse_u = self.signal_u
-            wse_reference.reference = self.signal_mean
+            wse_ref = self.signal_mean
+            stretch_stack.width = np.zeros_like(self.signal)+np.nan
         if self.signal_key == 'width':
             title_tag = title_tag + ' width'
             stretch_stack.width = self.signal
             stretch_stack.width_u = self.signal_u
-            width_reference.reference = self.signal_mean
+            width_ref = self.signal_mean
+            stretch_stack.wse = np.zeros_like(self.signal)+np.nan
         if self.signal_key == 'joint_wse_width':
             title_tag = title_tag + ' joint wse width'
             wse_b, width_b, post_cov_b = self.unpack_joint()
@@ -112,9 +118,15 @@ class BayesData(Product):
             stretch_stack.width = width_b.signal
             stretch_stack.width_u = width_b.signal_u
             # unpack reference
-            wse_reference.reference = wse_b.signal_mean
-            width_reference.reference = width_b.signal_mean
-        #breakpoint()
+            wse_ref = wse_b.signal_mean
+            width_ref = width_b.signal_mean
+        if wse_ref is not None:
+            wse_reference = rivscale.products.along_stretch.AlongStretchStats()
+            wse_reference.reference = wse_ref
+        if width_ref is not None:
+            width_reference = rivscale.products.along_stretch.AlongStretchStats()
+            width_reference.reference = width_ref
+
         stretch_stack.plot(
             wse_reference,
             width_reference,
@@ -596,13 +608,32 @@ class BayesData(Product):
         bayes_width.signal = np.array(width_hats).T
         bayes_wse.signal_u = np.array(wse_hats_u).T
         bayes_width.signal_u = np.array(width_hats_u).T
-        bayes_wse.post_cov = np.moveaxis(
+        bayes_wse.signal_post_cov = np.moveaxis(
             np.array(wse_post_covs), 0, -1)
-        bayes_width.post_cov = np.moveaxis(
+        bayes_width.signal_post_cov = np.moveaxis(
             np.array(width_post_covs), 0, -1)
         bayes_wse_width_post_cov = np.moveaxis(
             np.array(wse_width_post_covs), 0, -1)
-        # TODO: handle the node_id, p_lat vars etc...
+        # handle the node_id, p_lat vars etc...
+        variables = list(self.variables.keys())
+        # exclude already populated variables
+        variables = list(
+            set(variables) - set(list(bayes_wse.variables.keys())))
+        for key in variables:
+            shp = np.shape(self[key])
+            shp0 = np.shape(bayes_wse[key])
+            if len(shp)==1:
+                if shp[0]==2*shp0[0]:
+                    bayes_wse[key] = self[key][0:N]
+                    bayes_width[key] = self[key][N:]
+                else:
+                    bayes_wse[key] = self[key]
+                    bayes_width[key] = self[key]
+            else:
+                if shp[0]==2*shp0[0]:
+                    bayes_wse[key] = self[key][0:N,0:N]
+                    bayes_width[key] = self[key][N:,N:]
+        #breakpoint()
         return bayes_wse, bayes_width, bayes_wse_width_post_cov
 
 
