@@ -51,6 +51,8 @@ class FlowStateModel(Product):
     VARIABLES = odict([
         ['node_id', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['along_dist', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['p_lat', odict([['dimensions', odict([['num_nodes', 0]])]])],
+        ['p_lon', odict([['dimensions', odict([['num_nodes', 0]])]])],
         ['bin_centers', odict([['dimensions', odict([['num_states', 0]])]])],
         ['counts', odict([['dimensions', DIMENSIONS_FLOW]])],
         ['bin_profiles', odict([['dimensions', DIMENSIONS_FLOW]])],
@@ -94,6 +96,8 @@ class FlowStateModel(Product):
             stretch_stack.width,
             node_id=stretch_stack.node_id,
             along_dist=stretch_stack.along_dist,
+            p_lat=stretch_stack.p_lat,
+            p_lon=stretch_stack.p_lon,
             kind=kind,
             stretch_name=stretch_name,
             bin_width=bin_width,
@@ -109,6 +113,8 @@ class FlowStateModel(Product):
             kind, # 'wse_stretch_avg', or 'stack_wse'
             node_id=None,
             along_dist=None,
+            p_lat=None,
+            p_lon=None,
             stretch_name=None,
             bin_width = 0.5,
             oversamp_factor=2
@@ -125,6 +131,10 @@ class FlowStateModel(Product):
             flow_state.node_id = node_id
         if along_dist is not None:
             flow_state.along_dist = along_dist
+        if p_lat is not None:
+            flow_state.p_lat = p_lat
+        if p_lon is not None:
+            flow_state.p_lon = p_lon
         # call the binnner
         bbins, bin_count, p_list, bin_stats, width_bin_stats, wse_bin_stats = \
             rivscale.special.var_binned_node_stats(
