@@ -110,6 +110,8 @@ def main():
                 print(f'problem processing {e}')
         else:
             print('    already processed, not reruning')
+        # close the log handler
+        worker.release_logger()
         this_stop = time.time()
         print('  execution time: {:2.2f} seconds'.format(this_stop - this_start))
 

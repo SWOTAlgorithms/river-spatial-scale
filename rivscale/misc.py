@@ -284,7 +284,6 @@ class CfgParser(ConfigParser):
         """Load a file, adding 'main' section if necessary"""
         with open(filename, 'r') as f:
             string = f.readlines()
-            f.close() # try to explicitly close it?
         if string[0][0] != '[' and string[0][-1] != ']':
             string = ['[main]\n'] + string
         string = ''.join(string)
