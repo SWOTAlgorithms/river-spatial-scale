@@ -43,6 +43,7 @@ def plot_stretch_average_hw(stretch_data):
 def plot_spectra(
         stretch_data,
         y_key='wse',
+        ref = None,
         char_length_tau=10000,
         prior_unc_alpha=2,
         title='',
@@ -52,7 +53,8 @@ def plot_spectra(
     # plot along-river spectra of the anomaly fields
     dist_out = stretch_data['dist_out']
     y = stretch_data[y_key]
-    ref = stretch_data['{}_reference'.format(y_key)]
+    if ref is None:
+        ref = stretch_data['{}_reference'.format(y_key)]
     ref2 = np.broadcast_to(ref, np.shape(y.T)).T
     anom = y - ref2
     # now get anomanom
