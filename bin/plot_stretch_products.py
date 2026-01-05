@@ -65,10 +65,10 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
         if 'pekel_stats' in fle:
             dic['pekel_stats'] = \
                     rivscale.products.along_stretch.AlongStretchStats.from_ncfile(f)
-        if 'wse_stretch_average' in fle:
+        if ('wse_stretch_average' in fle) or ('wse_avg' in fle):
             dic['wse_stretch_average'] = \
                     rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
-        if 'width_stretch_average' in fle:
+        if ('width_stretch_average' in fle) or ('width_avg' in fle):
             dic['width_stretch_average'] = \
                     rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
         if 'wse_reach_average' in fle:
