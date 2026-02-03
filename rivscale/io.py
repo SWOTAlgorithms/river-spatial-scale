@@ -119,17 +119,36 @@ def read_SWORD(fle):
         }
     d_up = {}
     d_down = {}
+    dn = {
+        'reach_id':[],
+        'node_id':[],
+        'dist_out':[],
+        'node_length':[],
+        'river_name':[],
+        'y':[],
+        'x':[]
+        }
     with nc.Dataset(fle) as f:
         for var in d.keys():
-            d[var] = d[var] + list(f.groups['reaches'].variables[var][:])
+            d[var] = f.groups['reaches'].variables[var][:]
+            #d[var] = d[var] + list(f.groups['reaches'].variables[var][:])
 
         for k,rch in enumerate(f.groups['reaches'].variables['reach_id'][:]):
            #breakpoint()
            d_up[str(rch)] = f.groups['reaches'].variables['rch_id_up'][:,k]
            d_down[str(rch)] = f.groups['reaches'].variables['rch_id_dn'][:,k]
-    for var in d.keys():
-        d[var] = np.array(d[var])
+        # now do nodes
+        for var in dn.keys():
+            #d[var] = d[var] + list(f.groups['nodes'].variables[var][:])
+            dn[var] = f.groups['nodes'].variables[var][:]
+    #for var in d.keys():
+    #    d[var] = np.array(d[var])
     df = pd.DataFrame(d)
+    #
+    node_df = pd.DataFrame(dn)
+    node_df['p_lat'] = node_df['y']
+    node_df['p_lon'] = node_df['x']
+    """
     #breakpoint()
     # do the nodes now
     d = {
@@ -143,12 +162,14 @@ def read_SWORD(fle):
         }
     with nc.Dataset(fle) as f:
         for var in d.keys():
-            d[var] = d[var] + list(f.groups['nodes'].variables[var][:])
-    for var in d.keys():
-        d[var] = np.array(d[var])
+            #d[var] = d[var] + list(f.groups['nodes'].variables[var][:])
+            d[var] = f.groups['nodes'].variables[var][:]
+    #for var in d.keys():
+    #    d[var] = np.array(d[var])
     node_df = pd.DataFrame(d)
     node_df['p_lat'] = node_df['y']
     node_df['p_lon'] = node_df['x']
+    """
     return df, node_df, d_up, d_down
 
 def load_field_data(fles, sword_file):
