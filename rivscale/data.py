@@ -102,6 +102,10 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     df['wse_u'] = df['wse_r_u']
     df['dist_out'] = df['p_dist_out']
     df['node_length'] = df['p_length']
+    #if 'p_dist_out' in df.keys():
+    #    df['dist_out'] = df['p_dist_out']
+    #if 'p_length' in df.keys():
+    #    df['node_length'] = df['p_length']
     # put sig0 in dB
     if 'rdr_sig0' in df.keys():
         df['sig0 (dB)'] = 10*np.log10(df['rdr_sig0'])
@@ -293,6 +297,41 @@ def get_swot_data(
                     ds = xr.open_dataset(fle, decode_cf=False)
                     this_df = ds.to_dataframe()
                     df = pd.concat([df,this_df],ignore_index=True)
+    elif cfg[section]['method'] == 'dawg':
+        # read in the dawg-confluence format files
+        #orbit = cfg['main']['orbit']
+        #pass_cont = cfg['main']['granule']
+        this_group = 'node'
+        if 'reach' in group:
+            this_group = 'reach'
+        df = None
+        for reach in stretch_reaches:#df_stretches.keys():
+            #r_str = '{}'.format(reach)
+            fle_str = os.path.join(cfg['main']['data_path'],
+                    '{}_SWOT.nc'.format(reach))
+            fles = glob.glob(fle_str)
+            #breakpoint()
+            # these are already stretch-stack-like, need tool to convert
+            # to stretch_stack?
+            for fle in fles:
+                print('  ',fle)
+                # TODO: should catch if file doesnt exist or cant read it?
+                if df is None:
+                    ds = xr.open_dataset(fle, group=this_group, decode_cf=False)
+                    df = ds.drop('time_str').to_dataframe()
+                    #breakpoint()
+                else:
+                    ds = xr.open_dataset(fle, group=this_group, decode_cf=False)
+                    this_df = ds.drop('time_str').to_dataframe()
+                    df = pd.concat([df,this_df],ignore_index=True)
+        # TODO: figure out how to handle cycle/pass
+        df['cycle'] = np.zeros(np.shape(df['wse']), dtype=int)
+        df['pass'] = np.zeros(np.shape(df['wse']), dtype=int)
+        # TODO: figure out how to handle area_total
+        df['area_total'] = np.array(df['width']).copy()
+        # TODO: figure out what to do with p_dist_out and p_length
+        df['p_dist_out'] = np.array(df['width']) * 0
+        df['p_length'] = np.array(df['width']) * 0
     #
     df = manage_fields(
         df,
