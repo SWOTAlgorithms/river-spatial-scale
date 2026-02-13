@@ -361,7 +361,9 @@ def get_swot_data(
         # TODO: figure out how to handle area_total
         #df['area_total'] = np.array(df['width']).copy()
         # TODO: figure out what to do with p_dist_out and p_length
-        df['area_total'] = np.array(df['width']) * 0
+        #breakpoint()
+        df['area_total'] = np.array(df['width']) + np.nan
+        df['area_tot_u'] = np.array(df['width']) + np.nan
         df['p_dist_out'] = np.array(df['width']) * 0
         df['p_length'] = np.array(df['width']) * 0
     #
@@ -370,6 +372,7 @@ def get_swot_data(
         use_wse_sm=cfg[section]['use_wse_sm'],
         qual_filter=cfg[section]['qual_filter'],
         dark_thresh=cfg[section]['dark_thresh'])
+    #breakpoint()
     return df
 
 def init_dict_from_keys(keys):
@@ -515,5 +518,16 @@ def make_stretch_stack(
     # make along dist from node lengths
     dst = np.cumsum(np.array(data['node_length']))
     data['along_dist'] = np.max(dst) - dst # downstream dist
+    # regenreate the area_total from width if all nan
+    # (e.g., like dawg format that doesnt save area_total)
+    #breakpoint()
+    if np.nansum(data['area_total'])==0:
+        node_len = np.broadcast_to(
+            data['node_length'], np.shape(data['width'].T)).T
+        data['area_total'] = data['width'] * node_len
+    if np.nansum(data['area_tot_u'])==0:
+        node_len = np.broadcast_to(
+            data['node_length'], np.shape(data['width'].T)).T
+        data['area_tot_u'] = data['width_u'] * node_len
     return data
 
