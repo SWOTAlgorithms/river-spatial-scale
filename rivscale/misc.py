@@ -177,10 +177,20 @@ def field_time_to_swot_time(utc_times):
     time_sec = []
     for this_time in utc_times:
         if isinstance(this_time, str):
+            converted_time = datetime.datetime.strptime(
+                this_time,'%Y-%m-%d %H:%M:%S')
+            # set time-zone to utc
+            converted_time = converted_time.replace(
+                tzinfo=datetime.timezone.utc)
+            ref_time = datetime.datetime(2000, 1, 1,
+                tzinfo=datetime.timezone.utc)
+            time_diff = converted_time - ref_time
+            """
             time_diff = (datetime.datetime.strptime(
                 this_time,'%Y-%m-%d %H:%M:%S') -
                          datetime.datetime(2000, 1, 1,
                              tzinfo=datetime.timezone.utc))
+            """
         else:
             time_diff = (pd.to_datetime(this_time) - datetime.datetime(
                 2000, 1, 1,tzinfo=datetime.timezone.utc)) 

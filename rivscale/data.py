@@ -17,6 +17,40 @@ import datetime
 
 from rivscale.misc import TIME_ID_QUANTIZATION
 
+def dawg_file_to_df(fle, group='node'):
+    this_group = 'node'
+    if 'reach' in group:
+        this_group = 'reach'
+    #
+    ds = xr.open_dataset(fle, group=this_group)#, decode_cf=False)
+    # get the cyc/pas
+    ds0 = xr.open_dataset(fle)                
+    cyc_pas = np.array(ds0['observations'])
+    cyc = np.array([
+        int(i.decode("utf-8").split('_')[0]) for i in cyc_pas])
+    pas = np.array([
+        int(i.decode("utf-8").split('_')[1]) for i in cyc_pas])
+    ds['pass'] = (('nt'), pas)
+    ds['cycle'] = (('nt'), cyc)
+    df = ds.to_dataframe()
+    df['time_str'] = np.array([i.decode("utf-8") for i in df['time_str']])
+    time_str = np.array(df['time_str'])
+    time_str[time_str=='nan'] = '2000-01-01T00:00:00Z'
+    # drop the trailing 'Z'
+    time_str = np.array([t[0:-1] for t in time_str])
+    # replace the T with space
+    time_str = np.array([t.replace('T',' ') for t in time_str])
+    df['time_str'] = time_str
+    t_swot = rivscale.misc.field_time_to_swot_time(df['time_str'])
+    # replace time with swot time
+    df['time'] = t_swot
+    # handle nans in node_q_b
+    n_q_b = np.array(df['node_q_b'])
+    n_q_b[np.isnan(n_q_b)] = 2**29-1
+    df['node_q_b'] = n_q_b.astype(int)
+    #breakpoint()
+    return df
+
 try:
     import rivscale.ingest
 except ModuleNotFoundError:
@@ -301,9 +335,9 @@ def get_swot_data(
         # read in the dawg-confluence format files
         #orbit = cfg['main']['orbit']
         #pass_cont = cfg['main']['granule']
-        this_group = 'node'
-        if 'reach' in group:
-            this_group = 'reach'
+        #this_group = 'node'
+        #if 'reach' in group:
+        #    this_group = 'reach'
         df = None
         for reach in stretch_reaches:#df_stretches.keys():
             #r_str = '{}'.format(reach)
@@ -317,19 +351,17 @@ def get_swot_data(
                 print('  ',fle)
                 # TODO: should catch if file doesnt exist or cant read it?
                 if df is None:
-                    ds = xr.open_dataset(fle, group=this_group, decode_cf=False)
-                    df = ds.drop('time_str').to_dataframe()
-                    #breakpoint()
+                    df = dawg_file_to_df(fle, group=group)
                 else:
-                    ds = xr.open_dataset(fle, group=this_group, decode_cf=False)
-                    this_df = ds.drop('time_str').to_dataframe()
+                    this_df = dawg_file_to_df(fle, group=group)
                     df = pd.concat([df,this_df],ignore_index=True)
         # TODO: figure out how to handle cycle/pass
-        df['cycle'] = np.zeros(np.shape(df['wse']), dtype=int)
-        df['pass'] = np.zeros(np.shape(df['wse']), dtype=int)
+        #df['cycle'] = np.zeros(np.shape(df['wse']), dtype=int)
+        #df['pass'] = np.zeros(np.shape(df['wse']), dtype=int)
         # TODO: figure out how to handle area_total
-        df['area_total'] = np.array(df['width']).copy()
+        #df['area_total'] = np.array(df['width']).copy()
         # TODO: figure out what to do with p_dist_out and p_length
+        df['area_total'] = np.array(df['width']) * 0
         df['p_dist_out'] = np.array(df['width']) * 0
         df['p_length'] = np.array(df['width']) * 0
     #
