@@ -340,6 +340,7 @@ def get_swot_data(
         #    this_group = 'reach'
         df = None
         for reach in stretch_reaches:#df_stretches.keys():
+            #breakpoint()
             #r_str = '{}'.format(reach)
             fle_str = os.path.join(cfg['main']['data_path'],
                     '{}_SWOT.nc'.format(reach))
@@ -355,6 +356,7 @@ def get_swot_data(
                 else:
                     this_df = dawg_file_to_df(fle, group=group)
                     df = pd.concat([df,this_df],ignore_index=True)
+            #breakpoint()
         # TODO: figure out how to handle cycle/pass
         #df['cycle'] = np.zeros(np.shape(df['wse']), dtype=int)
         #df['pass'] = np.zeros(np.shape(df['wse']), dtype=int)
@@ -362,10 +364,11 @@ def get_swot_data(
         #df['area_total'] = np.array(df['width']).copy()
         # TODO: figure out what to do with p_dist_out and p_length
         #breakpoint()
-        df['area_total'] = np.array(df['width']) + np.nan
-        df['area_tot_u'] = np.array(df['width']) + np.nan
-        df['p_dist_out'] = np.array(df['width']) * 0
-        df['p_length'] = np.array(df['width']) * 0
+        if df is not None:
+            df['area_total'] = np.array(df['width']) + np.nan
+            df['area_tot_u'] = np.array(df['width']) + np.nan
+            df['p_dist_out'] = np.array(df['width']) * 0
+            df['p_length'] = np.array(df['width']) * 0
     #
     df = manage_fields(
         df,
