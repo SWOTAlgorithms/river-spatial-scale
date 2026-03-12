@@ -590,6 +590,7 @@ def plot_products(dic, outdir=None, cfg=None, width_correction=None):
                     width_data,
                     outdir=outdir,
                     title_tag='reach average')
+            #breakpoint()
             dic[key].plot(
                 wse_data=wse_data,
                 width_data=width_data,

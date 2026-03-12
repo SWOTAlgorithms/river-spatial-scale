@@ -539,7 +539,7 @@ class StretchStack(Product):
         wgt = np.array(wgt)
         w_bulk = np.squeeze(
             np.nansum(wgt * np.array(w_ref), axis=0) / np.nansum(wgt, axis=0))
-        # apply the buld offset and the correction for each pass
+        # apply the bulk offset and the correction for each pass
         w_corr = np.broadcast_to(w_bulk, np.shape(w_ref)) - w_ref
         # now expand correction to full stack
         gid = self.granule_id.copy()

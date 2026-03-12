@@ -262,6 +262,79 @@ class HeightWidthModel(Product):
         err = ml_error(wse_est, wse, width, sig_wse, sig_width, self)
         return wse_est, width_est, np.sqrt(err)
 
+    def compute_per_pass_data(
+            self,
+            wse_data,
+            width_data,
+            granule_id=None,
+            cross_track=None,
+            wse_ref=0.0,
+            width_ref=0.0,
+            cfg=None):
+        """
+        wse_data, width_data can be stretch_average obects
+        or arrays, in which case we also need granule_id, cross-track,
+        wse_ref and width_ref
+        """
+        per_pass = {
+            'pass_id':[],
+            'width_bias':[],
+            'width':[],
+            'wse':[],
+            'hw':[],
+            'spearman':[],
+            'cross_track':[]
+            }
+        if isinstance(wse_data, np.ndarray):
+            width = width_data.copy()
+            wse = wse_data.copy()
+            if granule_id is None:
+                return None
+            if cross_track is None:
+                return None
+        else:
+            #breakpoint()
+            width = width_data.mean
+            wse = wse_data.mean
+            wse_ref = np.nanmedian(wse_data.mean_reference)
+            width_ref = np.nanmedian(width_data.mean_reference)
+            wse_med = np.median(wse)
+            width_med = np.median(width)
+            granule_id = wse_data.granule_id.copy()
+            cross_track = wse_data.cross_track
+        # get the pass_id
+        pid = np.array([g.split('_')[1] for g in granule_id])
+        upid = np.unique(pid)
+        # loop over passes
+        for p in upid:
+            wse0 = wse[pid==p].flatten()
+            width0 = width[pid==p].flatten()
+            xtrk = cross_track[pid==p].flatten()
+            # also compute spearman
+            msk0 = np.logical_and(np.isfinite(width0), np.isfinite(wse0))
+            res = scipy.stats.spearmanr(width0[msk0], wse0[msk0])
+            # now plot do a height/width model for each pass
+            if cfg is None:
+                cfg = {'sigma_n':50.0, 'use_pekel':False}
+            # add reference that is taken off inside constructor
+            this_hw = self.from_objects(cfg, wse0, width0,
+                wse_anom=False, width_anom=False)
+            width_bias = this_hw.sample(
+                np.array([wse_ref,]), x_key='wse')[0] - width_ref
+            
+            # accummulate
+            per_pass['pass_id'].append(p)
+            per_pass['cross_track'].append(np.nanmedian(xtrk))
+            per_pass['width_bias'].append(width_bias)
+            per_pass['width'].append(width0)
+            per_pass['wse'].append(wse0)
+            #per_pass['width_ref'].append(width_ref)
+            #per_pass['wse_ref'].append(wse_ref)
+            per_pass['hw'].append(this_hw)
+            per_pass['spearman'].append(res.correlation)
+        
+        return per_pass 
+
     def plot(
             self,
             wse_data=None,
@@ -283,7 +356,12 @@ class HeightWidthModel(Product):
         if (wse_data is not None) and (
                 width_data is not None):
             label = None
-            gid = None
+            #breakpoint()
+            per_pass = self.compute_per_pass_data(
+                wse_data,
+                width_data,
+                granule_id,
+                )
             if isinstance(wse_data, np.ndarray):
                 d_width = width_data.copy()
                 d_wse = wse_data.copy()
@@ -305,40 +383,31 @@ class HeightWidthModel(Product):
                     d_wse = d_wse - wse_data.mean_reference
                     wse_ref = 0.0
                     width_ref = 0.0
+                wse_med = np.median(d_wse)
+                width_med = np.median(d_width)
                 gid = wse_data.granule_id.copy()
                 #breakpoint()
                 cross_track = wse_data.cross_track
-            pid = None
-            if gid is not None:
-                # get the pass_id
-                pid = np.array([g.split('_')[1] for g in gid])
-                upid = np.unique(pid)
-            if pid is None:
+            if per_pass is None:
                 plt.plot(d_width, d_wse, 'o', label=label)
                 plot_all_pass=True
             else:
-                for p in upid:
-                    wse0 = d_wse[pid==p].flatten()
-                    width0 = d_width[pid==p].flatten()
+                #breakpoint()
+                for k,p in enumerate(per_pass['pass_id']):
+                    print('pass',p)
+                    wse0 = per_pass['wse'][k]
+                    width0 = per_pass['width'][k]
                     # also compute spearman
-                    msk0 = np.logical_and(np.isfinite(width0), np.isfinite(wse0))
-                    res = scipy.stats.spearmanr(width0[msk0], wse0[msk0])
-                    # now plot do a height/width model for each pass
-                    if cfg is None:
-                        cfg = {'sigma_n':50.0, 'use_pekel':False}
-                    # add reference that is taken off inside constructor
-                    this_hw = self.from_objects(cfg, wse0, width0,
-                        wse_anom=False, width_anom=False)
-                    width_bias = this_hw.sample(
-                        np.array([wse_ref,]), x_key='wse')[0] - width_ref
+                    this_hw = per_pass['hw'][k]
+                    width_bias = per_pass['width_bias'][k]
+                    spearman = per_pass['spearman'][k]
+                    xtrk = per_pass['cross_track'][k]
                     # now plot it
                     this_label = 'pass {}, $\gamma_s$={:1.2f}, offset {:1.2f}'.format(
-                        p, res.correlation, width_bias)
-                    if cross_track is not None:
-                        xtrk = cross_track[pid==p].flatten()
-                        #breakpoint()
-                        this_label = this_label + ', xtrk {:2.1f} (km)'.format(
-                            np.median(xtrk)) # keep sign
+                        p, spearman, width_bias)
+                    
+                    this_label = this_label + ', xtrk {:2.1f} (km)'.format(
+                        xtrk) # keep sign
                     plt.plot(width0, wse0, 'o', label=this_label)
                     color = plt.gca().lines[-1].get_color()
                     plt.plot(this_hw.width_coords, this_hw.wse_coords,
@@ -356,9 +425,13 @@ class HeightWidthModel(Product):
             if not(delta):
                 widths = widths + width_ref
                 wses = wses + wse_ref
+            #breakpoint()
+            that_label = f'data median ({wse_med:1.2f}, {width_med:1.2f})'
             plt.plot(widths, wses,'-',
                 color=line_color, linewidth=2,
                 label=this_label)
+            #plt.plot([width_ref],[wse_ref,],'x', color=line_color)
+            plt.plot([width_med],[wse_med,],'s', color=line_color, label=that_label)
         #
         if delta:
             plt.xlabel('$\Delta$ width (m)')
