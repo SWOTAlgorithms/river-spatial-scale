@@ -207,25 +207,36 @@ def plot_stretch_stats(
         if show:
             plt.show()
 
-def plot_the_per_pass(gid, x, y, y_u, marker, cross_track=None):
+def plot_the_per_pass(gid, x, y, y_u, marker, cross_track=None, legend=False):
     pid = np.array([g.split('_')[1] for g in gid])
     upid = np.unique(pid)
     for p in upid:
         this_y = y[pid==p].flatten()
         this_x = x[pid==p].flatten()
         #this_x = swot_time_to_field_time(this_x*60.0*60.0)
-        this_x = time_id_to_date_hour(x)
+        this_x = time_id_to_date_hour(this_x)#x)
         this_y_u = y_u[pid==p].flatten()
         label = 'pass {}'.format(p)
         if cross_track is not None:
             xtrk = cross_track[pid==p].flatten()
             label = label + ', xtrk {:2.1f} (km)'.format(
                 np.median(xtrk)) # keep sign
+        else:
+            label=None
+        #breakpoint()
         plt.errorbar(this_x, this_y, yerr=this_y_u,
             marker=marker, label=label)
         #plt.plot(this_x, this_y, marker=marker, label='pass {}'.format(p))
     plt.grid()
-    plt.legend()
+    if legend:
+        plt.legend(
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.5),
+            ncol=2,
+            fancybox=True,
+            shadow=True,
+            borderaxespad=0
+            )
 
 def plot_per_pass_time_series(
         stats,
@@ -263,8 +274,12 @@ def plot_per_pass_time_series(
     if stats2 is not None:
         nplots=2
     plt.figure(figsize=figsize)
-    plt.subplot(nplots,1,1)
-    plot_the_per_pass(gid, x, y_mean, y_u, marker, cross_track)
+    plt.subplot(nplots,1,1)# layout='contrained')
+    #plt.subplots(nplots,layout='contrained')
+    legend=True
+    if nplots>0:
+        legend=False
+    plot_the_per_pass(gid, x, y_mean, y_u, marker, cross_track, legend=legend)
     plt.xlabel(label_units(x_label))
     plt.ylabel(label_units(y_key))
     if stats2 is not None:
@@ -280,7 +295,7 @@ def plot_per_pass_time_series(
         y_ref2 = stats2.mean_reference + np.zeros_like(y_mean2)
         gid2 = stats2.granule_id.copy()
         plt.subplot(nplots,1,2)
-        plot_the_per_pass(gid2, x, y_mean2, y_u2, marker)
+        plot_the_per_pass(gid2, x, y_mean2, y_u2, marker, cross_track, True)
         plt.xlabel(label_units(x_label))
         plt.ylabel(label_units(y_key2))
     if stats2 is None:

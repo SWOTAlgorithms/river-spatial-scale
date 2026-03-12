@@ -30,12 +30,15 @@ import rivscale.products.flow_state
 
 import rivscale.processor
 import rivscale.misc
+import glob
 
 import warnings
 
 EXAMPLE = ''
 
 def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
+    if len(files)<1:
+        return
     dic = {}
     # plot each individual file
     for f in files:
@@ -100,7 +103,7 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
         if 'bayes' in fle:
             dic['bayes'] = \
                     rivscale.products.bayes_data.BayesData.from_ncfile(f)
-    rivscale.plot.plot_products(dic, width_correction)
+    rivscale.plot.plot_products(dic, width_correction=width_correction, outdir=outdir)
 
 def get_stretch_list(stretch_list_in, dir_in, kind='stretch_stack'):
     stretch_files = []
@@ -145,8 +148,8 @@ def main():
         help='stretch_name(s) to plot')
     parser.add_argument('--width_correction', default=None,
         help='csv input file with width vs cross-track correction to apply')
-    parser.add_argument('--kind', default='estimate',
-        help='estimate, or reconstruct')
+    parser.add_argument('--kind', default='all',
+        help='all, reach, stretch, estimate, or reconstruct')
     args = parser.parse_args()
     #breakpoint()
     if args.infile is not None:
@@ -169,28 +172,71 @@ def main():
         all_stretches = list(args.stretch_name)
     for i,key in enumerate(all_stretches):
         print('plotting stretch: {}'.format(key))
-        # use the processor class to get all the output files
-        this_cfg = rivscale.estimate.make_single_stretch_config(
-            args.config, key, section=args.kind)
-        this_outpath = this_cfg['main']['out_path']
-        # initialize the worker
-        worker = rivscale.processor.Processor(this_cfg,
-            kind=args.kind,
-            stretch_name='{}'.format(key),
-            log_level='info',
-            log_file=None,
-            force=False)
-        plotdir = None
-        if args.stretch_name is None:
-            plotdir = os.path.join(this_outpath, 'plots')
-        # now plot the rest
-        try:
-            # TODO: handle --force
-            worker.plot(plotdir)
-            #plot_single_stretch(files, outdir=plotdir, cfg=cfg,
-            #    width_correction=args.width_correction)
-        except Exception as e:
-            print('problem plotting')
+        kinds = [args.kind,]
+        if args.kind=='all':
+            # get all the minor section headings
+            cfg_run = args.config
+            if isinstance(cfg_run,str):
+                infile = cfg_run
+                cfg_run = rivscale.misc.CfgParser()
+                cfg_run.read(infile)
+            
+            kinds = [k for k in cfg_run.keys()]
+            kinds = list(set(kinds) - set(['DEFAULT', 'main',]))
+            #
+            myout_path = cfg_run['main']['out_path']
+        for kind in kinds:
+            print('kind:', kind)
+            plotdir = None
+            # use the processor class to get all the output files
+            if not(kind in ['estimate', 'reconstruct']):
+                # use the processor class to get all the output files
+                this_cfg = rivscale.estimate.make_single_stretch_config(
+                    args.config, key, section='estimate')
+                if kind=='reach_avg':
+                    thepath = this_cfg['main']['reach_avg_path']
+                    files = glob.glob(f'{thepath}/*.nc')
+                if kind=='pekel':
+                    pekel_file = this_cfg['main']['pekel_along_stats_file']
+                    thepath,_ = os.path.split(pekel_file)
+                    files = [pekel_file,]
+                if kind=='stretch_stack':
+                    stretch_file = this_cfg['main']['stretch_stack_file']
+                    thepath,_ = os.path.split(stretch_file)
+                    files = [stretch_file,]
+                plotdir = os.path.join(thepath,'plots')
+                #
+                #breakpoint()
+                #
+                plot_single_stretch(files, outdir=plotdir, cfg=None,
+                    width_correction=None)
+                #plt.show()
+                #breakpoint()
+            else:
+                # use the processor class to get all the output files
+                this_cfg = rivscale.estimate.make_single_stretch_config(
+                    args.config, key, section=kind)
+                this_outpath = this_cfg['main']['out_path']
+                # initialize the worker
+                worker = rivscale.processor.Processor(this_cfg,
+                    kind=kind,
+                    stretch_name='{}'.format(key),
+                    log_level='info',
+                    log_file=None,
+                    force=False)
+                #plotdir = None
+                if args.stretch_name is None:
+                    plotdir = os.path.join(this_outpath, 'plots')
+                # now plot the rest
+                try:
+                    # TODO: handle --force
+                    #breakpoint()
+                    worker.plot(plotdir)
+                    #plot_single_stretch(files, outdir=plotdir, cfg=cfg,
+                    #    width_correction=args.width_correction)
+                except Exception as e:
+                    print('problem plotting')
+        #
         if plotdir is None:
             plt.show()
         plt.close('all')

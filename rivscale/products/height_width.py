@@ -273,9 +273,12 @@ class HeightWidthModel(Product):
             cfg=None,
             newfig=True,
             line_color='k',
-            label_prefix=''):
+            label_prefix='',
+            delta=False,
+            show_all_pass=True):
+        cross_track = None
         if newfig:
-            plt.figure()
+            plt.figure(figsize=(7,7))
         this_label = '{}model fit'.format(label_prefix)
         if (wse_data is not None) and (
                 width_data is not None):
@@ -293,9 +296,18 @@ class HeightWidthModel(Product):
                 # assume it is a stretch average
                 if title_tag is None:
                     label='stretch average'
-                d_width = width_data.mean - width_data.mean_reference
-                d_wse = wse_data.mean - wse_data.mean_reference
+                d_width = width_data.mean
+                d_wse = wse_data.mean
+                wse_ref = np.nanmedian(wse_data.mean_reference)
+                width_ref = np.nanmedian(width_data.mean_reference)
+                if delta:
+                    d_width = d_width - width_data.mean_reference
+                    d_wse = d_wse - wse_data.mean_reference
+                    wse_ref = 0.0
+                    width_ref = 0.0
                 gid = wse_data.granule_id.copy()
+                #breakpoint()
+                cross_track = wse_data.cross_track
             pid = None
             if gid is not None:
                 # get the pass_id
@@ -303,6 +315,7 @@ class HeightWidthModel(Product):
                 upid = np.unique(pid)
             if pid is None:
                 plt.plot(d_width, d_wse, 'o', label=label)
+                plot_all_pass=True
             else:
                 for p in upid:
                     wse0 = d_wse[pid==p].flatten()
@@ -317,10 +330,15 @@ class HeightWidthModel(Product):
                     this_hw = self.from_objects(cfg, wse0, width0,
                         wse_anom=False, width_anom=False)
                     width_bias = this_hw.sample(
-                        np.array([0.0,]), x_key='wse')[0]
+                        np.array([wse_ref,]), x_key='wse')[0] - width_ref
                     # now plot it
                     this_label = 'pass {}, $\gamma_s$={:1.2f}, offset {:1.2f}'.format(
                         p, res.correlation, width_bias)
+                    if cross_track is not None:
+                        xtrk = cross_track[pid==p].flatten()
+                        #breakpoint()
+                        this_label = this_label + ', xtrk {:2.1f} (km)'.format(
+                            np.median(xtrk)) # keep sign
                     plt.plot(width0, wse0, 'o', label=this_label)
                     color = plt.gca().lines[-1].get_color()
                     plt.plot(this_hw.width_coords, this_hw.wse_coords,
@@ -331,12 +349,32 @@ class HeightWidthModel(Product):
                 label_prefix, res.correlation)
         if line_color is None: 
             line_color = plt.gca().lines[-1].get_color()
-        plt.plot(self.width_coords, self.wse_coords,'-',
-            color=line_color, linewidth=2,
-            label=this_label)
-        plt.xlabel('$\Delta$ width (m)')
-        plt.ylabel('$\Delta$ wse (m)')
-        plt.legend()
+        # plot the model
+        if show_all_pass:
+            widths = self.width_coords.copy()
+            wses = self.wse_coords.copy()
+            if not(delta):
+                widths = widths + width_ref
+                wses = wses + wse_ref
+            plt.plot(widths, wses,'-',
+                color=line_color, linewidth=2,
+                label=this_label)
+        #
+        if delta:
+            plt.xlabel('$\Delta$ width (m)')
+            plt.ylabel('$\Delta$ wse (m)')
+        else:
+            plt.xlabel('width (m)')
+            plt.ylabel('wse (m)')
+        #plt.legend()
+        plt.legend(
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.2),
+            ncol=1,
+            fancybox=True,
+            shadow=True,
+            borderaxespad=0
+            )
         plt.grid()
 
         title = self.stretch_name
@@ -344,6 +382,7 @@ class HeightWidthModel(Product):
             title = title + ' ' +title_tag
         fname = title + '_wse_vs_width'
         plt.title(title)
+        plt.tight_layout()
         if outdir is not None:
             # create output dir if not exist
             if not os.path.exists(outdir):
