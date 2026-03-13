@@ -43,6 +43,8 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
     # plot each individual file
     for f in files:
         base, fle = os.path.split(f)
+        if not os.path.exists(f):
+            continue
         if 'stretch_stack' in fle:
             if 'stretch_stack_smoothwidth' in fle:
                 dic['stretch_stack_smoothwidth'] = \
@@ -79,11 +81,19 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
                     rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
         if 'width_reach_average' in fle:
             if 'height_width' in fle:
-                dic['height_width_reach_average'] = \
-                    rivscale.products.height_width.HeightWidthModel.from_ncfile(f)
+                if 'height_width_reach_average_corr' in fle:
+                    dic['height_width_reach_average_corr'] = \
+                        rivscale.products.height_width.HeightWidthModel.from_ncfile(f)
+                else:
+                    dic['height_width_reach_average'] = \
+                        rivscale.products.height_width.HeightWidthModel.from_ncfile(f)
             else:
-                dic['width_reach_average'] = \
-                    rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
+                if 'width_reach_average_corr' in fle:
+                    dic['width_reach_average_corr'] = \
+                        rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
+                else:
+                    dic['width_reach_average'] = \
+                        rivscale.products.stretch_average.StretchAverageStats.from_ncfile(f)
         if 'flow_state' in fle:
             dic['flow_state'] = \
                     rivscale.products.flow_state.FlowStateModel.from_ncfile(f)

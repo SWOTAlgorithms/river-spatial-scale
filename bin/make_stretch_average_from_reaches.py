@@ -43,6 +43,30 @@ import time
 
 EXAMPLE=''
 
+def apply_width_corr(wse_avg, width_avg, height_width, method='bundle_adjust'):
+    '''
+    apply a width correction to the width and recompute the
+    '''
+    width_avg_corr = None
+    height_width_corr = None
+    #breakpoint()
+    if method=='bundle_adjust':
+        # apply per-pass bundle adjustment to widths
+        # first compute the per-pass quantities
+        per_pass = height_width.compute_per_pass_data(wse_avg, width_avg)
+        # now create a copy of the width
+        width_avg_corr = width_avg.copy()
+        # now modify the widths
+        pid = np.array([g.split('_')[1] for g in width_avg.granule_id])
+        #upid = np.unique(pid)
+        # loop over passes
+        for p, bias in zip(per_pass['pass_id'],per_pass['width_bias']):
+            #
+            width_avg_corr.mean[pid==p] = width_avg.mean[pid==p] - bias
+        # now create a new height/width
+        height_width_corr = rivscale.products.height_width.HeightWidthModel.from_objects(
+                    {},wse_avg, width_avg_corr)        
+    return width_avg_corr, height_width_corr
 def main():
     parser = argparse.ArgumentParser(
         description='Process river stretch, reach, or multireach',
@@ -56,11 +80,8 @@ def main():
     #cfg = configparser.ConfigParser()
     #cfg.read(args.config)
     cfg = rivscale.misc.smash_configs(args.config, 'reach_avg')
+    
     # read in the SWORD file    
-
-
-
-    # read int he SWORD file
     print('reading SWORD file')
     sword_df, sword_node_df, d_up, d_down = rivscale.io.read_SWORD(
         cfg['main']['sword_file'])
@@ -168,12 +189,28 @@ def main():
         plt.show()
         breakpoint()
         """
+        # compute the bundle adjustment correction and appy it to the widths
+        # (if commanded) and also recompute the corrected height/width curve
+        outfile_width_corr = outfile_width.replace('.nc','_corr.nc')
+        outfile_height_width_corr = outfile_height_width.replace(
+            '.nc','_corr.nc')
+        width_reach_avg_corr = None
+        height_width_corr = None
+        if 'width_correction_method' in cfg['reach_avg'].keys():
+            width_reach_avg_corr, height_width_corr = apply_width_corr(
+                wse_reach_avg, width_reach_avg, height_width,
+                method=cfg['reach_avg']['width_correction_method'])
+        #
         if wse_reach_avg is not None:
             wse_reach_avg.to_ncfile(outfile_wse)
         if width_reach_avg is not None:
             width_reach_avg.to_ncfile(outfile_width)
         if height_width is not None:
             height_width.to_ncfile(outfile_height_width)
+        if width_reach_avg_corr is not None:
+            width_reach_avg_corr.to_ncfile(outfile_width_corr)
+        if height_width_corr is not None:
+            height_width_corr.to_ncfile(outfile_height_width_corr)
         this_stop = time.time()
         print('  execution time: {:2.2f} seconds'.format(this_stop - this_start))
 

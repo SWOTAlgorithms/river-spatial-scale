@@ -597,6 +597,28 @@ def plot_products(dic, outdir=None, cfg=None, width_correction=None):
                 outdir=outdir,
                 show=False,
                 title_tag=title_tag)
+        elif key=='height_width_reach_average_corr':
+            wse_data = None
+            width_data = None
+            title_tag = None
+            if ('wse_reach_average' in dic.keys()) and (
+                    'width_reach_average_corr' in dic.keys()):
+                wse_data = dic['wse_reach_average']
+                width_data = dic['width_reach_average_corr']
+                title_tag='reach average data corr'
+                # plot the wse and width time series per-pass
+                rivscale.plot.plot_per_pass_time_series(
+                    wse_data,
+                    width_data,
+                    outdir=outdir,
+                    title_tag='reach average corr')
+            #breakpoint()
+            dic[key].plot(
+                wse_data=wse_data,
+                width_data=width_data,
+                outdir=outdir,
+                show=False,
+                title_tag=title_tag)
         else:
             # single object plot
             title_tag = ''
