@@ -152,6 +152,7 @@ class BayesData(Product):
         bayes.dist_out = stretch_stack.node_length
         bayes.time_id = stretch_stack.time_id
         bayes.granule_id = stretch_stack.granule_id
+        bayes.node_id = stretch_stack.node_id
         bayes.signal_key = signal_key
         bayes.signal_mean = stats.reference.copy()
         time_key = 'time_id'
@@ -210,6 +211,10 @@ class BayesData(Product):
             stretch_stack.node_length])
         bayes.time_id = stretch_stack.time_id
         bayes.granule_id = stretch_stack.granule_id
+        #breakpoint()
+        bayes.node_id = np.concatenate([
+            stretch_stack.node_id,
+            stretch_stack.node_id])
         # get the mean and cov of the stacked wse and width
         #N = len(wse_along_stats.reference)
         # create the stacked mean
