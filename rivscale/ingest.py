@@ -17,11 +17,11 @@ https://podaac.github.io/tutorials/notebooks/datasets/Hydrocron_SWOT_timeseries_
 import dask
 import dask.dataframe as dd
 from dask.distributed import Client
-import hvplot.dask
+#import hvplot.dask
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pprint
+#import pprint
 import requests
 
 import datetime
