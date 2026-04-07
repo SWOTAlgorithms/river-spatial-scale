@@ -68,6 +68,9 @@ class BayesData(Product):
         ['signal_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         #['width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
         #['wse_width_cov', odict([['dimensions', DIMENSIONS_POSTCOV]])],
+        # put in the meas_u and meas_valid_mask (e.g., info for R_v and H)
+        ['meas_u', odict([['dimensions', DIMENSIONS_2D]])],
+        ['meas_valid', odict([['dimensions', DIMENSIONS_2D]])],
     ])
 
     def plot(
@@ -235,6 +238,8 @@ class BayesData(Product):
         Signal_hat_u = []
         Post_cov = []
         Pre_cov = []
+        Meas_u = []
+        Meas_valid = []
         time_key = 'time_id'
         #
         # go through each time/cycle observation in the stack
@@ -566,6 +571,10 @@ class BayesData(Product):
             Signal_hat_u.append(np.diag(post_cov))
             Post_cov.append(post_cov)
             Pre_cov.append(Ry)
+            Meas_u.append(meas_u)
+            meas_valid = np.zeros_like(meas)
+            meas_valid[np.isfinite(meas)] = 1
+            Meas_valid.append(meas_valid)
         #breakpoint()
         try:
             bayes.signal = np.array(Signal_hat).T
@@ -585,6 +594,14 @@ class BayesData(Product):
                 np.array(Pre_cov), 0, -1)
         except AssertionError as e:
             print(e)
+        try:
+            bayes.meas_u = np.array(Meas_u).T
+        except AssertionError as e:
+            print(e)
+        try:
+            bayes.meas_valid = np.array(Meas_valid).T
+        except AssertionError as e:
+            print(e)
         return bayes
 
 
@@ -600,8 +617,12 @@ class BayesData(Product):
         bayes_width.signal_mean = self.signal_mean[N:]
         wse_hats = []
         wse_hats_u = []
+        wse_meas_u = []
+        wse_meas_valid = []
         width_hats = []
         width_hats_u = []
+        width_meas_u = []
+        width_meas_valid = []
         wse_post_covs = []
         width_post_covs = []
         wse_width_post_covs = []
@@ -609,18 +630,28 @@ class BayesData(Product):
         for j, jnk in enumerate(self.signal[-1]):
             signal_hat = self.signal[:,j]
             post_cov = self.signal_post_cov[:,:,j]
+            meas_u = self.meas_u[:,j]
+            meas_valid = self.meas_valid[:,j]
             # populate the output arrays
             wse_hats.append(signal_hat[0:N])
             wse_post_covs.append(post_cov[0:N,0:N])
             wse_hats_u.append(np.diag(post_cov[0:N,0:N]))
+            wse_meas_u.append(meas_u[0:N])
+            wse_meas_valid.append(meas_valid[0:N])
             width_hats.append(signal_hat[N:])
             width_post_covs.append(post_cov[N:,N:])
+            width_meas_u.append(meas_u[N:])
+            width_meas_valid.append(meas_valid[N:])
             width_hats_u.append(np.diag(post_cov[N:,N:]))
             wse_width_post_covs.append(post_cov[0:N,N:])
         bayes_wse.signal = np.array(wse_hats).T
         bayes_width.signal = np.array(width_hats).T
         bayes_wse.signal_u = np.array(wse_hats_u).T
         bayes_width.signal_u = np.array(width_hats_u).T
+        bayes_wse.meas_u = np.array(wse_meas_u).T
+        bayes_width.meas_u = np.array(width_meas_u).T
+        bayes_wse.meas_valid = np.array(wse_meas_valid).T
+        bayes_width.meas_valid = np.array(width_meas_valid).T
         bayes_wse.signal_post_cov = np.moveaxis(
             np.array(wse_post_covs), 0, -1)
         bayes_width.signal_post_cov = np.moveaxis(
@@ -630,6 +661,7 @@ class BayesData(Product):
         # handle the node_id, p_lat vars etc...
         variables = list(self.variables.keys())
         # exclude already populated variables
+        #breakpoint()
         variables = list(
             set(variables) - set(list(bayes_wse.variables.keys())))
         for key in variables:
