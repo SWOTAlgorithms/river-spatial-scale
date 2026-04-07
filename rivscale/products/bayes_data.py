@@ -234,6 +234,7 @@ class BayesData(Product):
         Signal_hat = []
         Signal_hat_u = []
         Post_cov = []
+        Pre_cov = []
         time_key = 'time_id'
         #
         # go through each time/cycle observation in the stack
@@ -267,6 +268,7 @@ class BayesData(Product):
                 [R1, R12],
                 [R12.T, R2],
                 ])
+            #Pre_cov.eppend(Ry)
             signal_b, post_cov = rivscale.reconstruct.reconstruct_one_time_obs(
                 meas, meas_u, Ry, mn, nodes)
 
@@ -563,6 +565,7 @@ class BayesData(Product):
             Signal_hat.append(signal_hat)
             Signal_hat_u.append(np.diag(post_cov))
             Post_cov.append(post_cov)
+            Pre_cov.append(Ry)
         #breakpoint()
         try:
             bayes.signal = np.array(Signal_hat).T
@@ -575,6 +578,11 @@ class BayesData(Product):
         try:
             bayes.signal_post_cov = np.moveaxis(
                 np.array(Post_cov), 0, -1)
+        except AssertionError as e:
+            print(e)
+        try:
+            bayes.signal_cov = np.moveaxis(
+                np.array(Pre_cov), 0, -1)
         except AssertionError as e:
             print(e)
         return bayes
@@ -641,8 +649,36 @@ class BayesData(Product):
         #breakpoint()
         return bayes_wse, bayes_width, bayes_wse_width_post_cov
 
+"""
+    # TODO: Implement this?
+    def crop_to_reach(
+            self,
+            reach_id=None):
+        bayes = BayesData()
+        if reach_id is None:
+            if self.stretch_name.isdigit():
+                reach_id = self.stretch_name
+            else:
+                reach_id = 'bad'
+        if not((reach_id.isdigit()) and (len(reach_id)==11)):
+            print('reach_id is not a valid value, not cropping')
+            return None
+        # now get the mask
+        reach_ids = np.array([str(n)[0:10]+str(n)[-1] for n in self.node_id])
+        mask = np.where(reach_ids==reach_id)[0]
+        bayes.stretch_name = self.stretch_name
+        bayes.reaches = np.array([int(reach_id),])
+        # crop the along-river variables
+        #breakpoint()
+        keys = set(self.variables.keys()) - set(['reaches',])
+        for key in keys:
+            #print(key)
+            dims = self.VARIABLES[key]['dimensions']
+            if 'num_nodes' in dims.keys():
+                bayes[key] = self[key][mask]#mask[0]:mask[-1]]
+            else:
+                bayes[key] = self[key]
+        return bayes
 
 
-
-
-
+"""
