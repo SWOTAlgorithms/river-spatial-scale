@@ -180,6 +180,7 @@ def filter_qual(
         area=True,
         dark_thresh=1.0,
         kind='OB',
+        use_wse_sm=False,
         ):
     """
     filter out swot data based on quality, dark_frac, ice,
@@ -191,51 +192,75 @@ def filter_qual(
     else:
         qual_key = 'reach_q'
         qual_b_key = 'reach_q_b'
+    #####
+    # ALL
+    #####
+    # always exclude fill values
+    wse_keep = df['wse'] > -99999999.0
+    area_keep = df['area_total'] > -99999999.0
 
-    ###
-    # compute all the various masks for wse and area
-    ###
-    # filter out ice
-    #ice = df['ice_clim_f']==0
-    ice = df['ice_clim_f']<=0 # ignore ice flag if it is negative/fill_value
-    # filter out bad qual
-    bad  = df[qual_key] < 3
-    # drop xovr_cal_q == 2
-    xover = df['xovr_cal_q'] < 2
-    #    # fill values
-    wse_fill = df['wse'] > -99999999.0
-    area_fill = df['area_total'] > -99999999.0
-
-    # filter out swath edges
-    near = np.bitwise_and(df[qual_b_key], 2**13) == 0
-    far = np.bitwise_and(df[qual_b_key], 2**14) == 0
-
-    # geolocation_qual_degraded
-    geoloc_deg = np.bitwise_and(df[qual_b_key], 2**19) == 0
-    # wse outlier
-    wse_outlier = np.bitwise_and(df[qual_b_key], 2**23) == 0
-    # classification_qual_degraded
-    class_q_deg = np.bitwise_and(df[qual_b_key], 2**18) == 0
-    # filter out high dark frac
-    dark = df['dark_frac'] <= dark_thresh
-    ###
-    # always drop ice, xover, and bad_q, and fill and dark_frac
-    # for both wse and area
-    ###
-    wse_keep = np.logical_and.reduce([ice, bad, xover, wse_fill, dark])
-    area_keep = np.logical_and.reduce([ice, bad, xover, area_fill, dark])
-
-    if 'OB' in kind:
-        # filter out swath edges of both wse and area
+    # init these now for later use
+    #dark = wse_keep
+    geoloc_deg = wse_keep
+    wse_outlier = wse_keep
+    class_q_deg = area_keep
+    #####
+    # OUTER
+    ####
+    if 'OUTER' in kind:
+        # filter out swath edges
+        near = np.bitwise_and(df[qual_b_key], 2**13) == 0
+        far = np.bitwise_and(df[qual_b_key], 2**14) == 0
         wse_keep = np.logical_and.reduce([wse_keep, near, far])
         area_keep = np.logical_and.reduce([area_keep, near, far])
-        # drop wse outliers
-        wse_keep = np.logical_and.reduce([wse_keep, wse_outlier])
-    if 'no_degraded' in kind:
-        # drop degraded wse and wse outliers
-        wse_keep = np.logical_and.reduce([wse_keep, geoloc_deg])
-        # drop classification_qual_degraded
-        area_keep = np.logical_and.reduce([area_keep, class_q_deg])
+
+        if 'ICE' in kind:
+            # filter out ice
+            #ice = df['ice_clim_f']==0
+            ice = df['ice_clim_f']<=0 # ignore ice flag if it is negative/fill_value
+            wse_keep = np.logical_and.reduce([wse_keep, ice])
+            area_keep = np.logical_and.reduce([area_keep, ice])
+
+        #####
+        # INNER
+        #####
+        if 'INNER' in kind:
+            # filter out bad qual
+            if use_wse_sm:
+                bad  = df['wse_q'] < 3
+            else:
+                bad  = df[qual_key] < 3
+
+            # drop xovr_cal_q == 2
+            xover = df['xovr_cal_q'] < 2
+
+            # filter out high dark frac
+            dark = df['dark_frac'] <= dark_thresh
+
+            # wse outlier
+            wse_outlier = wse_keep
+            if not use_wse_sm:
+                wse_outlier = np.bitwise_and(df[qual_b_key], 2**23) == 0
+
+            # drop them
+            wse_keep = np.logical_and.reduce([
+                bad, xover, wse_keep, dark, wse_outlier])
+            area_keep = np.logical_and.reduce([bad, xover, area_keep, dark])
+
+            if 'NODEGREADED' in kind:
+                # compute degraded cases
+                geoloc_deg = wse_keep
+                wse_outlier = wse_keep
+                class_q_deg = area_keep
+                if not use_wse_sm:
+                    # geolocation_qual_degraded
+                    geoloc_deg = np.bitwise_and(df[qual_b_key], 2**19) == 0
+                    # classification_qual_degraded
+                    class_q_deg = np.bitwise_and(df[qual_b_key], 2**18) == 0
+                # drop degraded wse
+                wse_keep = np.logical_and.reduce([wse_keep, geoloc_deg])
+                # drop classification_qual_degraded
+                area_keep = np.logical_and.reduce([area_keep, class_q_deg])
     # TODO: handle OBIM etc
     #breakpoint()
     # null-out the bad data with nans

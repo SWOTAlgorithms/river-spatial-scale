@@ -105,7 +105,8 @@ def manage_fields(df, use_wse_sm=False, qual_filter='', dark_thresh=1.0):
     # TODO: robustify qual filter methods (OB, IM, OBIM etc)
     df = rivscale.filter.filter_qual(
         df, height=True, area=False,
-        kind=qual_filter, dark_thresh=dark_thresh)
+        kind=qual_filter, dark_thresh=dark_thresh,
+        use_wse_sm=use_wse_sm)
     #
     if 'cycle_id' in df.keys():
         df['cycle'] = df['cycle_id']
@@ -175,7 +176,7 @@ def get_swot_data(
     if 'use_wse_sm' not in cfg[section].keys():
         cfg[section]['use_wse_sm'] = 'False'
     if 'qual_filter' not in cfg[section].keys():
-        cfg[section]['qual_filter'] = 'OB'
+        cfg[section]['qual_filter'] = 'OUTER_BASELINE'
     if 'dark_thresh' not in cfg[section].keys():
         cfg[section]['dark_thresh'] = '1.0'
     if cfg[section]['method'] == 'csv':
@@ -449,6 +450,10 @@ def make_stretch_stack(
     extra_keys = sword_keys + ['time_id', 'granule_id']
     time_ids = np.sort(np.unique(np.floor(
         swot_node_df['time']/TIME_ID_QUANTIZATION)))
+    # check that the times are not too close..smach time indices within 1
+    close = np.abs(np.diff(time_ids,append=time_ids[-1]+5)<2)
+    time_ids = np.sort(np.array(list(set(time_ids) - set(time_ids[close]))))
+    #
     stretch_data = init_dict_from_keys(keys + extra_keys)
     # go through each reach and stack the various items
     for reach in stretch_reaches:
@@ -468,8 +473,13 @@ def make_stretch_stack(
         signal = init_dict_from_keys(keys + extra_keys)
         # go through the time/cycles
         for t_id in time_ids:
-            that_df = this_df[np.floor(
-                this_df['time']/TIME_ID_QUANTIZATION)==t_id]
+            #that_df = this_df[np.floor(
+            #    this_df['time']/TIME_ID_QUANTIZATION)==t_id]
+            time_mask = np.logical_or.reduce((
+                    np.floor(this_df['time']/TIME_ID_QUANTIZATION)==t_id+1,
+                    np.floor(this_df['time']/TIME_ID_QUANTIZATION)==t_id,
+                    np.floor(this_df['time']/TIME_ID_QUANTIZATION)==t_id-1))
+            that_df = this_df[time_mask]
             this_nodes = np.array(that_df['local_node_id'])
             for key in keys:
                 this_key = np.array(that_df[key])
