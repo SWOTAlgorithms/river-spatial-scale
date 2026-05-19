@@ -15,7 +15,53 @@ import rivscale.products.stretch_stack
 import xarray as xr
 import datetime
 
+import sqlite3
+
 from rivscale.misc import TIME_ID_QUANTIZATION
+
+def read_sql_data(fle, reach_ids):
+    ####
+    # read the nodes
+    ####
+    db = sqlite3.connect(fle)
+    rid_str = ""
+    if len(reach_ids)>1:
+        for rid in reach_ids[0:-1]:
+            rid_str = rid_str + f"{rid}, "
+        rid_str = rid_str + f"{reach_ids[-1]}"
+    else:
+        rid_str = f"{reach_ids[0]}"
+    query = f"SELECT * FROM swot_node_df WHERE reach_id IN ({rid_str})"
+    df = pd.read_sql(query, db, coerce_float=False)
+    # drop rows with nan times (assumes all data is invalid)
+    #breakpoint()
+    df = df.dropna(subset=['time'])
+    ####
+    # read in the filename table
+    ####
+    uindex = np.unique(df['file_index'])
+    uindex_str = ""
+    for ind in uindex[0:-1]:
+        uindex_str = uindex_str + f"{ind}, "
+    uindex_str = uindex_str + f"{uindex[-1]}"
+    query = f"SELECT * FROM swot_filenames WHERE `index` IN ({uindex_str})"
+    df_filenames = pd.read_sql(query, db)
+    # just grab the fileds that we care about
+    dic = {
+            'file_index': np.array(df_filenames['index']),
+            'pass_id': np.array(df_filenames['pass']),
+            'cycle_id': np.array(df_filenames['cycle']),
+            'crid': np.array(df_filenames['crid']),
+            }
+    df_ind = pd.DataFrame(dic)
+    ####
+    # merge the databases
+    ####
+    df_merged = df.merge(df_ind, on='file_index', how='inner')
+
+    # sort it by time
+    #df_merged = df_merged.sort_values(by='time')
+    return df_merged
 
 def dawg_file_to_df(fle, group='node'):
     this_group = 'node'
@@ -304,6 +350,7 @@ def get_swot_data(
         for reach in stretch_reaches:#df_stretches.keys():
             if 'both' in orbit:
                 orbits = ['cal', 'science']
+                #orbits = ['cal', 'science_20260508'] # TODO: generalize this?
             else:
                 orbits = [orbit,]
             r_str = '{}'.format(reach)
@@ -332,6 +379,34 @@ def get_swot_data(
                     ds = xr.open_dataset(fle, decode_cf=False)
                     this_df = ds.to_dataframe()
                     df = pd.concat([df,this_df],ignore_index=True)
+    elif cfg[section]['method'] == 'sql':
+        orbit = cfg['main']['orbit']
+        pass_cont = cfg['main']['granule']
+        df = None
+        if 'both' in orbit:
+            orbits = ['cal', 'science']
+        else:
+            orbits = [orbit,]
+        fles = []
+        for this_orbit in orbits:
+            orbit_str = 'Nom'
+            if 'cal' in this_orbit:
+                orbit_str='Cal'
+            fle_str = os.path.join(cfg['main']['data_path'],
+                'SWOT_L2_HR_RiverSP_{}.sqlite3'.format(
+                    orbit_str))
+            this_fles = glob.glob(fle_str)
+            fles = fles + this_fles
+        #breakpoint()
+        for fle in fles:
+            print('  ',fle)
+            # TODO: should catch if file doesnt exist or cant read it?
+            if df is None:
+                df = read_sql_data(fle, stretch_reaches)
+            else:
+                this_df = read_sql_data(fle, stretch_reaches)
+                df = pd.concat([df,this_df],ignore_index=True)
+                #breakpoint()
     elif cfg[section]['method'] == 'dawg':
         # read in the dawg-confluence format files
         #orbit = cfg['main']['orbit']
