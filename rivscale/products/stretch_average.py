@@ -118,6 +118,11 @@ class StretchAverageStats(Product):
             times_id = np.floor(
                 df['time']/TIME_ID_QUANTIZATION).astype(int)
             this_df = df[times_id==time_i]
+            #if len(this_df)>1:
+            #    # favor PG if PI anf PG exist? 
+            #    reproc_crid_mask = ['PG' in c for c in this_df['crid']]
+            #    this_df = this_df[reproc_crid_mask]
+            #    #breakpoint()
             # TODO handle window over desired reach
             dist_out.append(np.array(this_df['dist_out']))
             cross_track.append(
@@ -143,6 +148,7 @@ class StretchAverageStats(Product):
             ####
         #if reach=='81247300101':
         #    breakpoint()
+        #breakpoint()
         Other = np.array(other).squeeze()
         stats.time_id = np.array(time_id).squeeze()
         stats.granule_id = np.array(granule_id).squeeze()

@@ -476,6 +476,12 @@ def plot_products(dic, outdir=None, cfg=None, width_correction=None):
         # create the dir if not exist
         if not os.path.exists(outdir):
             os.makedirs(outdir)
+    # handle stretch_avg and reach_avg from processor object
+    #breakpoint()
+    if 'wse_avg' in dic.keys() and (not('wse_stretch_average' in dic.keys())):
+        dic['wse_stretch_average'] = dic['wse_avg']
+    if 'width_avg' in dic.keys() and (not('widrh_stretch_average' in dic.keys())):
+        dic['width_stretch_average'] = dic['width_avg']
     if width_correction is not None:
         # apply the width correction to the width stretch_avg and reach_avg data
         wc_df = pd.read_csv(width_correction)
@@ -486,12 +492,12 @@ def plot_products(dic, outdir=None, cfg=None, width_correction=None):
                 wc_df['cross_track'], wc_df['width_correction'])
             dic['width_stretch_average'].mean = \
                 dic['width_stretch_average'].mean - w_corr
-        # do rech correction
+        # do reach correction
         if dic['width_reach_average'] is not None:
             ct = dic['width_reach_average'].cross_track
             w_corr = np.interp(np.abs(ct),
                 wc_df['cross_track'], wc_df['width_correction'])
-            dic['width_reach_average'].mean = \
+            dic['width_reach_average_corr'].mean = \
                 dic['width_reach_average'].mean - w_corr
         #breakpoint()
     for key in dic.keys():

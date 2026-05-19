@@ -100,7 +100,10 @@ def query_fts(query_url, params, kind='node_ids'):
     reaches = requests.get(query_url, params=params)
     reaches_json = reaches.json()
     #breakpoint()
-    hits = reaches_json['hits']
+    #try:
+    #    hits = reaches_json['hits']
+    #except KeyError:
+    hits = reaches_json.get('hits', 0)
     if 'search on' in reaches_json.keys():
         page_size = reaches_json['search on']['page_size']
         page_number = reaches_json['search on']['page_number']
@@ -118,7 +121,7 @@ def query_fts(query_url, params, kind='node_ids'):
         "hits": hits,
         "page_size": page_size,
         "page_number": page_number,
-        out_key: [ item[this_key] for item in reaches_json['results'] ]
+        out_key: [ item[this_key] for item in reaches_json.get('results',[]) ]
         }
 
 def empty_feature_dic(feature, kind='node_ids'):
@@ -339,7 +342,11 @@ def query_main(
             collection_name=collection_name
             ))
     # Load DataFrame results into dask.dataframe
-    ddf = dd.from_delayed(results)
+    if len(results)>0:
+        ddf = dd.from_delayed(results)
+    else:
+        print("##### No results for basin: {}".format(basin_id))
+        return None
     #ddf.head(n=20, npartitions=len(node_ids))
     #breakpoint()
     try:
@@ -393,6 +400,8 @@ def basin_loop(
             this_df = query_main(basin_id,
                 start_time=start_time, end_time=end_time, kind=this_kind,
                 collection_name=collection_name, sword_df=sword_df)
+        if this_df is None:
+            continue
         if df is None:
             df = this_df
         else:

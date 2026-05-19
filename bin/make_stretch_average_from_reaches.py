@@ -47,6 +47,8 @@ def apply_width_corr(wse_avg, width_avg, height_width, method='bundle_adjust'):
     '''
     apply a width correction to the width and recompute the
     '''
+    if (wse_avg is None) or (height_width is None) or (width_avg) is None:
+        return None, None
     width_avg_corr = None
     height_width_corr = None
     #breakpoint()
