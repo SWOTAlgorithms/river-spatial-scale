@@ -681,12 +681,15 @@ class BayesData(Product):
         #breakpoint()
         return bayes_wse, bayes_width, bayes_wse_width_post_cov
 
-"""
-    # TODO: Implement this?
+
     def crop_to_reach(
             self,
             reach_id=None):
+        if 'joint' in self.signal_key: # TODO: handle joint?
+            print('this is a joint signal object, not cropping')
+            return None
         bayes = BayesData()
+        bayes.signal_key = self.signal_key
         if reach_id is None:
             if self.stretch_name.isdigit():
                 reach_id = self.stretch_name
@@ -712,5 +715,3 @@ class BayesData(Product):
                 bayes[key] = self[key]
         return bayes
 
-
-"""

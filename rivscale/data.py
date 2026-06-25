@@ -36,6 +36,9 @@ def read_sql_data(fle, reach_ids):
     # drop rows with nan times (assumes all data is invalid)
     #breakpoint()
     df = df.dropna(subset=['time'])
+    if len(df)==0:
+        # handle empty df
+        return None
     ####
     # read in the filename table
     ####
