@@ -570,11 +570,13 @@ class Processor(object):
     ####
     # plot the products
     ####
-    def plot(self, plotdir=None):
+    def plot(self, plotdir=None, crop_to_reach=False):
         """
         This method can be used (e.g., in conjunction with
         plot_stretch_produts.py) to plot the various output products
         that get produced after a specific kind of processing (e.g., )
         """
-        rivscale.plot.plot_products(self.products, outdir=plotdir)
+        rivscale.plot.plot_products(self.products,
+                outdir=plotdir,
+                crop_to_reach=crop_to_reach)
         

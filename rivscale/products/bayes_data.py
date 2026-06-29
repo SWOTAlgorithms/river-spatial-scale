@@ -685,9 +685,6 @@ class BayesData(Product):
     def crop_to_reach(
             self,
             reach_id=None):
-        if 'joint' in self.signal_key: # TODO: handle joint?
-            print('this is a joint signal object, not cropping')
-            return None
         bayes = BayesData()
         bayes.signal_key = self.signal_key
         if reach_id is None:
@@ -710,8 +707,14 @@ class BayesData(Product):
             #print(key)
             dims = self.VARIABLES[key]['dimensions']
             if 'num_nodes' in dims.keys():
-                bayes[key] = self[key][mask]#mask[0]:mask[-1]]
+                #breakpoint()
+                if len(np.shape(self[key]))==3:
+                    tmp = self[key][:,mask,:]
+                    bayes[key] = tmp[mask,:,:]
+                else:
+                    bayes[key] = self[key][mask]#mask[0]:mask[-1]]
             else:
                 bayes[key] = self[key]
+        #breakpoint()
         return bayes
 

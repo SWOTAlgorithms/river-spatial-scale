@@ -467,7 +467,11 @@ def plot_stretch_stack(
         if show:
             plt.show()
 
-def plot_products(dic, outdir=None, cfg=None, width_correction=None):
+def plot_products(dic,
+        outdir=None,
+        cfg=None,
+        width_correction=None,
+        crop_to_reach=False):
     """
     plot all the products in the dictonary and output them to outdir
     if outdir is not None, otherwise plot them all interactively
@@ -476,6 +480,16 @@ def plot_products(dic, outdir=None, cfg=None, width_correction=None):
         # create the dir if not exist
         if not os.path.exists(outdir):
             os.makedirs(outdir)
+    # crop_to_reach all products, if commanded
+    if crop_to_reach:
+        # call the objects crop_to_reach function
+        for key in dic.keys():
+            try:
+                tmp = dic[key].crop_to_reach()
+                if tmp is not None:
+                    dic[key] = tmp
+            except AttributeError:
+                print(f'problem cropping {key} to reach')
     # handle stretch_avg and reach_avg from processor object
     #breakpoint()
     if 'wse_avg' in dic.keys() and (not('wse_stretch_average' in dic.keys())):

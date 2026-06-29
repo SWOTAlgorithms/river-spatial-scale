@@ -36,7 +36,11 @@ import warnings
 
 EXAMPLE = ''
 
-def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
+def plot_single_stretch(files,
+        outdir=None,
+        cfg=None,
+        width_correction=None,
+        crop_to_reach=False):
     if len(files)<1:
         return
     dic = {}
@@ -113,7 +117,11 @@ def plot_single_stretch(files, outdir=None, cfg=None, width_correction=None):
         if 'bayes' in fle:
             dic['bayes'] = \
                     rivscale.products.bayes_data.BayesData.from_ncfile(f)
-    rivscale.plot.plot_products(dic, width_correction=width_correction, outdir=outdir)
+    #
+    rivscale.plot.plot_products(dic,
+            width_correction=width_correction,
+            outdir=outdir,
+            crop_to_reach=crop_to_reach)
 
 def get_stretch_list(stretch_list_in, dir_in, kind='stretch_stack'):
     stretch_files = []
@@ -160,12 +168,13 @@ def main():
         help='csv input file with width vs cross-track correction to apply')
     parser.add_argument('--kind', default='all',
         help='all, reach, stretch, estimate, or reconstruct')
+    parser.add_argument('--crop_to_reach', action='store_true')
     args = parser.parse_args()
-    #breakpoint()
+    #
     if args.infile is not None:
         # just plot the specific file, and show it (not saving it)
         plot_single_stretch(args.infile, outdir=None, cfg=None,
-            width_correction=None)
+            width_correction=None, crop_to_reach=args.crop_to_reach)
         plt.show()
         return
     #cfg = configparser.ConfigParser()
@@ -219,7 +228,7 @@ def main():
                 #breakpoint()
                 #
                 plot_single_stretch(files, outdir=plotdir, cfg=None,
-                    width_correction=None)
+                    width_correction=None, crop_to_reach=args.crop_to_reach)
                 #plt.show()
                 #breakpoint()
             else:
@@ -241,7 +250,7 @@ def main():
                 try:
                     # TODO: handle --force
                     #breakpoint()
-                    worker.plot(plotdir)
+                    worker.plot(plotdir, crop_to_reach=args.crop_to_reach)
                     #plot_single_stretch(files, outdir=plotdir, cfg=cfg,
                     #    width_correction=args.width_correction)
                 except Exception as e:
