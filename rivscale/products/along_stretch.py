@@ -266,5 +266,32 @@ class AlongStretchStats(Product):
         stats['percentiles'] = self['percentiles'][mask,:]#mask[0]:mask[-1],:]
         return stats
 
-
+    def to_dataframe(self,
+            variables=['reference', 'count', 'mean', 'std', 'percentiles'],
+            df_in=None,
+            crop_to_reach=True):
+        """
+        Grab standard variables and output as pandas dataframe while prepending
+        the signal_key to the desired variables (and handling all percentiles).
+        By default we will crop to reach, as we intend to use this to produce
+        extra variables in a SWORD-like database 
+        """
+        if crop_to_reach:
+            this = self.crop_to_reach()
+        else:
+            this = self
+        #
+        dic = {}
+        dic['node_id'] = this['node_id']
+        for key in variables:
+            if key == 'percentiles':
+                for k,ptile in enumerate(this['percentile_list']):
+                    out_key = f'{this.signal_key}_{ptile}_percentile'
+                    dic[out_key] = this[key][:,k]
+            else:
+                out_key = f'{this.signal_key}_{key}'
+                dic[out_key] = this[key]
+        #breakpoint()
+        df = pd.DataFrame(dic).sort_values(by='node_id')
+        return df
 
