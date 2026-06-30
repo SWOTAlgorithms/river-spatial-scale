@@ -467,7 +467,7 @@ def plot_stretch_stack(
         if show:
             plt.show()
 
-def plot_products(dic,
+def plot_products(dic_in,
         outdir=None,
         cfg=None,
         width_correction=None,
@@ -476,6 +476,14 @@ def plot_products(dic,
     plot all the products in the dictonary and output them to outdir
     if outdir is not None, otherwise plot them all interactively
     """
+    # drop any keys in dic that are None
+    dic = {}
+    for key in dic_in.keys():
+        if dic_in[key] is not None:
+            dic[key] = dic_in[key]
+    if len(dic) == 0:
+        print(f'nothing to plot for outdir:{outdir}')
+        return
     if outdir is not None:
         # create the dir if not exist
         if not os.path.exists(outdir):
@@ -517,10 +525,10 @@ def plot_products(dic,
     for key in dic.keys():
         if dic[key] is None:
             continue
+        print("plotting", key)
         # plot each individual plot
         if key=='height_width_array':
             # plot the 3d plot if we are interactove else don't
-            #breakpoint()
             if outdir is None:
                 dic[key].plot()
         elif key=='height_width':
@@ -565,9 +573,11 @@ def plot_products(dic,
                 ref2_w = np.broadcast_to(
                     width_stats.reference, np.shape(width.T)).T
                 dic[key].plot(
-                    wse_data=wse - ref2,
-                    width_data=width - ref2_w,
+                    wse_data=(wse - ref2),
+                    width_data=(width - ref2_w),
                     outdir=outdir,
+                    delta=True,
+                    #show_all_pass=False,
                     show=False,
                     title_tag='node measurements')
                 something_plotted=True
@@ -587,6 +597,7 @@ def plot_products(dic,
                     wse_data=d_wse,
                     width_data=d_width,
                     outdir=outdir,
+                    delta=True,
                     show=False,
                     title_tag='Bayes node estimates')
                 something_plotted=True

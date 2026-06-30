@@ -171,6 +171,11 @@ def main():
     parser.add_argument('--crop_to_reach', action='store_true')
     args = parser.parse_args()
     #
+    plotbase = 'plots_new'
+    if args.crop_to_reach:
+        plotbase = plotbase+'_crop'
+    
+    #
     if args.infile is not None:
         # just plot the specific file, and show it (not saving it)
         plot_single_stretch(args.infile, outdir=None, cfg=None,
@@ -223,7 +228,7 @@ def main():
                     stretch_file = this_cfg['main']['stretch_stack_file']
                     thepath,_ = os.path.split(stretch_file)
                     files = [stretch_file,]
-                plotdir = os.path.join(thepath,'plots')
+                plotdir = os.path.join(thepath,plotbase)
                 #
                 #breakpoint()
                 #
@@ -245,7 +250,7 @@ def main():
                     force=False)
                 #plotdir = None
                 if args.stretch_name is None:
-                    plotdir = os.path.join(this_outpath, 'plots')
+                    plotdir = os.path.join(this_outpath, plotbase)
                 # now plot the rest
                 try:
                     # TODO: handle --force
@@ -254,7 +259,7 @@ def main():
                     #plot_single_stretch(files, outdir=plotdir, cfg=cfg,
                     #    width_correction=args.width_correction)
                 except Exception as e:
-                    print('problem plotting')
+                    print('problem plotting, ',e)
         #
         if plotdir is None:
             plt.show()

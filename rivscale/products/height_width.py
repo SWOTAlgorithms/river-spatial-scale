@@ -365,6 +365,10 @@ class HeightWidthModel(Product):
             if isinstance(wse_data, np.ndarray):
                 d_width = width_data.copy()
                 d_wse = wse_data.copy()
+                wse_ref = 0.0
+                width_ref = 0.0
+                wse_med = np.median(d_wse)
+                width_med = np.median(d_width)
                 # make them anomalies
                 #d_wse = d_wse - np.nanmedian(d_wse)
                 #d_width = d_width - np.nanmedian(d_width)
