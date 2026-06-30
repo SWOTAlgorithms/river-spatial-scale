@@ -718,3 +718,33 @@ class BayesData(Product):
         #breakpoint()
         return bayes
 
+    def to_dataframe(self,
+            variables=['signal',],
+            crop_to_reach=True):
+        """
+        Grab standard variables and output as pandas dataframe
+        By default we will crop to reach, as we intend to use this to produce
+        extra RiverSP-like variables (this is primarily to extract the bayes
+        reconstructed wse and width data for each node-observation).
+        """
+        if crop_to_reach:
+            this = self.crop_to_reach()
+        else:
+            this = self
+        # TODO: handle non-joint?
+        wse, width, postcov = this.unpack_joint()
+        dic = {}
+        gid, nid = np.meshgrid(wse['granule_id'], wse['node_id'])
+        dic['node_id'] = nid.flatten()
+        dic['granule_id'] = gid.flatten()
+        for key in variables:
+            out_key = key
+            if key == 'signal':
+                # do both wse and width here
+                dic['wse_bayes'] = wse[key].flatten()
+                dic['width_bayes'] = width[key].flatten()
+        df = pd.DataFrame(dic).sort_values(by=['node_id','granule_id'])
+        return df
+
+
+

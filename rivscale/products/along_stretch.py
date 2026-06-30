@@ -268,7 +268,6 @@ class AlongStretchStats(Product):
 
     def to_dataframe(self,
             variables=['reference', 'count', 'mean', 'std', 'percentiles'],
-            df_in=None,
             crop_to_reach=True):
         """
         Grab standard variables and output as pandas dataframe while prepending

@@ -554,3 +554,29 @@ class StretchStack(Product):
         out_stack.width = out_stack.width + width_correction
         return out_stack
 
+    def to_dataframe(self,
+            variables=['width', 'width_correction',],
+            crop_to_reach=True):
+        """
+        Grab standard variables and output as pandas dataframe
+        By default we will crop to reach, as we intend to use this to produce
+        extra RiverSP-like variables (this is primarily to extract the corrected
+        width data for each node-observation).
+        """
+        if crop_to_reach:
+            this = self.crop_to_reach()
+        else:
+            this = self
+        #
+        dic = {}
+        gid, nid = np.meshgrid(this['granule_id'], this['node_id'])
+        dic['node_id'] = nid.flatten()
+        dic['granule_id'] = gid.flatten()
+        for key in variables:
+            out_key = key
+            if key == 'width':
+                out_key = key+'_corrected'
+            dic[out_key] = this[key].flatten()
+        df = pd.DataFrame(dic).sort_values(by=['node_id','granule_id'])
+        return df
+
