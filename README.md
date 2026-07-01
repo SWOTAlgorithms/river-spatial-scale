@@ -120,13 +120,13 @@ Alternatively you can use the --infile option to plot a specific product:
 ## Post-processing extraction of desired quantities
 After running process_strecth_stack.py over the stretch(es), you can extract the estimated quantities (e.g., reference profiles, along_stats, etc) by calling postprocess_stretch_stack.py the same way you called process_strecth_stack.py.  That is, to get the per-node estimates (e.g., that could be stuffed into SWORD) that crop out the extra up-stream and down-stream info you can call this:
 
-`$ process_stretch_stack.py <runtime.cfg>`
+`$ postprocess_stretch_stack.py <runtime.cfg>`
 
 which will produce a sqlite3 database called postproc_estimate.sqlite3 with node_id and various quantites for dark_water, wse, and width profiles/statistics (oriented like in a pandas dataframe).
 
 Also, if you call it after running the reconstruction and also give it the --kind reconstruct, it will produce a database with the bayes-reconstructed wse and width as well as the bundle-adjusted width correction (and per-pass corrected width that is input the bayes reconstruction).  These are data-frame-like too, but oriented by both node_id, granule_id (e.g., a unique estimate for each observation of each node).  This is called like this:
 
-`$ process_stretch_stack.py <runtime.cfg> --kind reconstruct`
+`$ postprocess_stretch_stack.py <runtime.cfg> --kind reconstruct`
 
 This produces a sqlite3 database called postproc_reconstruct.sqlite3.
 
