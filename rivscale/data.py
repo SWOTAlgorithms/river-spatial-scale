@@ -42,28 +42,32 @@ def read_sql_data(fle, reach_ids, group='Node'):
     if len(df)==0:
         # handle empty df
         return None
+    
     ####
     # read in the filename table
     ####
-    uindex = np.unique(df['file_index'])
-    uindex_str = ""
-    for ind in uindex[0:-1]:
-        uindex_str = uindex_str + f"{ind}, "
-    uindex_str = uindex_str + f"{uindex[-1]}"
-    query = f"SELECT * FROM swot_filenames WHERE `index` IN ({uindex_str})"
-    df_filenames = pd.read_sql(query, db)
-    # just grab the fileds that we care about
-    dic = {
+    try:
+        uindex = np.unique(df['file_index'])
+        uindex_str = ""
+        for ind in uindex[0:-1]:
+            uindex_str = uindex_str + f"{ind}, "
+        uindex_str = uindex_str + f"{uindex[-1]}"
+        query = f"SELECT * FROM swot_filenames WHERE `index` IN ({uindex_str})"
+        df_filenames = pd.read_sql(query, db)
+        # just grab the fileds that we care about
+        dic = {
             'file_index': np.array(df_filenames['index']),
             'pass_id': np.array(df_filenames['pass']),
             'cycle_id': np.array(df_filenames['cycle']),
             'crid': np.array(df_filenames['crid']),
             }
-    df_ind = pd.DataFrame(dic)
-    ####
-    # merge the databases
-    ####
-    df_merged = df.merge(df_ind, on='file_index', how='inner')
+        df_ind = pd.DataFrame(dic)
+        ####
+        # merge the databases
+        ####
+        df_merged = df.merge(df_ind, on='file_index', how='inner')
+    except pandas.errors.DatabaseError:
+        df_merged = df
 
     # sort it by time
     #df_merged = df_merged.sort_values(by='time')
@@ -452,6 +456,10 @@ def get_swot_data(
             df['area_tot_u'] = np.array(df['width']) + np.nan
             df['p_dist_out'] = np.array(df['width']) * 0
             df['p_length'] = np.array(df['width']) * 0
+    else:
+        # method not implemented
+        meth = cfg[section]['method']
+        print(f'method {meth} not implemented')
     #
     df = manage_fields(
         df,
