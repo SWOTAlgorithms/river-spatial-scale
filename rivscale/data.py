@@ -19,10 +19,13 @@ import sqlite3
 
 from rivscale.misc import TIME_ID_QUANTIZATION
 
-def read_sql_data(fle, reach_ids):
+def read_sql_data(fle, reach_ids, group='Node'):
     ####
     # read the nodes
     ####
+    table = 'swot_node_df'
+    if 'reach' in group.lower():
+        table = 'swot_reach_df'
     db = sqlite3.connect(fle)
     rid_str = ""
     if len(reach_ids)>1:
@@ -31,7 +34,7 @@ def read_sql_data(fle, reach_ids):
         rid_str = rid_str + f"{reach_ids[-1]}"
     else:
         rid_str = f"{reach_ids[0]}"
-    query = f"SELECT * FROM swot_node_df WHERE reach_id IN ({rid_str})"
+    query = f"SELECT * FROM swot_reach_df WHERE reach_id IN ({rid_str})"
     df = pd.read_sql(query, db, coerce_float=False)
     # drop rows with nan times (assumes all data is invalid)
     #breakpoint()
@@ -64,6 +67,7 @@ def read_sql_data(fle, reach_ids):
 
     # sort it by time
     #df_merged = df_merged.sort_values(by='time')
+    db.close()
     return df_merged
 
 def dawg_file_to_df(fle, group='node'):
@@ -407,7 +411,7 @@ def get_swot_data(
             if df is None:
                 df = read_sql_data(fle, stretch_reaches)
             else:
-                this_df = read_sql_data(fle, stretch_reaches)
+                this_df = read_sql_data(fle, stretch_reaches, group=group)
                 df = pd.concat([df,this_df],ignore_index=True)
                 #breakpoint()
     elif cfg[section]['method'] == 'dawg':
