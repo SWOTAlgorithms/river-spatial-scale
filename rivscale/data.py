@@ -66,7 +66,7 @@ def read_sql_data(fle, reach_ids, group='Node'):
         # merge the databases
         ####
         df_merged = df.merge(df_ind, on='file_index', how='inner')
-    except pandas.errors.DatabaseError:
+    except pd.errors.DatabaseError:
         df_merged = df
 
     # sort it by time
