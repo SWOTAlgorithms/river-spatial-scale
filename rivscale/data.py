@@ -19,7 +19,7 @@ import sqlite3
 
 from rivscale.misc import TIME_ID_QUANTIZATION
 
-def read_sql_data(fle, reach_ids, group='Node'):
+def read_sql_data(fle, reach_ids, group='node'):
     ####
     # read the nodes
     ####
@@ -413,7 +413,7 @@ def get_swot_data(
             print('  ',fle)
             # TODO: should catch if file doesnt exist or cant read it?
             if df is None:
-                df = read_sql_data(fle, stretch_reaches, grou=group)
+                df = read_sql_data(fle, stretch_reaches, group=group)
             else:
                 this_df = read_sql_data(fle, stretch_reaches, group=group)
                 df = pd.concat([df,this_df],ignore_index=True)
