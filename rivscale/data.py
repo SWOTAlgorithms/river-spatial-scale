@@ -413,7 +413,7 @@ def get_swot_data(
             print('  ',fle)
             # TODO: should catch if file doesnt exist or cant read it?
             if df is None:
-                df = read_sql_data(fle, stretch_reaches)
+                df = read_sql_data(fle, stretch_reaches, grou=group)
             else:
                 this_df = read_sql_data(fle, stretch_reaches, group=group)
                 df = pd.concat([df,this_df],ignore_index=True)
